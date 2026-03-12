@@ -14,7 +14,11 @@ config :demo, DemoWeb.Endpoint,
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "9Uo/Dvibit8W2vare8V+DP5MDHsNlm2QIn8xCrecFiJTyDGp/mr1T3g68nFYOewM",
-  watchers: []
+  watchers: [
+    volt:
+      {Mix.Tasks.Volt.Dev, :run,
+       [~w(--tailwind --tailwind-css assets/css/app.css --watch-dir lib/)]}
+  ]
 
 # ## SSL Support
 #

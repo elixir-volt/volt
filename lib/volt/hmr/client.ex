@@ -6,53 +6,56 @@ defmodule Volt.HMR.Client do
   @client_js """
   (() => {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/@volt/ws`);
+    let ws;
+    let reconnectTimer;
 
-    ws.onmessage = (event) => {
-      const { type, payload } = JSON.parse(event.data);
+    function connect() {
+      ws = new WebSocket(`${proto}//${location.host}/@volt/ws`);
 
-      if (type === 'update') {
-        const { path, changes } = payload;
+      ws.onopen = () => {
+        console.log('[Volt] HMR connected');
+        clearTimeout(reconnectTimer);
+      };
 
-        if (changes.includes('style') && changes.length === 1) {
-          updateStyles(path);
-        } else if (changes.includes('full') || changes.includes('script')) {
-          location.reload();
-        } else if (changes.includes('template')) {
+      ws.onmessage = (event) => {
+        const { type, payload } = JSON.parse(event.data);
+
+        if (type === 'update') {
+          const { path, changes } = payload;
+
+          if (changes.length === 1 && changes[0] === 'style') {
+            updateStyles(path);
+          } else {
+            location.reload();
+          }
+        } else if (type === 'error') {
+          showOverlay(payload.reason);
+        } else if (type === 'remove') {
           location.reload();
         }
-      } else if (type === 'error') {
-        showOverlay(payload.reason);
-      } else if (type === 'remove') {
-        location.reload();
-      }
-    };
+      };
 
-    ws.onclose = () => {
-      console.log('[Volt] Connection lost. Reconnecting...');
-      setTimeout(() => location.reload(), 1000);
-    };
+      ws.onclose = () => {
+        console.log('[Volt] Disconnected. Reconnecting...');
+        reconnectTimer = setTimeout(connect, 1000);
+      };
+    }
 
     function updateStyles(path) {
       const links = document.querySelectorAll('link[rel="stylesheet"]');
+      let updated = false;
+
       links.forEach(link => {
-        if (link.href.includes(path)) {
+        const href = link.getAttribute('href');
+        if (href && (href.includes(path) || path.endsWith('.css'))) {
           const url = new URL(link.href);
           url.searchParams.set('t', Date.now());
           link.href = url.toString();
+          updated = true;
         }
       });
 
-      const styles = document.querySelectorAll('style[data-volt-path]');
-      styles.forEach(style => {
-        if (style.dataset.voltPath === path) {
-          fetch(`${location.origin}/${path}?type=style&t=${Date.now()}`)
-            .then(r => r.text())
-            .then(css => { style.textContent = css; });
-        }
-      });
-
-      if (links.length === 0 && styles.length === 0) {
+      if (!updated) {
         location.reload();
       }
     }
@@ -70,7 +73,7 @@ defmodule Volt.HMR.Client do
       overlay.textContent = '[Volt] Build error:\\n\\n' + msg;
     }
 
-    console.log('[Volt] HMR connected');
+    connect();
   })();
   """
 

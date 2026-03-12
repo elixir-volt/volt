@@ -10,16 +10,22 @@ defmodule Volt.HMRTest do
       assert js =~ "HMR connected"
     end
 
-    test "handles update messages" do
+    test "handles style-only updates without reload" do
       js = Volt.HMR.Client.js()
-      assert js =~ "update"
-      assert js =~ "location.reload"
+      assert js =~ "updateStyles"
+      assert js =~ "style"
     end
 
     test "handles error overlay" do
       js = Volt.HMR.Client.js()
       assert js =~ "showOverlay"
       assert js =~ "volt-error-overlay"
+    end
+
+    test "reconnects on close" do
+      js = Volt.HMR.Client.js()
+      assert js =~ "Reconnecting"
+      assert js =~ "setTimeout"
     end
   end
 
@@ -57,6 +63,14 @@ defmodule Volt.HMRTest do
   end
 
   describe "Volt.Watcher" do
+    @watch_dir Path.expand("fixtures/watcher_test", __DIR__)
+
+    setup do
+      File.mkdir_p!(@watch_dir)
+      on_exit(fn -> File.rm_rf!(@watch_dir) end)
+      :ok
+    end
+
     test "broadcasts via registry on dispatch" do
       Registry.register(Volt.HMR.Registry, :clients, nil)
 
@@ -67,6 +81,58 @@ defmodule Volt.HMRTest do
       end)
 
       assert_receive {:volt_hmr, :update, %{path: "test.ts", changes: [:full]}}
+    end
+
+    test "starts and watches a directory" do
+      {:ok, pid} = Volt.Watcher.start_link(root: @watch_dir, name: :test_watcher)
+      assert Process.alive?(pid)
+      GenServer.stop(pid)
+    end
+
+    test "detects file changes and broadcasts update" do
+      Registry.register(Volt.HMR.Registry, :clients, nil)
+
+      ts_file = Path.join(@watch_dir, "app.ts")
+      File.write!(ts_file, "export const x = 1;")
+
+      {:ok, pid} = Volt.Watcher.start_link(root: @watch_dir, name: :test_watcher_change)
+
+      Process.sleep(100)
+      File.write!(ts_file, "export const x = 2;")
+
+      assert_receive {:volt_hmr, :update, %{path: "app.ts", changes: [:full]}}, 2000
+
+      GenServer.stop(pid)
+    end
+
+    test "triggers tailwind rebuild on template changes" do
+      Registry.register(Volt.HMR.Registry, :clients, nil)
+
+      heex_file = Path.join(@watch_dir, "page.heex")
+      File.write!(heex_file, ~s(<div class="flex">hi</div>))
+
+      outdir = Path.join(@watch_dir, "css_out")
+
+      {:ok, pid} =
+        Volt.Watcher.start_link(
+          root: @watch_dir,
+          watch_dirs: [@watch_dir],
+          tailwind: true,
+          tailwind_outdir: outdir,
+          name: :test_watcher_tw
+        )
+
+      Process.sleep(100)
+      File.write!(heex_file, ~s(<div class="flex mt-4 bg-blue-500">hi</div>))
+
+      assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+                     3000
+
+      assert File.exists?(Path.join(outdir, "app.css"))
+      css = File.read!(Path.join(outdir, "app.css"))
+      assert css =~ "tailwindcss"
+
+      GenServer.stop(pid)
     end
   end
 
