@@ -28,16 +28,33 @@ defmodule Volt.Pipeline do
     * `:sourcemap` — generate source maps (default: `true`)
     * `:minify` — minify output (default: `false`)
     * `:vapor` — use Vue Vapor mode (default: `false`)
+    * `:rewrite_import` — function `(specifier -> {:rewrite, new} | :keep)` for import rewriting
   """
   @spec compile(String.t(), String.t(), keyword()) :: {:ok, compiled()} | {:error, term()}
   def compile(path, source, opts \\ []) do
     ext = Path.extname(path)
 
-    cond do
-      ext == @vue_ext -> compile_vue(path, source, opts)
-      ext in @js_exts -> compile_js(path, source, opts)
-      ext in @css_exts -> compile_css(source, opts)
-      true -> {:error, {:unsupported, ext}}
+    result =
+      cond do
+        ext == @vue_ext -> compile_vue(path, source, opts)
+        ext in @js_exts -> compile_js(path, source, opts)
+        ext in @css_exts -> compile_css(source, opts)
+        true -> {:error, {:unsupported, ext}}
+      end
+
+    with {:ok, compiled} <- result,
+         rewrite_fn when is_function(rewrite_fn) <- Keyword.get(opts, :rewrite_import) do
+      rewrite_compiled_imports(compiled, path, rewrite_fn)
+    else
+      nil -> result
+      other -> other
+    end
+  end
+
+  defp rewrite_compiled_imports(compiled, path, rewrite_fn) do
+    case Volt.ImportRewriter.rewrite(compiled.code, Path.basename(path), rewrite_fn) do
+      {:ok, rewritten} -> {:ok, %{compiled | code: rewritten}}
+      {:error, _} -> {:ok, compiled}
     end
   end
 

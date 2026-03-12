@@ -56,6 +56,28 @@ defmodule Volt.PipelineTest do
     end
   end
 
+  describe "compile/3 with import rewriting" do
+    test "rewrites imports when rewrite_import is provided" do
+      source = "import { ref } from 'vue'\nconst x = ref(0)"
+
+      {:ok, result} =
+        Volt.Pipeline.compile("app.ts", source,
+          rewrite_import: fn
+            "vue" -> {:rewrite, "/@vendor/vue.js"}
+            _ -> :keep
+          end
+        )
+
+      assert result.code =~ "/@vendor/vue.js"
+      refute result.code =~ "'vue'"
+    end
+
+    test "skips rewriting when no rewrite_import given" do
+      {:ok, result} = Volt.Pipeline.compile("app.ts", "import { ref } from 'vue'\nref(0)")
+      assert result.code =~ "vue"
+    end
+  end
+
   describe "compile/3 errors" do
     test "returns error for unsupported extensions" do
       {:error, {:unsupported, ".png"}} = Volt.Pipeline.compile("image.png", "binary")

@@ -41,6 +41,24 @@ defmodule Volt.DevServer do
   end
 
   @impl true
+  def call(%Plug.Conn{request_path: "/@vendor/" <> specifier_js} = conn, _config) do
+    specifier = String.trim_trailing(specifier_js, ".js") |> String.replace("_", "/")
+
+    case Volt.Vendor.read(specifier) do
+      {:ok, code} ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/javascript")
+        |> Plug.Conn.put_resp_header("cache-control", "max-age=31536000, immutable")
+        |> Plug.Conn.send_resp(200, code)
+        |> Plug.Conn.halt()
+
+      {:error, _} ->
+        conn
+        |> Plug.Conn.send_resp(404, "// vendor module not found: #{specifier}")
+        |> Plug.Conn.halt()
+    end
+  end
+
   def call(%Plug.Conn{request_path: request_path} = conn, config) do
     prefix = config.prefix
 
