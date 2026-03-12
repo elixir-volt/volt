@@ -28,6 +28,7 @@ defmodule Volt.Builder do
     * `:sourcemap` — generate source maps (default: `true`)
     * `:define` — compile-time replacements
     * `:node_modules` — path to node_modules (default: auto-detect)
+    * `:resolve_dirs` — additional directories to resolve bare specifiers (e.g. `["deps"]`)
     * `:name` — output base name (default: derived from entry filename)
   """
   @spec build(keyword()) :: {:ok, build_result()} | {:error, term()}
@@ -39,9 +40,11 @@ defmodule Volt.Builder do
     sourcemap = Keyword.get(opts, :sourcemap, true)
     define = Keyword.get(opts, :define, %{})
     node_modules = Keyword.get(opts, :node_modules) || find_node_modules(Path.dirname(entry))
+    resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
+    hash = Keyword.get(opts, :hash, true)
     name = Keyword.get(opts, :name, entry |> Path.basename() |> Path.rootname())
 
-    with {:ok, modules} <- collect_modules(entry, node_modules),
+    with {:ok, modules} <- collect_modules(entry, node_modules, resolve_dirs),
          {:ok, {js_files, css_parts}} <- compile_all(modules, target) do
       bundle_opts = [
         minify: minify,
@@ -50,20 +53,20 @@ defmodule Volt.Builder do
         define: define
       ]
 
-      write_output(js_files, css_parts, outdir, name, bundle_opts)
+      write_output(js_files, css_parts, outdir, name, hash, bundle_opts)
     end
   end
 
-  defp collect_modules(entry_path, node_modules) do
+  defp collect_modules(entry_path, node_modules, resolve_dirs) do
     label = Path.basename(entry_path)
 
-    case do_collect(entry_path, label, node_modules, [], MapSet.new()) do
+    case do_collect(entry_path, label, node_modules, resolve_dirs, [], MapSet.new()) do
       {:ok, files, _seen} -> {:ok, Enum.reverse(files)}
       {:error, _} = error -> error
     end
   end
 
-  defp do_collect(abs_path, label, node_modules, files, seen) do
+  defp do_collect(abs_path, label, node_modules, resolve_dirs, files, seen) do
     if MapSet.member?(seen, abs_path) do
       {:ok, files, seen}
     else
@@ -74,7 +77,7 @@ defmodule Volt.Builder do
 
           case extract_imports(source, abs_path) do
             {:ok, specifiers} ->
-              collect_imports(specifiers, abs_path, node_modules, files, seen)
+              collect_imports(specifiers, abs_path, node_modules, resolve_dirs, files, seen)
 
             {:error, _} = error ->
               error
@@ -119,21 +122,21 @@ defmodule Volt.Builder do
     end
   end
 
-  defp collect_imports([], _importer, _node_modules, files, seen) do
+  defp collect_imports([], _importer, _node_modules, _resolve_dirs, files, seen) do
     {:ok, files, seen}
   end
 
-  defp collect_imports([specifier | rest], importer, node_modules, files, seen) do
-    case resolve_specifier(specifier, importer, node_modules) do
+  defp collect_imports([specifier | rest], importer, node_modules, resolve_dirs, files, seen) do
+    case resolve_specifier(specifier, importer, node_modules, resolve_dirs) do
       :skip ->
-        collect_imports(rest, importer, node_modules, files, seen)
+        collect_imports(rest, importer, node_modules, resolve_dirs, files, seen)
 
       {:ok, resolved_path} ->
         label = if relative?(specifier), do: Path.basename(resolved_path), else: specifier
 
-        case do_collect(resolved_path, label, node_modules, files, seen) do
+        case do_collect(resolved_path, label, node_modules, resolve_dirs, files, seen) do
           {:ok, files, seen} ->
-            collect_imports(rest, importer, node_modules, files, seen)
+            collect_imports(rest, importer, node_modules, resolve_dirs, files, seen)
 
           {:error, _} = error ->
             error
@@ -190,24 +193,20 @@ defmodule Volt.Builder do
     end
   end
 
-  defp write_output(js_files, css_parts, outdir, name, bundle_opts) do
+  defp write_output(js_files, css_parts, outdir, name, hash?, bundle_opts) do
     File.mkdir_p!(outdir)
 
     case OXC.bundle(js_files, bundle_opts) do
       {:ok, bundle_result} ->
         {js_code, js_sourcemap} = extract_bundle(bundle_result)
-        js_hash = content_hash(js_code)
-        js_filename = "#{name}-#{js_hash}.js"
+        js_filename = if hash?, do: "#{name}-#{content_hash(js_code)}.js", else: "#{name}.js"
         js_path = Path.join(outdir, js_filename)
         File.write!(js_path, js_code)
 
-        manifest = %{
-          "#{name}.js" => js_filename
-        }
+        manifest = %{"#{name}.js" => js_filename}
 
         if js_sourcemap do
-          map_filename = "#{js_filename}.map"
-          File.write!(Path.join(outdir, map_filename), js_sourcemap)
+          File.write!(Path.join(outdir, "#{js_filename}.map"), js_sourcemap)
         end
 
         css_result =
@@ -220,8 +219,9 @@ defmodule Volt.Builder do
                 _ -> css_code
               end
 
-            css_hash = content_hash(css_code)
-            css_filename = "#{name}-#{css_hash}.css"
+            css_filename =
+              if hash?, do: "#{name}-#{content_hash(css_code)}.css", else: "#{name}.css"
+
             css_path = Path.join(outdir, css_filename)
             File.write!(css_path, css_code)
             %{path: css_path, size: byte_size(css_code)}
@@ -229,8 +229,8 @@ defmodule Volt.Builder do
 
         manifest =
           if css_result do
-            css_hash = content_hash(File.read!(css_result.path))
-            Map.put(manifest, "#{name}.css", "#{name}-#{css_hash}.css")
+            css_filename = Path.basename(css_result.path)
+            Map.put(manifest, "#{name}.css", css_filename)
           else
             manifest
           end
@@ -257,11 +257,11 @@ defmodule Volt.Builder do
     :crypto.hash(:sha256, content) |> Base.encode16(case: :lower) |> binary_part(0, 8)
   end
 
-  defp resolve_specifier(specifier, importer, node_modules) do
+  defp resolve_specifier(specifier, importer, node_modules, resolve_dirs) do
     cond do
       String.starts_with?(specifier, "node:") -> :skip
       relative?(specifier) -> resolve_relative(specifier, importer)
-      true -> resolve_bare(specifier, node_modules)
+      true -> resolve_bare(specifier, node_modules, resolve_dirs)
     end
   end
 
@@ -274,11 +274,21 @@ defmodule Volt.Builder do
     try_resolve(base)
   end
 
-  defp resolve_bare(_specifier, nil), do: :skip
+  defp resolve_bare(specifier, node_modules, resolve_dirs) do
+    dirs =
+      if node_modules, do: [node_modules | resolve_dirs], else: resolve_dirs
 
-  defp resolve_bare(specifier, node_modules) do
+    Enum.find_value(dirs, :skip, fn dir ->
+      case resolve_in_dir(specifier, dir) do
+        {:ok, _} = found -> found
+        _ -> nil
+      end
+    end)
+  end
+
+  defp resolve_in_dir(specifier, dir) do
     {package_name, subpath} = split_specifier(specifier)
-    package_dir = Path.join(node_modules, package_name)
+    package_dir = Path.join(dir, package_name)
 
     if subpath do
       try_resolve(Path.join(package_dir, subpath))

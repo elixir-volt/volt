@@ -12,6 +12,7 @@ defmodule Mix.Tasks.Volt.Build do
     * `--target` — JS target (default: `"es2020"`)
     * `--no-minify` — skip minification
     * `--no-sourcemap` — skip source map generation
+    * `--resolve-dir` — additional directory for bare specifier resolution (repeatable, e.g. `deps`)
     * `--name` — output base name (default: derived from entry filename)
   """
   use Mix.Task
@@ -28,9 +29,13 @@ defmodule Mix.Tasks.Volt.Build do
           target: :string,
           minify: :boolean,
           sourcemap: :boolean,
-          name: :string
+          name: :string,
+          hash: :boolean,
+          resolve_dir: [:string, :keep]
         ]
       )
+
+    resolve_dirs = Keyword.get_values(parsed, :resolve_dir)
 
     opts = [
       entry: Keyword.get(parsed, :entry, "assets/js/app.ts"),
@@ -38,6 +43,8 @@ defmodule Mix.Tasks.Volt.Build do
       target: Keyword.get(parsed, :target, "es2020"),
       minify: Keyword.get(parsed, :minify, true),
       sourcemap: Keyword.get(parsed, :sourcemap, true),
+      resolve_dirs: resolve_dirs,
+      hash: Keyword.get(parsed, :hash, true),
       name: parsed[:name]
     ]
 
