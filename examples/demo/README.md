@@ -1,6 +1,6 @@
 # Volt Demo
 
-A Phoenix LiveView app using **Volt** as the asset pipeline and **LiveVueNext** for Vue template rendering — no esbuild, no Node.js, no JavaScript runtime for SSR.
+A Phoenix LiveView app using **Volt** as the asset pipeline and **PhoenixVapor** for Vue template rendering — no esbuild, no Node.js, no JavaScript runtime for SSR.
 
 ## What this demonstrates
 

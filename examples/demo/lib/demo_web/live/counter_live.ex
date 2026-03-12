@@ -1,6 +1,6 @@
 defmodule DemoWeb.CounterLive do
   use DemoWeb, :live_view
-  use LiveVueNext
+  use PhoenixVapor
 
   def mount(_params, _session, socket) do
     {:ok, assign(socket, count: 0)}
@@ -9,7 +9,7 @@ defmodule DemoWeb.CounterLive do
   def render(assigns) do
     ~VUE"""
     <div class="space-y-6 max-w-md mx-auto mt-12">
-      <h1 class="text-3xl font-bold text-center">Volt + LiveVueNext</h1>
+      <h1 class="text-3xl font-bold text-center">Volt + PhoenixVapor</h1>
       <p class="text-center text-gray-500">Vue templates rendered as native LiveView — no JS runtime</p>
 
       <div class="text-center space-y-4">

@@ -1,11 +1,11 @@
 defmodule DemoWeb.TodoLive do
   use DemoWeb, :live_view
-  use LiveVueNext
+  use PhoenixVapor
 
   def mount(_params, _session, socket) do
     todos = [
       %{id: 1, text: "Set up Volt", done: true},
-      %{id: 2, text: "Add live_vue_next", done: true},
+      %{id: 2, text: "Add PhoenixVapor", done: true},
       %{id: 3, text: "Ship it", done: false}
     ]
 

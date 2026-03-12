@@ -49,7 +49,7 @@ defmodule Demo.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:volt, path: "../.."},
-      {:live_vue_next, path: "../../../live_vue_next"},
+      {:phoenix_vapor, path: "../../../phoenix_vapor"},
       {:oxc, path: "../../../oxc_ex", override: true},
       {:vize, path: "../../../vize_ex", override: true},
       {:quickbeam, path: "../../../quickbeam", override: true},

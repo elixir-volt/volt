@@ -3,6 +3,6 @@ defmodule DemoWeb.PageControllerTest do
 
   test "GET / renders counter" do
     conn = get(build_conn(), ~p"/")
-    assert html_response(conn, 200) =~ "Volt + LiveVueNext"
+    assert html_response(conn, 200) =~ "Volt + PhoenixVapor"
   end
 end
