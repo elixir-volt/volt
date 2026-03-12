@@ -1,17 +1,28 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+  @source_url "https://github.com/dannote/volt"
+
   def project do
     [
       app: :volt,
-      version: "0.1.0",
-      elixir: "~> 1.18",
+      version: @version,
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases(),
+      dialyzer: [plt_add_apps: [:mix]],
+      name: "Volt",
+      description:
+        "Elixir-native frontend build tool — dev server, HMR, and production builds powered by OXC and Vize.",
+      source_url: @source_url,
+      homepage_url: @source_url,
+      package: package(),
+      docs: docs()
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger],
@@ -19,11 +30,46 @@ defmodule Volt.MixProject do
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:oxc, "~> 0.3.0", path: "../oxc_ex"},
+      {:vize, "~> 0.3.0", path: "../vize_ex"},
+      {:plug, "~> 1.16"},
+      {:file_system, "~> 1.0"},
+      {:jason, "~> 1.4"},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
+      {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.35", only: :dev, runtime: false}
+    ]
+  end
+
+  defp aliases do
+    [
+      lint: [
+        "format --check-formatted",
+        "credo --strict",
+        "ex_dna",
+        "dialyzer"
+      ],
+      ci: ["lint", "cmd MIX_ENV=test mix test"]
+    ]
+  end
+
+  defp package do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => @source_url},
+      files: ~w[lib mix.exs README.md LICENSE]
+    ]
+  end
+
+  defp docs do
+    [
+      main: "Volt",
+      extras: ["README.md"],
+      source_ref: "v#{@version}"
     ]
   end
 end

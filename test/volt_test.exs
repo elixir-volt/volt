@@ -1,8 +1,4 @@
 defmodule VoltTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest Volt
-
-  test "greets the world" do
-    assert Volt.hello() == :world
-  end
 end
