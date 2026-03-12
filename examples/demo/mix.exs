@@ -36,7 +36,6 @@ defmodule Demo.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1.0"},
       {:lazy_html, ">= 0.1.0", only: :test},
-      {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",
@@ -53,22 +52,21 @@ defmodule Demo.MixProject do
       {:live_vue_next, path: "../../../live_vue_next"},
       {:oxc, path: "../../../oxc_ex", override: true},
       {:vize, path: "../../../vize_ex", override: true},
-      {:quickbeam, path: "../../../quickbeam", override: true}
+      {:quickbeam, path: "../../../quickbeam", override: true},
+      {:oxide_ex, path: "../../../oxide_ex", override: true},
+      {:rustler, ">= 0.0.0", optional: true}
     ]
   end
 
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup", "assets.build"],
-      "assets.setup": ["tailwind.install --if-missing"],
+      setup: ["deps.get", "assets.build"],
       "assets.build": [
         "compile",
-        "tailwind demo",
-        "volt.build --entry assets/js/app.ts --outdir priv/static/assets/js --resolve-dir deps --no-minify --no-hash"
+        "volt.build --entry assets/js/app.ts --outdir priv/static/assets --resolve-dir deps --no-minify --no-hash --tailwind --tailwind-css assets/css/app.css"
       ],
       "assets.deploy": [
-        "tailwind demo --minify",
-        "volt.build --entry assets/js/app.ts --outdir priv/static/assets/js --resolve-dir deps --no-hash",
+        "volt.build --entry assets/js/app.ts --outdir priv/static/assets --resolve-dir deps --no-hash --tailwind --tailwind-css assets/css/app.css",
         "phx.digest"
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]

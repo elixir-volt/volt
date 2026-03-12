@@ -21,17 +21,6 @@ config :demo, DemoWeb.Endpoint,
   pubsub_server: Demo.PubSub,
   live_view: [signing_salt: "CNAIzA7/"]
 
-# Configure tailwind (the version is required)
-config :tailwind,
-  version: "4.1.12",
-  demo: [
-    args: ~w(
-      --input=assets/css/app.css
-      --output=priv/static/assets/css/app.css
-    ),
-    cd: Path.expand("..", __DIR__)
-  ]
-
 # Configure Elixir's Logger
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",

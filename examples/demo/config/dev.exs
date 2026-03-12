@@ -14,9 +14,7 @@ config :demo, DemoWeb.Endpoint,
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "9Uo/Dvibit8W2vare8V+DP5MDHsNlm2QIn8xCrecFiJTyDGp/mr1T3g68nFYOewM",
-  watchers: [
-    tailwind: {Tailwind, :install_and_run, [:demo, ~w(--watch)]}
-  ]
+  watchers: []
 
 # ## SSL Support
 #

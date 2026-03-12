@@ -32,8 +32,10 @@ defmodule Volt.MixProject do
 
   defp deps do
     [
-      {:oxc, "~> 0.3.0", path: "../oxc_ex"},
-      {:vize, "~> 0.3.0", path: "../vize_ex"},
+      {:oxc, "~> 0.4.0", override: true},
+      {:vize, "~> 0.4.0"},
+      {:oxide_ex, "~> 0.1.0"},
+      {:quickbeam, path: "../quickbeam"},
       {:plug, "~> 1.16"},
       {:websock_adapter, "~> 0.5"},
       {:file_system, "~> 1.0"},
