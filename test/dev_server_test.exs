@@ -1,6 +1,7 @@
 defmodule Volt.DevServerTest do
   use ExUnit.Case, async: false
-  use Plug.Test
+  import Plug.Test
+  import Plug.Conn
 
   @fixture_dir Path.expand("fixtures", __DIR__)
 
