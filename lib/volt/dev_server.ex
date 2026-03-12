@@ -41,6 +41,19 @@ defmodule Volt.DevServer do
   end
 
   @impl true
+  def call(%Plug.Conn{request_path: "/@volt/ws"} = conn, _config) do
+    conn
+    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [], timeout: 60_000)
+    |> Plug.Conn.halt()
+  end
+
+  def call(%Plug.Conn{request_path: "/@volt/client.js"} = conn, _config) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/javascript")
+    |> Plug.Conn.send_resp(200, Volt.HMR.Client.js())
+    |> Plug.Conn.halt()
+  end
+
   def call(%Plug.Conn{request_path: "/@vendor/" <> specifier_js} = conn, _config) do
     specifier = String.trim_trailing(specifier_js, ".js") |> String.replace("_", "/")
 

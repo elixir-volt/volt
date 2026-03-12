@@ -35,6 +35,7 @@ defmodule Volt.MixProject do
       {:oxc, "~> 0.3.0", path: "../oxc_ex"},
       {:vize, "~> 0.3.0", path: "../vize_ex"},
       {:plug, "~> 1.16"},
+      {:websock_adapter, "~> 0.5"},
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
