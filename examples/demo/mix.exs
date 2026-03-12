@@ -49,12 +49,7 @@ defmodule Demo.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:volt, path: "../.."},
-      {:phoenix_vapor, path: "../../../phoenix_vapor"},
-      {:oxc, path: "../../../oxc_ex", override: true},
-      {:vize, path: "../../../vize_ex", override: true},
-      {:quickbeam, path: "../../../quickbeam", override: true},
-      {:oxide_ex, path: "../../../oxide_ex", override: true},
-      {:rustler, ">= 0.0.0", optional: true}
+      {:phoenix_vapor, path: "../../../phoenix_vapor"}
     ]
   end
 
