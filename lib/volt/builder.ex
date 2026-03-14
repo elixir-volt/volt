@@ -7,6 +7,8 @@ defmodule Volt.Builder do
   content-hashed output files with a manifest.
   """
 
+  alias Volt.PackageResolver
+
   @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".vue"]
   @index_files ~w(/index.ts /index.tsx /index.js /index.jsx)
 
@@ -39,7 +41,7 @@ defmodule Volt.Builder do
     minify = Keyword.get(opts, :minify, true)
     sourcemap = Keyword.get(opts, :sourcemap, true)
     define = Keyword.get(opts, :define, %{})
-    node_modules = Keyword.get(opts, :node_modules) || find_node_modules(Path.dirname(entry))
+    node_modules = Keyword.get(opts, :node_modules) || PackageResolver.find_node_modules(Path.dirname(entry))
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
     hash = Keyword.get(opts, :hash, true)
     name = Keyword.get(opts, :name, entry |> Path.basename() |> Path.rootname())
@@ -287,57 +289,15 @@ defmodule Volt.Builder do
   end
 
   defp resolve_in_dir(specifier, dir) do
-    {package_name, subpath} = split_specifier(specifier)
+    {package_name, subpath} = PackageResolver.split_specifier(specifier)
     package_dir = Path.join(dir, package_name)
 
     if subpath do
       try_resolve(Path.join(package_dir, subpath))
     else
-      resolve_package_entry(package_dir, package_name)
+      PackageResolver.resolve_package_entry(package_dir, package_name, &try_resolve/1)
     end
   end
-
-  defp split_specifier("@" <> rest) do
-    case String.split(rest, "/", parts: 3) do
-      [scope, name, subpath] -> {"@#{scope}/#{name}", subpath}
-      [scope, name] -> {"@#{scope}/#{name}", nil}
-      _ -> {"@#{rest}", nil}
-    end
-  end
-
-  defp split_specifier(specifier) do
-    case String.split(specifier, "/", parts: 2) do
-      [name, subpath] -> {name, subpath}
-      [name] -> {name, nil}
-    end
-  end
-
-  defp resolve_package_entry(package_dir, package_name) do
-    pkg_json = Path.join(package_dir, "package.json")
-
-    case File.read(pkg_json) do
-      {:ok, content} ->
-        pkg = :json.decode(content)
-        entry = resolve_exports(pkg) || pkg["module"] || pkg["main"] || "index.js"
-        try_resolve(Path.expand(Path.join(package_dir, entry)))
-
-      {:error, _} ->
-        {:error, {:not_found, package_name}}
-    end
-  end
-
-  defp resolve_exports(%{"exports" => exports}) when is_binary(exports), do: exports
-  defp resolve_exports(%{"exports" => %{"." => entry}}) when is_binary(entry), do: entry
-
-  defp resolve_exports(%{"exports" => %{"." => conditions}}) when is_map(conditions) do
-    resolve_condition(conditions["import"] || conditions["default"] || conditions["require"])
-  end
-
-  defp resolve_exports(_), do: nil
-
-  defp resolve_condition(value) when is_binary(value), do: value
-  defp resolve_condition(%{} = m), do: m["default"] || m["import"] || m["require"]
-  defp resolve_condition(_), do: nil
 
   defp try_resolve(base) do
     Enum.find_value(@extensions, fn ext ->
@@ -349,15 +309,5 @@ defmodule Volt.Builder do
         if File.regular?(path), do: {:ok, path}
       end) ||
       {:error, {:not_found, base}}
-  end
-
-  defp find_node_modules(dir) do
-    candidate = Path.join(dir, "node_modules")
-
-    cond do
-      File.dir?(candidate) -> candidate
-      dir == "/" -> nil
-      true -> find_node_modules(Path.dirname(dir))
-    end
   end
 end

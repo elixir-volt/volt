@@ -9,6 +9,8 @@ defmodule Volt.Vendor do
   Bundled files are cached on disk in `_build/volt/vendor/`.
   """
 
+  alias Volt.PackageResolver
+
   @cache_dir "_build/volt/vendor"
 
   @doc """
@@ -26,7 +28,7 @@ defmodule Volt.Vendor do
   def prebundle(opts) do
     root = Keyword.fetch!(opts, :root)
     force = Keyword.get(opts, :force, false)
-    node_modules = opts[:node_modules] || find_node_modules(root)
+    node_modules = opts[:node_modules] || PackageResolver.find_node_modules(root)
 
     with {:ok, specifiers} <- scan_bare_imports(root),
          :ok <- ensure_cache_dir() do
@@ -159,62 +161,19 @@ defmodule Volt.Vendor do
   end
 
   defp resolve_package_entry(specifier, node_modules) when is_binary(node_modules) do
-    {package_name, subpath} = split_specifier(specifier)
+    {package_name, subpath} = PackageResolver.split_specifier(specifier)
     package_dir = Path.join(node_modules, package_name)
 
     if subpath do
       try_resolve(Path.join(package_dir, subpath))
     else
-      resolve_from_package_json(package_dir, package_name)
+      PackageResolver.resolve_package_entry(package_dir, package_name, &try_resolve/1)
     end
   end
 
   defp resolve_package_entry(_specifier, nil) do
     {:error, :no_node_modules}
   end
-
-  defp split_specifier("@" <> rest) do
-    case String.split(rest, "/", parts: 3) do
-      [scope, name, subpath] -> {"@#{scope}/#{name}", subpath}
-      [scope, name] -> {"@#{scope}/#{name}", nil}
-      _ -> {"@#{rest}", nil}
-    end
-  end
-
-  defp split_specifier(specifier) do
-    case String.split(specifier, "/", parts: 2) do
-      [name, subpath] -> {name, subpath}
-      [name] -> {name, nil}
-    end
-  end
-
-  defp resolve_from_package_json(package_dir, package_name) do
-    pkg_json = Path.join(package_dir, "package.json")
-
-    case File.read(pkg_json) do
-      {:ok, content} ->
-        pkg = :json.decode(content)
-        entry = resolve_exports(pkg) || pkg["module"] || pkg["main"] || "index.js"
-        try_resolve(Path.expand(Path.join(package_dir, entry)))
-
-      {:error, _} ->
-        {:error, {:not_found, package_name}}
-    end
-  end
-
-  defp resolve_exports(%{"exports" => exports}) when is_binary(exports), do: exports
-
-  defp resolve_exports(%{"exports" => %{"." => entry}}) when is_binary(entry), do: entry
-
-  defp resolve_exports(%{"exports" => %{"." => conditions}}) when is_map(conditions) do
-    resolve_condition(conditions["import"] || conditions["default"] || conditions["require"])
-  end
-
-  defp resolve_exports(_), do: nil
-
-  defp resolve_condition(value) when is_binary(value), do: value
-  defp resolve_condition(%{} = m), do: m["default"] || m["import"] || m["require"]
-  defp resolve_condition(_), do: nil
 
   @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mjs"]
 
@@ -223,16 +182,6 @@ defmodule Volt.Vendor do
       path = base <> ext
       if File.regular?(path), do: {:ok, path}
     end) || {:error, {:not_found, base}}
-  end
-
-  defp find_node_modules(dir) do
-    candidate = Path.join(dir, "node_modules")
-
-    cond do
-      File.dir?(candidate) -> candidate
-      dir == "/" -> nil
-      true -> find_node_modules(Path.dirname(dir))
-    end
   end
 
   defp ensure_cache_dir do

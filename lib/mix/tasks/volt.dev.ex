@@ -89,8 +89,7 @@ defmodule Mix.Tasks.Volt.Dev do
     end
   end
 
-  defp format_size(bytes) when bytes < 1024, do: "#{bytes} B"
-  defp format_size(bytes), do: "#{Float.round(bytes / 1024, 1)} KB"
+  defdelegate format_size(bytes), to: Volt.Format
 
   defp iex_running? do
     Code.ensure_loaded?(IEx) and IEx.started?()
