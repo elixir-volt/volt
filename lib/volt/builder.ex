@@ -330,10 +330,14 @@ defmodule Volt.Builder do
   defp resolve_exports(%{"exports" => %{"." => entry}}) when is_binary(entry), do: entry
 
   defp resolve_exports(%{"exports" => %{"." => conditions}}) when is_map(conditions) do
-    conditions["import"] || conditions["default"] || conditions["require"]
+    resolve_condition(conditions["import"] || conditions["default"] || conditions["require"])
   end
 
   defp resolve_exports(_), do: nil
+
+  defp resolve_condition(value) when is_binary(value), do: value
+  defp resolve_condition(%{} = m), do: m["default"] || m["import"] || m["require"]
+  defp resolve_condition(_), do: nil
 
   defp try_resolve(base) do
     Enum.find_value(@extensions, fn ext ->

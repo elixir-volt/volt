@@ -33,9 +33,9 @@ defmodule Volt.MixProject do
   defp deps do
     [
       {:oxc, "~> 0.5.0"},
-      {:vize, "~> 0.5.0"},
+      {:vize, "~> 0.5.0 or ~> 0.6.0"},
       {:oxide_ex, "~> 0.2.0"},
-      {:quickbeam, "~> 0.3.0"},
+      {:quickbeam, "~> 0.3.0 or ~> 0.6.0"},
       {:plug, "~> 1.16"},
       {:websock_adapter, "~> 0.5"},
       {:file_system, "~> 1.0"},
