@@ -137,15 +137,8 @@ defmodule Volt.Pipeline do
   end
 
   defp compile_css_module(path, source, opts) do
-    {:ok, js, scoped_css} = Volt.CSSModules.compile(source, Path.basename(path))
     minify = Keyword.get(opts, :minify, false)
-
-    scoped_css =
-      case Vize.compile_css(scoped_css, minify: minify) do
-        {:ok, %{code: minified}} -> minified
-        _ -> scoped_css
-      end
-
+    {:ok, js, scoped_css} = Volt.CSSModules.compile(source, Path.basename(path), minify: minify)
     {:ok, %{code: js, sourcemap: nil, css: scoped_css, hashes: nil}}
   end
 

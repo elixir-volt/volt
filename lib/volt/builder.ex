@@ -242,6 +242,7 @@ defmodule Volt.Builder do
     {:ok, js, scoped_css}
   end
 
+
   defp compile_vue_module(source, path) do
     case Vize.compile_sfc(source, filename: Path.basename(path)) do
       {:ok, result} -> {:ok, result.code, result.css}
