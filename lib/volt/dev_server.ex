@@ -10,7 +10,7 @@ defmodule Volt.DevServer do
 
     * `:root` — source directory (required, e.g. `"assets/src"`)
     * `:prefix` — URL prefix to intercept (default: `"/assets"`)
-    * `:target` — JS downlevel target (e.g. `"es2020"`)
+    * `:target` — JS downlevel target (e.g. `:es2020`)
     * `:import_source` — JSX import source (e.g. `"vue"`)
     * `:vapor` — use Vue Vapor mode (default: `false`)
 
@@ -19,7 +19,7 @@ defmodule Volt.DevServer do
       plug Volt.DevServer,
         root: "assets/src",
         prefix: "/assets",
-        target: "es2020"
+        target: :es2020
   """
 
   @behaviour Plug

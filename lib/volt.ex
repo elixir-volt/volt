@@ -12,7 +12,7 @@ defmodule Volt do
 
       plug Volt.DevServer,
         root: "assets/src",
-        target: "es2020"
+        target: :es2020
 
   Or use the Mix tasks:
 

@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Volt.Dev do
     * `--tailwind` — enable Tailwind CSS rebuilds
     * `--tailwind-css` — custom Tailwind input CSS file
     * `--tailwind-outdir` — directory to write rebuilt CSS (default: `"priv/static/assets/css"`)
-    * `--target` — JS target (default: `"es2020"`)
+    * `--target` — JS target (default: `es2020`)
   """
   use Mix.Task
 

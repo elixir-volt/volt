@@ -5,7 +5,7 @@ defmodule Volt.ConfigTest do
     test "returns defaults when no app env set" do
       config = Volt.Config.build()
       assert config.entry == "assets/js/app.ts"
-      assert config.target == "es2020"
+      assert config.target == :es2020
       assert config.minify == true
       assert config.external == []
       assert config.aliases == %{}
@@ -14,8 +14,8 @@ defmodule Volt.ConfigTest do
     end
 
     test "overrides take precedence" do
-      config = Volt.Config.build(target: "es2022", minify: false)
-      assert config.target == "es2022"
+      config = Volt.Config.build(target: :es2022, minify: false)
+      assert config.target == :es2022
       assert config.minify == false
     end
 

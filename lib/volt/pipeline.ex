@@ -24,7 +24,7 @@ defmodule Volt.Pipeline do
 
   ## Options
 
-    * `:target` — downlevel target (e.g. `"es2020"`)
+    * `:target` — downlevel target (e.g. `:es2020`)
     * `:import_source` — JSX import source (e.g. `"vue"`)
     * `:sourcemap` — generate source maps (default: `true`)
     * `:minify` — minify output (default: `false`)
@@ -106,8 +106,8 @@ defmodule Volt.Pipeline do
 
   defp compile_js(path, source, opts) do
     sourcemap = Keyword.get(opts, :sourcemap, true)
-    target = Keyword.get(opts, :target, "")
-    import_source = Keyword.get(opts, :import_source, "")
+    target = opts |> Keyword.get(:target) |> stringify()
+    import_source = opts |> Keyword.get(:import_source) |> stringify()
 
     transform_opts = [
       sourcemap: sourcemap,
@@ -145,4 +145,8 @@ defmodule Volt.Pipeline do
   defp compile_json(source) do
     {:ok, %{code: "export default #{source};\n", sourcemap: nil, css: nil, hashes: nil}}
   end
+
+  defp stringify(nil), do: ""
+  defp stringify(atom) when is_atom(atom), do: Atom.to_string(atom)
+  defp stringify(str) when is_binary(str), do: str
 end

@@ -7,7 +7,7 @@ defmodule Volt.Config do
       # config/config.exs
       config :volt,
         entry: "assets/js/app.ts",
-        target: "es2020",
+        target: :es2020,
         external: ~w(phoenix phoenix_html phoenix_live_view),
         aliases: %{
           "@" => "assets/src",
@@ -33,18 +33,18 @@ defmodule Volt.Config do
   @defaults %{
     entry: "assets/js/app.ts",
     outdir: "priv/static/assets",
-    target: "es2020",
+    target: :es2020,
     minify: true,
     sourcemap: true,
     hash: true,
     code_splitting: true,
-    mode: "production",
+    mode: :production,
     external: [],
     aliases: %{},
     plugins: [],
     resolve_dirs: [],
     root: "assets",
-    import_source: "",
+    import_source: nil,
     vapor: false
   }
 

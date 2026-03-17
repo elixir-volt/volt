@@ -12,7 +12,7 @@ defmodule Mix.Tasks.Volt.Build do
 
     * `--entry` — entry file (repeatable, default from config or `"assets/js/app.ts"`)
     * `--outdir` — output directory (default: `"priv/static/assets"`)
-    * `--target` — JS target (default: `"es2020"`)
+    * `--target` — JS target (default: `es2020`)
     * `--no-minify` — skip minification
     * `--no-sourcemap` — skip source map generation
     * `--resolve-dir` — additional directory for bare specifier resolution (repeatable)

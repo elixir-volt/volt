@@ -16,7 +16,7 @@ defmodule Volt.PipelineTest do
     end
 
     test "applies target downleveling" do
-      {:ok, result} = Volt.Pipeline.compile("app.js", "const x = a ?? b", target: "es2019")
+      {:ok, result} = Volt.Pipeline.compile("app.js", "const x = a ?? b", target: :es2019)
       refute result.code =~ "??"
     end
   end

@@ -23,7 +23,7 @@ defmodule Volt.Builder do
 
     * `:entry` — entry file path or list of paths (required)
     * `:outdir` — output directory (default: `"priv/static/assets"`)
-    * `:target` — JS target (e.g. `"es2020"`)
+    * `:target` — JS target (e.g. `:es2020`)
     * `:minify` — minify output (default: `true`)
     * `:sourcemap` — generate source maps (default: `true`)
     * `:define` — compile-time replacements
@@ -41,7 +41,7 @@ defmodule Volt.Builder do
   def build(opts) do
     entries = opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&Path.expand/1)
     outdir = Keyword.get(opts, :outdir, "priv/static/assets") |> Path.expand()
-    target = Keyword.get(opts, :target, "")
+    target = opts |> Keyword.get(:target, "") |> to_string()
     minify = Keyword.get(opts, :minify, true)
     sourcemap = Keyword.get(opts, :sourcemap, true)
     define = Keyword.get(opts, :define, %{})
