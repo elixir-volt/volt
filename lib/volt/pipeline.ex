@@ -132,7 +132,7 @@ defmodule Volt.Pipeline do
     minify = Keyword.get(opts, :minify, false)
 
     result =
-      if File.regular?(path) and source =~ ~r/@import\s/ do
+      if File.regular?(path) do
         Vize.bundle_css(path, minify: minify)
       else
         Vize.compile_css(source, minify: minify)
