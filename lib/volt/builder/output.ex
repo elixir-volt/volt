@@ -1,14 +1,17 @@
 defmodule Volt.Builder.Output do
   @moduledoc false
 
+  alias Volt.Builder.Externals
+
   @doc "Bundle modules into a single JS file and write output."
-  def build_single(name, {js_files, css_parts}, outdir, hash, bundle_opts, plugins) do
+  def build_single(name, {js_files, css_parts}, outdir, hash, bundle_opts, ctx) do
     File.mkdir_p!(outdir)
 
     case OXC.bundle(js_files, bundle_opts) do
       {:ok, bundle_result} ->
         {js_code, js_sourcemap} = extract_bundle(bundle_result)
-        js_code = Volt.PluginRunner.render_chunk(plugins, js_code, %{name: name, type: :entry})
+        js_code = inject_external_preamble(js_code, js_files, ctx)
+        js_code = Volt.PluginRunner.render_chunk(ctx.plugins, js_code, %{name: name, type: :entry})
 
         js_filename = hashed_name(name, js_code, ".js", hash)
         write_js(outdir, js_filename, js_code, js_sourcemap)
@@ -29,7 +32,7 @@ defmodule Volt.Builder.Output do
   end
 
   @doc "Bundle modules into separate chunks based on the chunk graph."
-  def build_chunks(entry, name, modules, dep_map, {js_files, css_parts}, outdir, hash, bundle_opts, plugins) do
+  def build_chunks(entry, name, modules, dep_map, {js_files, css_parts}, outdir, hash, bundle_opts, ctx) do
     File.mkdir_p!(outdir)
 
     graph = Volt.ChunkGraph.build(entry, modules, dep_map)
@@ -61,8 +64,10 @@ defmodule Volt.Builder.Output do
     js_results =
       Enum.map(chunk_filenames, fn {chunk_id, {_filename, code}} ->
         chunk = graph.chunks[chunk_id]
+        chunk_js = select_chunk_files(chunk.modules, js_map)
+        code = inject_external_preamble(code, chunk_js, ctx)
         code = rewrite_dynamic_imports(code, graph.module_to_chunk, chunk_url_map)
-        code = Volt.PluginRunner.render_chunk(plugins, code, %{name: chunk_id, type: chunk.type})
+        code = Volt.PluginRunner.render_chunk(ctx.plugins, code, %{name: chunk_id, type: chunk.type})
 
         filename = hashed_name(
           (if chunk.type == :entry, do: name, else: "#{name}-#{chunk_id}"),
@@ -145,6 +150,30 @@ defmodule Volt.Builder.Output do
       end)
 
     if resolved, do: chunk_url_map[resolved]
+  end
+
+  # ── External globals ─────────────────────────────────────────────────
+
+  defp inject_external_preamble(code, js_files, ctx) do
+    if MapSet.size(ctx.external_set) == 0 do
+      code
+    else
+      external_imports = Externals.collect_imports(js_files, ctx.external_set)
+
+      if map_size(external_imports) == 0 do
+        code
+      else
+        preamble = Externals.generate_preamble(external_imports, ctx.external_globals)
+        inject_into_iife(code, preamble)
+      end
+    end
+  end
+
+  defp inject_into_iife(code, preamble) do
+    case String.split(code, "(() => {\n", parts: 2) do
+      [before, rest] -> before <> "(() => {\n" <> preamble <> rest
+      _ -> preamble <> code
+    end
   end
 
   # ── File writing ────────────────────────────────────────────────────

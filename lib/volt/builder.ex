@@ -34,8 +34,11 @@ defmodule Volt.Builder do
     * `:plugins` — list of `Volt.Plugin` modules
     * `:mode` — build mode for env variables (default: `"production"`)
     * `:code_splitting` — split dynamic imports into separate chunks (default: `true`)
-    * `:external` — list of specifiers to exclude from the bundle (e.g. `["phoenix", "phoenix_html"]`).
-      External imports are left as-is in the output.
+    * `:external` — specifiers to exclude from the bundle and access as globals.
+      Accepts a list (global name auto-derived) or a map of `specifier => global_name`:
+
+          external: ["vue", "phoenix"]
+          external: %{"vue" => "Vue", "phoenix" => "Phoenix"}
   """
   @spec build(keyword()) :: {:ok, build_result()} | {:error, term()}
   def build(opts) do
@@ -49,7 +52,8 @@ defmodule Volt.Builder do
     aliases = Keyword.get(opts, :aliases, %{})
     plugins = Keyword.get(opts, :plugins, [])
     code_splitting = Keyword.get(opts, :code_splitting, true)
-    external = Keyword.get(opts, :external, []) |> MapSet.new()
+    external_raw = Keyword.get(opts, :external, [])
+    {external_set, external_globals} = normalize_external(external_raw)
 
     first_entry = hd(entries)
     node_modules = Keyword.get(opts, :node_modules) || PackageResolver.find_node_modules(Path.dirname(first_entry))
@@ -65,7 +69,8 @@ defmodule Volt.Builder do
       resolve_dirs: resolve_dirs,
       aliases: aliases,
       plugins: plugins,
-      external: external
+      external: external_set,
+      external_globals: external_globals
     }
 
     bundle_opts = [
@@ -91,10 +96,12 @@ defmodule Volt.Builder do
   defp build_entry(entry, name, ctx, outdir, target, hash, bundle_opts, code_splitting) do
     with {:ok, modules, dep_map} <- Collector.collect(entry, ctx),
          {:ok, compiled} <- compile_all(modules, target, ctx.plugins) do
+      output_ctx = %{plugins: ctx.plugins, external_set: ctx.external, external_globals: ctx.external_globals}
+
       if code_splitting and has_dynamic_imports?(dep_map) do
-        Output.build_chunks(entry, name, modules, dep_map, compiled, outdir, hash, bundle_opts, ctx.plugins)
+        Output.build_chunks(entry, name, modules, dep_map, compiled, outdir, hash, bundle_opts, output_ctx)
       else
-        Output.build_single(name, compiled, outdir, hash, bundle_opts, ctx.plugins)
+        Output.build_single(name, compiled, outdir, hash, bundle_opts, output_ctx)
       end
     end
   end
@@ -166,6 +173,24 @@ defmodule Volt.Builder do
       {:ok, %{code: code}} -> {:ok, code, nil}
       {:error, errors} -> {:error, errors}
     end
+  end
+
+  defp normalize_external(externals) when is_map(externals) do
+    set = externals |> Map.keys() |> MapSet.new()
+    {set, externals}
+  end
+
+  defp normalize_external(externals) when is_list(externals) do
+    set = MapSet.new(externals)
+    globals = Map.new(externals, &{&1, derive_global_name(&1)})
+    {set, globals}
+  end
+
+  defp derive_global_name(specifier) do
+    specifier
+    |> String.replace(~r"^@\w+/", "")
+    |> String.split(~r"[-_/]")
+    |> Enum.map_join(&String.capitalize/1)
   end
 
   defp merge_build_results(results) do

@@ -141,5 +141,46 @@ defmodule Volt.BuilderTest do
           outdir: @outdir
         )
     end
+
+    test "external imports become global access in IIFE" do
+      File.write!(Path.join(@fixture_dir, "src/vue_app.ts"), """
+      import { ref, computed } from 'vue'
+      const count = ref(0)
+      const double = computed(() => count.value * 2)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/vue_app.ts"),
+          outdir: @outdir,
+          external: ["vue"],
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "const { ref, computed } = Vue;"
+      assert js =~ "ref(0)"
+      refute js =~ ~s(from 'vue')
+    end
+
+    test "external with explicit global name" do
+      File.write!(Path.join(@fixture_dir, "src/ext_app.ts"), """
+      import { ref } from 'vue'
+      ref(0)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/ext_app.ts"),
+          outdir: @outdir,
+          external: %{"vue" => "MyVue"},
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "const { ref } = MyVue;"
+    end
   end
 end
