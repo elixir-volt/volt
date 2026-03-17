@@ -215,8 +215,7 @@ defmodule Volt.Builder.Output do
   end
 
   def hashed_name(name, content, ext, true) do
-    hash = :crypto.hash(:sha256, content) |> Base.encode16(case: :lower) |> binary_part(0, 8)
-    "#{name}-#{hash}#{ext}"
+    "#{name}-#{Volt.Format.content_hash(content)}#{ext}"
   end
 
   def hashed_name(name, _content, ext, false), do: "#{name}#{ext}"

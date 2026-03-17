@@ -65,8 +65,7 @@ defmodule Volt.Config do
 
     @defaults
     |> Map.merge(Map.new(app_env))
-    |> Map.merge(Map.new(overrides, fn {k, v} -> {k, v} end))
-    |> maybe_wrap_entry()
+    |> Map.merge(Map.new(overrides))
   end
 
   @doc """
@@ -89,6 +88,4 @@ defmodule Volt.Config do
     Application.get_env(:volt, :tailwind, [])
   end
 
-  defp maybe_wrap_entry(%{entry: entries} = config) when is_list(entries), do: config
-  defp maybe_wrap_entry(config), do: config
 end

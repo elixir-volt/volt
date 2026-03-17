@@ -119,10 +119,5 @@ defmodule Volt.Builder.Externals do
     parts |> Enum.reverse() |> Enum.join("\n")
   end
 
-  defp derive_global(specifier) do
-    specifier
-    |> String.replace(~r"^@\w+/", "")
-    |> String.split(~r"[-_/]")
-    |> Enum.map_join(&String.capitalize/1)
-  end
+  defp derive_global(specifier), do: Volt.Builder.derive_global_name(specifier)
 end

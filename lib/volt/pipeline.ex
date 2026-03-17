@@ -141,6 +141,12 @@ defmodule Volt.Pipeline do
     case result do
       {:ok, %{code: code}} ->
         {:ok, %{code: code, sourcemap: nil, css: nil, hashes: nil}}
+
+      {:ok, %{errors: errors}} when errors != [] ->
+        {:error, errors}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

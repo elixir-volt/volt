@@ -51,7 +51,7 @@ defmodule Volt.Vendor do
   """
   @spec vendor_url(String.t()) :: String.t()
   def vendor_url(specifier) do
-    "/@vendor/#{safe_filename(specifier)}.js"
+    "/@vendor/#{encode_specifier(specifier)}.js"
   end
 
   @doc """
@@ -96,28 +96,7 @@ defmodule Volt.Vendor do
     end
   end
 
-  defp extract_vue_imports(source) do
-    case Vize.parse_sfc(source) do
-      {:ok, descriptor} ->
-        imports =
-          [descriptor.script, descriptor.script_setup]
-          |> Enum.reject(&is_nil/1)
-          |> Enum.flat_map(fn block ->
-            lang = block[:lang] || "js"
-            filename = "script.#{lang}"
-
-            case OXC.imports(block.content, filename) do
-              {:ok, imports} -> imports
-              {:error, _} -> []
-            end
-          end)
-
-        {:ok, imports}
-
-      {:error, _} ->
-        {:ok, []}
-    end
-  end
+  defp extract_vue_imports(source), do: Volt.VueImports.extract(source)
 
   defp bare_specifier?(spec) do
     not String.starts_with?(spec, ".") and
@@ -190,10 +169,20 @@ defmodule Volt.Vendor do
   end
 
   defp cache_path(specifier) do
-    Path.join(@cache_dir, safe_filename(specifier) <> ".js")
+    Path.join(@cache_dir, encode_specifier(specifier) <> ".js")
   end
 
-  defp safe_filename(specifier) do
-    String.replace(specifier, ~r"[/@]", "_")
+  @doc false
+  def encode_specifier(specifier) do
+    specifier
+    |> String.replace("@", "__at__")
+    |> String.replace("/", "__slash__")
+  end
+
+  @doc false
+  def decode_specifier(encoded) do
+    encoded
+    |> String.replace("__slash__", "/")
+    |> String.replace("__at__", "@")
   end
 end

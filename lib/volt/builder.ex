@@ -197,7 +197,8 @@ defmodule Volt.Builder do
     {set, globals}
   end
 
-  defp derive_global_name(specifier) do
+  @doc false
+  def derive_global_name(specifier) do
     specifier
     |> String.replace(~r"^@\w+/", "")
     |> String.split(~r"[-_/]")

@@ -59,7 +59,7 @@ defmodule Volt.DevServer do
   end
 
   def call(%Plug.Conn{request_path: "/@vendor/" <> specifier_js} = conn, _config) do
-    specifier = String.trim_trailing(specifier_js, ".js") |> String.replace("_", "/")
+    specifier = specifier_js |> String.trim_trailing(".js") |> Volt.Vendor.decode_specifier()
 
     case Volt.Vendor.read(specifier) do
       {:ok, code} ->
@@ -194,12 +194,7 @@ defmodule Volt.DevServer do
     end
   end
 
-  defp file_mtime(path) do
-    case File.stat(path, time: :posix) do
-      {:ok, %{mtime: mtime}} -> mtime
-      _ -> 0
-    end
-  end
+  defp file_mtime(path), do: Volt.Format.file_mtime(path)
 
   defp error_overlay(errors) do
     msg =

@@ -187,7 +187,7 @@ defmodule Mix.Tasks.Volt.Build do
         path = Path.join(css_outdir, filename)
         File.write!(path, css)
 
-        Mix.shell().info("  #{filename}  #{format_size(byte_size(css))}")
+        Mix.shell().info("  #{filename}  #{Volt.Format.format_size(byte_size(css))}")
         Mix.shell().info("Built Tailwind in #{ms}ms")
 
       {:error, reason} ->
@@ -196,11 +196,8 @@ defmodule Mix.Tasks.Volt.Build do
     end
   end
 
-  defp content_hash(content) do
-    :crypto.hash(:sha256, content) |> Base.encode16(case: :lower) |> binary_part(0, 8)
-  end
+  defp content_hash(content), do: Volt.Format.content_hash(content)
 
-  defp format_size(bytes), do: Volt.Format.format_size(bytes)
 
   defp format_file(path) do
     Volt.Format.format_with_gzip(File.read!(path))

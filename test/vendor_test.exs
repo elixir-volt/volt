@@ -88,7 +88,11 @@ defmodule Volt.VendorTest do
     end
 
     test "handles scoped packages" do
-      assert Volt.Vendor.vendor_url("@vue/reactivity") == "/@vendor/_vue_reactivity.js"
+      url = Volt.Vendor.vendor_url("@vue/reactivity")
+      assert url =~ "/@vendor/"
+      assert url =~ ".js"
+      decoded = url |> String.trim_leading("/@vendor/") |> String.trim_trailing(".js") |> Volt.Vendor.decode_specifier()
+      assert decoded == "@vue/reactivity"
     end
   end
 end

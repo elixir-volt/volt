@@ -121,7 +121,5 @@ defmodule Volt.Assets do
     end
   end
 
-  defp content_hash(content) do
-    :crypto.hash(:sha256, content) |> Base.encode16(case: :lower) |> binary_part(0, 8)
-  end
+  defp content_hash(content), do: Volt.Format.content_hash(content)
 end

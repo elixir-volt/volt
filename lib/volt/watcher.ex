@@ -167,7 +167,8 @@ defmodule Volt.Watcher do
   defp handle_js_change(path, state) do
     relative = Path.relative_to(path, state.root)
 
-    old_entry = Volt.Cache.get(path, 0)
+    old_mtime = file_mtime(path)
+    old_entry = Volt.Cache.get(path, old_mtime)
     Volt.Cache.evict(path)
 
     case File.read(path) do
@@ -180,6 +181,7 @@ defmodule Volt.Watcher do
               code: result.code,
               sourcemap: result.sourcemap,
               css: result.css,
+              hashes: result.hashes,
               content_type: "application/javascript"
             }
 
@@ -260,12 +262,7 @@ defmodule Volt.Watcher do
     end)
   end
 
-  defp file_mtime(path) do
-    case File.stat(path, time: :posix) do
-      {:ok, %{mtime: mtime}} -> mtime
-      _ -> 0
-    end
-  end
+  defp file_mtime(path), do: Volt.Format.file_mtime(path)
 
   defp maybe_expand(nil), do: nil
   defp maybe_expand(path), do: Path.expand(path)
