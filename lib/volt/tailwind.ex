@@ -20,7 +20,7 @@ defmodule Volt.Tailwind do
 
   use GenServer
 
-  @bundle_path Path.join(:code.priv_dir(:volt) |> to_string(), "tailwind.js")
+  defp bundle_path, do: Application.app_dir(:volt, "priv/tailwind.js")
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -57,27 +57,34 @@ defmodule Volt.Tailwind do
   def init(opts) do
     sources = opts[:sources] || Volt.Config.tailwind()[:sources] || []
 
-    {:ok, rt} = QuickBEAM.start()
-    {:ok, _} = QuickBEAM.eval(rt, "globalThis.process = {env: {NODE_ENV: 'production'}};")
-    {:ok, _} = QuickBEAM.eval(rt, File.read!(@bundle_path))
-
-    scanner =
-      if sources != [] do
-        oxide_sources = Enum.map(sources, &to_oxide_source/1)
-        Oxide.new(sources: oxide_sources)
-      end
-
     {:ok,
      %{
-       runtime: rt,
-       scanner: scanner,
+       runtime: nil,
+       scanner: nil,
        sources: sources,
        last_css: nil
      }}
   end
 
+  defp ensure_runtime(%{runtime: nil} = state) do
+    {:ok, rt} = QuickBEAM.start()
+    {:ok, _} = QuickBEAM.eval(rt, "globalThis.process = {env: {NODE_ENV: 'production'}};")
+    {:ok, _} = QuickBEAM.eval(rt, File.read!(bundle_path()))
+
+    scanner =
+      if state.sources != [] do
+        oxide_sources = Enum.map(state.sources, &to_oxide_source/1)
+        Oxide.new(sources: oxide_sources)
+      end
+
+    %{state | runtime: rt, scanner: scanner}
+  end
+
+  defp ensure_runtime(state), do: state
+
   @impl true
   def handle_call({:build, opts}, _from, state) do
+    state = ensure_runtime(state)
     sources = opts[:sources] || state.sources
     css_input = opts[:css]
     minify = Keyword.get(opts, :minify, false)
@@ -103,6 +110,7 @@ defmodule Volt.Tailwind do
   end
 
   def handle_call({:rebuild, changed_files, opts}, _from, state) do
+    state = ensure_runtime(state)
     minify = Keyword.get(opts, :minify, false)
     css_input = opts[:css]
 
@@ -140,8 +148,9 @@ defmodule Volt.Tailwind do
   end
 
   @impl true
-  def terminate(_reason, state) do
-    if state.runtime, do: QuickBEAM.stop(state.runtime)
+  def terminate(_reason, %{runtime: nil}), do: :ok
+  def terminate(_reason, %{runtime: rt}) do
+    QuickBEAM.stop(rt)
     :ok
   end
 

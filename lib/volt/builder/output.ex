@@ -142,14 +142,22 @@ defmodule Volt.Builder.Output do
   end
 
   defp find_chunk_url(spec, module_to_chunk, chunk_url_map) do
-    resolved =
+    spec_normalized =
+      spec
+      |> String.trim_leading("./")
+      |> String.trim_leading("../")
+      |> Path.rootname()
+
+    chunk_id =
       Enum.find_value(module_to_chunk, fn {mod_path, chunk_id} ->
-        basename = Path.basename(mod_path, Path.extname(mod_path))
-        spec_base = spec |> String.trim_leading("./") |> String.trim_leading("../") |> Path.rootname()
-        if basename == Path.basename(spec_base), do: chunk_id
+        mod_normalized = Path.rootname(mod_path)
+
+        if String.ends_with?(mod_normalized, spec_normalized) do
+          chunk_id
+        end
       end)
 
-    if resolved, do: chunk_url_map[resolved]
+    if chunk_id, do: chunk_url_map[chunk_id]
   end
 
   # ── External globals ─────────────────────────────────────────────────
@@ -170,9 +178,31 @@ defmodule Volt.Builder.Output do
   end
 
   defp inject_into_iife(code, preamble) do
-    case String.split(code, "(() => {\n", parts: 2) do
-      [before, rest] -> before <> "(() => {\n" <> preamble <> rest
-      _ -> preamble <> code
+    case find_iife_body_start(code) do
+      {:ok, offset} ->
+        binary_part(code, 0, offset) <> "\n" <> preamble <> binary_part(code, offset, byte_size(code) - offset)
+
+      :error ->
+        preamble <> code
+    end
+  end
+
+  defp find_iife_body_start(code) do
+    case OXC.parse(code, "iife.js") do
+      {:ok, ast} ->
+        {_ast, result} =
+          OXC.postwalk(ast, :error, fn
+            %{type: "ArrowFunctionExpression", body: %{type: "FunctionBody", start: start}} = node, :error ->
+              {node, {:ok, start + 1}}
+
+            node, acc ->
+              {node, acc}
+          end)
+
+        result
+
+      {:error, _} ->
+        :error
     end
   end
 

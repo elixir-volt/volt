@@ -11,7 +11,10 @@ defmodule Volt.Vendor do
 
   alias Volt.PackageResolver
 
-  @cache_dir "_build/volt/vendor"
+  defp cache_dir do
+    build_path = System.get_env("MIX_BUILD_PATH") || "_build"
+    Path.join(build_path, "volt/vendor")
+  end
 
   @doc """
   Scan source files and pre-bundle any bare npm imports.
@@ -164,12 +167,12 @@ defmodule Volt.Vendor do
   end
 
   defp ensure_cache_dir do
-    File.mkdir_p!(@cache_dir)
+    File.mkdir_p!(cache_dir())
     :ok
   end
 
   defp cache_path(specifier) do
-    Path.join(@cache_dir, encode_specifier(specifier) <> ".js")
+    Path.join(cache_dir(), encode_specifier(specifier) <> ".js")
   end
 
   @doc false
