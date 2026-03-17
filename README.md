@@ -175,7 +175,7 @@ volt
 
 ## Demo
 
-See [`examples/demo/`](examples/demo/) for a full Phoenix app using Volt + [PhoenixVapor](https://github.com/dannote/phoenix_vapor) — Vue templates rendered as native LiveView, Tailwind CSS, no JavaScript runtime for SSR.
+See [`examples/demo/`](https://github.com/elixir-volt/volt/tree/master/examples/demo) for a full Phoenix app using Volt + [PhoenixVapor](https://github.com/elixir-volt/phoenix_vapor) — Vue templates rendered as native LiveView, Tailwind CSS, no JavaScript runtime for SSR.
 
 ## License
 

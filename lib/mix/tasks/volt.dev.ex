@@ -89,6 +89,7 @@ defmodule Mix.Tasks.Volt.Dev do
     end
   end
 
+  @doc false
   defdelegate format_size(bytes), to: Volt.Format
 
   defp iex_running? do

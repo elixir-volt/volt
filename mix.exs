@@ -1,7 +1,7 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
   @source_url "https://github.com/elixir-volt/volt"
 
   def project do
@@ -32,10 +32,10 @@ defmodule Volt.MixProject do
 
   defp deps do
     [
-      {:oxc, "~> 0.5.0"},
+      {:oxc, "~> 0.5.1"},
       {:vize, "~> 0.7.0"},
       {:oxide_ex, "~> 0.2.0"},
-      {:quickbeam, "~> 0.3.0 or ~> 0.6.0"},
+      {:quickbeam, "~> 0.7.1"},
       {:plug, "~> 1.16"},
       {:websock_adapter, "~> 0.5"},
       {:file_system, "~> 1.0"},
