@@ -42,7 +42,7 @@ defmodule Volt.Builder do
   """
   @spec build(keyword()) :: {:ok, build_result()} | {:error, term()}
   def build(opts) do
-    entries = opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&Path.expand/1)
+    entries = opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&Path.expand/1) |> expand_html_entries()
     outdir = Keyword.get(opts, :outdir, "priv/static/assets") |> Path.expand()
     target = opts |> Keyword.get(:target, "") |> to_string()
     minify = Keyword.get(opts, :minify, true)
@@ -173,6 +173,17 @@ defmodule Volt.Builder do
       {:ok, %{code: code}} -> {:ok, code, nil}
       {:error, errors} -> {:error, errors}
     end
+  end
+
+  defp expand_html_entries(entries) do
+    Enum.flat_map(entries, fn entry ->
+      if Volt.HTMLEntry.html?(entry) do
+        {:ok, %{scripts: scripts}} = Volt.HTMLEntry.extract(entry)
+        scripts
+      else
+        [entry]
+      end
+    end)
   end
 
   defp normalize_external(externals) when is_map(externals) do

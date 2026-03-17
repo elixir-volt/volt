@@ -117,8 +117,8 @@ defmodule Mix.Tasks.Volt.Build do
     case result do
       {:ok, %{js: js, css: css, manifest: manifest} = result} ->
         case js do
-          %{path: path, size: size} ->
-            Mix.shell().info("  #{Path.basename(path)}  #{format_size(size)}")
+          %{path: path} ->
+            Mix.shell().info("  #{Path.basename(path)}  #{format_file(path)}")
 
           _ ->
             :ok
@@ -126,12 +126,12 @@ defmodule Mix.Tasks.Volt.Build do
 
         if chunks = result[:chunks] do
           for chunk <- chunks, chunk.type != :entry do
-            Mix.shell().info("  #{Path.basename(chunk.path)}  #{format_size(chunk.size)}")
+            Mix.shell().info("  #{Path.basename(chunk.path)}  #{format_file(chunk.path)}")
           end
         end
 
         if css do
-          Mix.shell().info("  #{Path.basename(css.path)}  #{format_size(css.size)}")
+          Mix.shell().info("  #{Path.basename(css.path)}  #{format_file(css.path)}")
         end
 
         Mix.shell().info("  manifest.json  #{map_size(manifest)} entries")
@@ -201,4 +201,8 @@ defmodule Mix.Tasks.Volt.Build do
   end
 
   defp format_size(bytes), do: Volt.Format.format_size(bytes)
+
+  defp format_file(path) do
+    Volt.Format.format_with_gzip(File.read!(path))
+  end
 end

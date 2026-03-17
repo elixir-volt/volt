@@ -49,6 +49,8 @@ defmodule Demo.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:volt, path: "../..", override: true},
+      {:oxc, "~> 0.5.2", override: true},
+      {:vize, "~> 0.8.0", override: true},
       {:phoenix_vapor, path: "../../../phoenix_vapor"}
     ]
   end
