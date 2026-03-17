@@ -3,15 +3,15 @@ defmodule Mix.Tasks.Volt.Dev do
   @moduledoc """
   Start the Volt file watcher for development.
 
-  Watches source files, recompiles on change, rebuilds Tailwind CSS
-  when templates change, and pushes HMR updates over WebSocket.
+  Reads configuration from `config :volt` and `config :volt, :server`.
+  CLI flags override config values.
 
       mix volt.dev
 
   ## Options
 
-    * `--root` — asset source directory (default: `"assets"`)
-    * `--watch-dir` — additional directory to watch (repeatable, e.g. `lib/`)
+    * `--root` — asset source directory (default from config or `"assets"`)
+    * `--watch-dir` — additional directory to watch (repeatable)
     * `--tailwind` — enable Tailwind CSS rebuilds
     * `--tailwind-css` — custom Tailwind input CSS file
     * `--tailwind-outdir` — directory to write rebuilt CSS (default: `"priv/static/assets/css"`)
@@ -35,28 +35,47 @@ defmodule Mix.Tasks.Volt.Dev do
         ]
       )
 
-    tailwind = Keyword.get(parsed, :tailwind, false)
-    watch_dirs = Keyword.get_values(parsed, :watch_dir)
-    watch_dirs = if tailwind and watch_dirs == [], do: ["lib/"], else: watch_dirs
+    config = Volt.Config.build()
+    server_config = Volt.Config.server()
+    tailwind_config = Volt.Config.tailwind()
 
-    if tailwind do
-      initial_build(parsed)
+    root = Keyword.get(parsed, :root) || to_string(config.root)
+    target = Keyword.get(parsed, :target) || to_string(config.target)
+
+    tailwind? =
+      Keyword.get(parsed, :tailwind) ||
+        (tailwind_config != [] and Keyword.get(parsed, :tailwind, true))
+
+    cli_watch_dirs = Keyword.get_values(parsed, :watch_dir)
+
+    watch_dirs =
+      case cli_watch_dirs do
+        [] -> server_config.watch_dirs
+        list -> list
+      end
+
+    watch_dirs = if tailwind? and watch_dirs == [], do: ["lib/"], else: watch_dirs
+
+    tailwind_css = Keyword.get(parsed, :tailwind_css) || tailwind_config[:css]
+
+    if tailwind? do
+      initial_build(tailwind_config, tailwind_css, parsed)
     end
 
     opts = [
-      root: Keyword.get(parsed, :root, "assets"),
+      root: root,
       watch_dirs: watch_dirs,
-      tailwind: tailwind,
-      tailwind_css: parsed[:tailwind_css],
+      tailwind: tailwind?,
+      tailwind_css: tailwind_css,
       tailwind_outdir: Keyword.get(parsed, :tailwind_outdir, "priv/static/assets/css"),
-      target: Keyword.get(parsed, :target, "es2020")
+      target: target
     ]
 
     {:ok, _pid} = Volt.Watcher.start_link(opts)
 
     Mix.shell().info("[Volt] Watching #{opts[:root]}...")
 
-    if tailwind do
+    if tailwind? do
       Mix.shell().info("[Volt] Tailwind CSS enabled (watching #{Enum.join(watch_dirs, ", ")})")
     end
 
@@ -65,14 +84,16 @@ defmodule Mix.Tasks.Volt.Dev do
     end
   end
 
-  defp initial_build(parsed) do
-    sources = [
-      %{base: "lib/", pattern: "**/*.{ex,heex,eex}"},
-      %{base: "assets/", pattern: "**/*.{vue,ts,tsx,js,jsx}"}
-    ]
+  defp initial_build(tailwind_config, tailwind_css, parsed) do
+    sources =
+      tailwind_config[:sources] ||
+        [
+          %{base: "lib/", pattern: "**/*.{ex,heex,eex}"},
+          %{base: "assets/", pattern: "**/*.{vue,ts,tsx,js,jsx}"}
+        ]
 
     css_input =
-      case parsed[:tailwind_css] do
+      case tailwind_css do
         nil -> nil
         path -> File.read!(path)
       end
@@ -89,7 +110,6 @@ defmodule Mix.Tasks.Volt.Dev do
     end
   end
 
-  @doc false
   defdelegate format_size(bytes), to: Volt.Format
 
   defp iex_running? do

@@ -55,7 +55,7 @@ defmodule Volt.Tailwind do
 
   @impl true
   def init(opts) do
-    sources = opts[:sources] || Application.get_env(:volt, :tailwind, [])[:sources] || []
+    sources = opts[:sources] || Volt.Config.tailwind()[:sources] || []
 
     {:ok, rt} = QuickBEAM.start()
     {:ok, _} = QuickBEAM.eval(rt, "globalThis.process = {env: {NODE_ENV: 'production'}};")

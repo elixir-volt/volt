@@ -6,7 +6,7 @@ defmodule Volt.Application do
   def start(_type, _args) do
     children = [
       {Registry, keys: :duplicate, name: Volt.HMR.Registry},
-      {Volt.Tailwind, Application.get_env(:volt, :tailwind, [])}
+      {Volt.Tailwind, Volt.Config.tailwind()}
     ]
 
     opts = [strategy: :one_for_one, name: Volt.Supervisor]

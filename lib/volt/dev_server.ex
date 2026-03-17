@@ -28,17 +28,19 @@ defmodule Volt.DevServer do
 
   @impl true
   def init(opts) do
-    root = Keyword.fetch!(opts, :root) |> Path.expand()
-    prefix = Keyword.get(opts, :prefix, "/assets")
+    config = Volt.Config.build(opts)
+    server_config = Volt.Config.server(opts)
+
+    root = Keyword.get(opts, :root) || to_string(config.root)
 
     %{
-      root: root,
-      prefix: prefix,
-      target: Keyword.get(opts, :target, ""),
-      import_source: Keyword.get(opts, :import_source, ""),
-      vapor: Keyword.get(opts, :vapor, false),
-      plugins: Keyword.get(opts, :plugins, []),
-      aliases: Keyword.get(opts, :aliases, %{})
+      root: Path.expand(root),
+      prefix: server_config.prefix,
+      target: to_string(config.target),
+      import_source: to_string(config.import_source),
+      vapor: config.vapor,
+      plugins: config.plugins,
+      aliases: config.aliases
     }
   end
 

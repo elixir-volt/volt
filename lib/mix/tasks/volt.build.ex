@@ -5,18 +5,24 @@ defmodule Mix.Tasks.Volt.Build do
 
       mix volt.build
 
+  Reads configuration from `config :volt` in your config files.
+  CLI flags override config values.
+
   ## Options
 
-    * `--entry` — entry file (default: `"assets/js/app.ts"`)
+    * `--entry` — entry file (repeatable, default from config or `"assets/js/app.ts"`)
     * `--outdir` — output directory (default: `"priv/static/assets"`)
     * `--target` — JS target (default: `"es2020"`)
     * `--no-minify` — skip minification
     * `--no-sourcemap` — skip source map generation
-    * `--resolve-dir` — additional directory for bare specifier resolution (repeatable, e.g. `deps`)
+    * `--resolve-dir` — additional directory for bare specifier resolution (repeatable)
+    * `--external` — specifier to exclude from bundle (repeatable)
     * `--name` — output base name (default: derived from entry filename)
     * `--no-hash` — stable filenames (no content hash)
-    * `--tailwind` — build Tailwind CSS (scans sources, compiles CSS)
-    * `--tailwind-css` — custom Tailwind input CSS file (default: Tailwind base)
+    * `--no-code-splitting` — disable chunk splitting
+    * `--mode` — build mode for env variables (default: `"production"`)
+    * `--tailwind` — build Tailwind CSS
+    * `--tailwind-css` — custom Tailwind input CSS file
     * `--tailwind-source` — source directory for Tailwind scanning (repeatable)
   """
   use Mix.Task
@@ -45,46 +51,84 @@ defmodule Mix.Tasks.Volt.Build do
         ]
       )
 
-    resolve_dirs = Keyword.get_values(parsed, :resolve_dir)
-    externals = Keyword.get_values(parsed, :external)
-    minify = Keyword.get(parsed, :minify, true)
-    outdir = Keyword.get(parsed, :outdir, "priv/static/assets")
+    config = Volt.Config.build()
+    tailwind_config = Volt.Config.tailwind()
 
-    if Keyword.get(parsed, :tailwind, false) do
-      build_tailwind(parsed, outdir, minify)
+    cli_entries = Keyword.get_values(parsed, :entry)
+    cli_resolve_dirs = Keyword.get_values(parsed, :resolve_dir)
+    cli_externals = Keyword.get_values(parsed, :external)
+
+    outdir = Keyword.get(parsed, :outdir) || to_string(config.outdir)
+    minify = Keyword.get(parsed, :minify, config.minify)
+
+    tailwind? =
+      Keyword.get(parsed, :tailwind) ||
+        (tailwind_config != [] and Keyword.get(parsed, :tailwind, true))
+
+    if tailwind? do
+      build_tailwind(parsed, tailwind_config, outdir, minify)
     end
 
-    build_js(parsed, resolve_dirs, externals, outdir, minify)
-  end
+    entries =
+      case cli_entries do
+        [] -> List.wrap(config.entry)
+        list -> list
+      end
 
-  defp build_js(parsed, resolve_dirs, externals, outdir, minify) do
-    entries = Keyword.get_values(parsed, :entry)
-    entries = if entries == [], do: ["assets/js/app.ts"], else: entries
+    resolve_dirs =
+      case cli_resolve_dirs do
+        [] -> config.resolve_dirs
+        list -> list
+      end
+
+    externals =
+      case cli_externals do
+        [] -> config.external
+        list -> list
+      end
 
     opts = [
       entry: if(length(entries) == 1, do: hd(entries), else: entries),
       outdir: Path.join(outdir, "js"),
-      target: Keyword.get(parsed, :target, "es2020"),
+      target: Keyword.get(parsed, :target) || to_string(config.target),
       minify: minify,
-      sourcemap: Keyword.get(parsed, :sourcemap, true),
+      sourcemap: Keyword.get(parsed, :sourcemap, config.sourcemap),
       resolve_dirs: resolve_dirs,
       external: externals,
-      hash: Keyword.get(parsed, :hash, true),
-      mode: Keyword.get(parsed, :mode, "production"),
-      code_splitting: Keyword.get(parsed, :code_splitting, true),
+      aliases: config.aliases,
+      plugins: config.plugins,
+      hash: Keyword.get(parsed, :hash, config.hash),
+      mode: Keyword.get(parsed, :mode) || to_string(config.mode),
+      code_splitting: Keyword.get(parsed, :code_splitting, config.code_splitting),
       name: parsed[:name]
     ]
 
     opts = if opts[:name], do: opts, else: Keyword.delete(opts, :name)
 
-    Mix.shell().info("Building #{opts[:entry]}...")
+    build_js(opts)
+  end
+
+  defp build_js(opts) do
+    Mix.shell().info("Building #{inspect(opts[:entry])}...")
 
     {us, result} = :timer.tc(fn -> Volt.Builder.build(opts) end)
     ms = div(us, 1000)
 
     case result do
-      {:ok, %{js: js, css: css, manifest: manifest}} ->
-        Mix.shell().info("  #{Path.basename(js.path)}  #{format_size(js.size)}")
+      {:ok, %{js: js, css: css, manifest: manifest} = result} ->
+        case js do
+          %{path: path, size: size} ->
+            Mix.shell().info("  #{Path.basename(path)}  #{format_size(size)}")
+
+          _ ->
+            :ok
+        end
+
+        if chunks = result[:chunks] do
+          for chunk <- chunks, chunk.type != :entry do
+            Mix.shell().info("  #{Path.basename(chunk.path)}  #{format_size(chunk.size)}")
+          end
+        end
 
         if css do
           Mix.shell().info("  #{Path.basename(css.path)}  #{format_size(css.size)}")
@@ -99,22 +143,25 @@ defmodule Mix.Tasks.Volt.Build do
     end
   end
 
-  defp build_tailwind(parsed, outdir, minify) do
-    tailwind_sources = Keyword.get_values(parsed, :tailwind_source)
+  defp build_tailwind(parsed, tailwind_config, outdir, minify) do
+    cli_sources = Keyword.get_values(parsed, :tailwind_source)
     hash = Keyword.get(parsed, :hash, true)
 
     sources =
-      if tailwind_sources == [] do
-        [
-          %{base: "lib/", pattern: "**/*.{ex,heex}"},
-          %{base: "assets/", pattern: "**/*.{vue,ts,tsx,js,jsx}"}
-        ]
-      else
-        Enum.map(tailwind_sources, &%{base: &1, pattern: "**/*"})
+      case cli_sources do
+        [] ->
+          tailwind_config[:sources] ||
+            [
+              %{base: "lib/", pattern: "**/*.{ex,heex}"},
+              %{base: "assets/", pattern: "**/*.{vue,ts,tsx,js,jsx}"}
+            ]
+
+        list ->
+          Enum.map(list, &%{base: &1, pattern: "**/*"})
       end
 
     css_input =
-      case Keyword.get(parsed, :tailwind_css) do
+      case Keyword.get(parsed, :tailwind_css) || tailwind_config[:css] do
         nil -> nil
         path -> File.read!(path)
       end
@@ -153,6 +200,5 @@ defmodule Mix.Tasks.Volt.Build do
     :crypto.hash(:sha256, content) |> Base.encode16(case: :lower) |> binary_part(0, 8)
   end
 
-  @doc false
   defdelegate format_size(bytes), to: Volt.Format
 end
