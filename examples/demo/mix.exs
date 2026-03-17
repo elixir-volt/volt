@@ -48,7 +48,7 @@ defmodule Demo.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:volt, path: "../.."},
+      {:volt, path: "../..", override: true},
       {:phoenix_vapor, path: "../../../phoenix_vapor"}
     ]
   end
@@ -58,10 +58,10 @@ defmodule Demo.MixProject do
       setup: ["deps.get", "assets.build"],
       "assets.build": [
         "compile",
-        "volt.build --entry assets/js/app.ts --outdir priv/static/assets --resolve-dir deps --no-minify --no-hash --tailwind --tailwind-css assets/css/app.css"
+        "volt.build --no-minify --no-hash --tailwind"
       ],
       "assets.deploy": [
-        "volt.build --entry assets/js/app.ts --outdir priv/static/assets --resolve-dir deps --no-hash --tailwind --tailwind-css assets/css/app.css",
+        "volt.build --no-hash --tailwind",
         "phx.digest"
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]

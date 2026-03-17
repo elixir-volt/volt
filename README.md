@@ -26,7 +26,7 @@ Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https:/
 
 ```elixir
 def deps do
-  [{:volt, "~> 0.2.0"}]
+  [{:volt, "~> 0.3.0"}]
 end
 ```
 
@@ -335,7 +335,7 @@ volt
 
 ## Demo
 
-See [`examples/demo/`](examples/demo/) for a full Phoenix app using Volt + [PhoenixVapor](https://github.com/dannote/phoenix_vapor) — Vue templates rendered as native LiveView, Tailwind CSS, no JavaScript runtime for SSR.
+See the [demo app](https://github.com/elixir-volt/volt/tree/master/examples/demo) for a full Phoenix app using Volt + [PhoenixVapor](https://github.com/dannote/phoenix_vapor) — Vue templates rendered as native LiveView, Tailwind CSS, no JavaScript runtime for SSR.
 
 ## License
 

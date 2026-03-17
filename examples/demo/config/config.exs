@@ -32,7 +32,9 @@ config :phoenix, :json_library, Jason
 # Volt frontend build tool
 config :volt,
   entry: "assets/js/app.ts",
+  outdir: "priv/static/assets",
   target: :es2020,
+  resolve_dirs: ["deps"],
   tailwind: [
     css: "assets/css/app.css",
     sources: [

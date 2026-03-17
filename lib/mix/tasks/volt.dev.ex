@@ -110,7 +110,7 @@ defmodule Mix.Tasks.Volt.Dev do
     end
   end
 
-  defdelegate format_size(bytes), to: Volt.Format
+  defp format_size(bytes), do: Volt.Format.format_size(bytes)
 
   defp iex_running? do
     Code.ensure_loaded?(IEx) and IEx.started?()

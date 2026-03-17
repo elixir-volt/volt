@@ -200,5 +200,5 @@ defmodule Mix.Tasks.Volt.Build do
     :crypto.hash(:sha256, content) |> Base.encode16(case: :lower) |> binary_part(0, 8)
   end
 
-  defdelegate format_size(bytes), to: Volt.Format
+  defp format_size(bytes), do: Volt.Format.format_size(bytes)
 end
