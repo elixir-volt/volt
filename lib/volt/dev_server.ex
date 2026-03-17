@@ -24,7 +24,7 @@ defmodule Volt.DevServer do
 
   @behaviour Plug
 
-  @compilable_exts ~w(.vue .ts .tsx .js .jsx .mts .mjs .css)
+  @compilable_exts ~w(.vue .ts .tsx .js .jsx .mts .mjs .css .json)
 
   @impl true
   def init(opts) do
@@ -36,7 +36,9 @@ defmodule Volt.DevServer do
       prefix: prefix,
       target: Keyword.get(opts, :target, ""),
       import_source: Keyword.get(opts, :import_source, ""),
-      vapor: Keyword.get(opts, :vapor, false)
+      vapor: Keyword.get(opts, :vapor, false),
+      plugins: Keyword.get(opts, :plugins, []),
+      aliases: Keyword.get(opts, :aliases, %{})
     }
   end
 
@@ -97,10 +99,15 @@ defmodule Volt.DevServer do
   defp serve(conn, relative, config) do
     file_path = Path.join(config.root, relative)
 
-    if compilable?(file_path) and File.regular?(file_path) do
-      serve_compiled(conn, file_path, relative, config)
-    else
-      conn
+    cond do
+      compilable?(file_path) and File.regular?(file_path) ->
+        serve_compiled(conn, file_path, relative, config)
+
+      Volt.Assets.asset?(file_path) and File.regular?(file_path) ->
+        serve_asset(conn, file_path)
+
+      true ->
+        conn
     end
   end
 
@@ -127,7 +134,8 @@ defmodule Volt.DevServer do
       target: config.target,
       import_source: config.import_source,
       vapor: config.vapor,
-      sourcemap: true
+      sourcemap: true,
+      plugins: config.plugins
     ]
 
     case Volt.Pipeline.compile(file_path, source, pipeline_opts) do
@@ -166,9 +174,20 @@ defmodule Volt.DevServer do
     |> Plug.Conn.halt()
   end
 
+  defp serve_asset(conn, file_path) do
+    mime = Volt.Assets.mime_type(file_path)
+
+    conn
+    |> Plug.Conn.put_resp_content_type(mime)
+    |> Plug.Conn.put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
+    |> Plug.Conn.send_file(200, file_path)
+    |> Plug.Conn.halt()
+  end
+
   defp content_type_for(path) do
     case Path.extname(path) do
       ".css" -> "text/css"
+      ".json" -> "application/javascript"
       _ -> "application/javascript"
     end
   end

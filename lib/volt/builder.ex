@@ -9,7 +9,7 @@ defmodule Volt.Builder do
 
   alias Volt.PackageResolver
 
-  @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".vue"]
+  @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".vue", ".json"]
   @index_files ~w(/index.ts /index.tsx /index.js /index.jsx)
 
   @type build_result :: %{
@@ -19,11 +19,11 @@ defmodule Volt.Builder do
         }
 
   @doc """
-  Build production assets from an entry file.
+  Build production assets from one or more entry files.
 
   ## Options
 
-    * `:entry` — entry file path (required)
+    * `:entry` — entry file path or list of paths (required)
     * `:outdir` — output directory (default: `"priv/static/assets"`)
     * `:target` — JS target (e.g. `"es2020"`)
     * `:minify` — minify output (default: `true`)
@@ -32,43 +32,82 @@ defmodule Volt.Builder do
     * `:node_modules` — path to node_modules (default: auto-detect)
     * `:resolve_dirs` — additional directories to resolve bare specifiers (e.g. `["deps"]`)
     * `:name` — output base name (default: derived from entry filename)
+    * `:aliases` — import alias map (e.g. `%{"@" => "assets/src"}`)
+    * `:plugins` — list of `Volt.Plugin` modules
+    * `:mode` — build mode for env variables (default: `"production"`)
   """
   @spec build(keyword()) :: {:ok, build_result()} | {:error, term()}
   def build(opts) do
-    entry = Keyword.fetch!(opts, :entry) |> Path.expand()
+    entries = opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&Path.expand/1)
     outdir = Keyword.get(opts, :outdir, "priv/static/assets") |> Path.expand()
     target = Keyword.get(opts, :target, "")
     minify = Keyword.get(opts, :minify, true)
     sourcemap = Keyword.get(opts, :sourcemap, true)
     define = Keyword.get(opts, :define, %{})
-    node_modules = Keyword.get(opts, :node_modules) || PackageResolver.find_node_modules(Path.dirname(entry))
+    mode = Keyword.get(opts, :mode, "production")
+    aliases = Keyword.get(opts, :aliases, %{})
+    plugins = Keyword.get(opts, :plugins, [])
+
+    first_entry = hd(entries)
+    node_modules = Keyword.get(opts, :node_modules) || PackageResolver.find_node_modules(Path.dirname(first_entry))
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
     hash = Keyword.get(opts, :hash, true)
-    name = Keyword.get(opts, :name, entry |> Path.basename() |> Path.rootname())
+    name = Keyword.get(opts, :name)
 
-    with {:ok, modules} <- collect_modules(entry, node_modules, resolve_dirs),
-         {:ok, {js_files, css_parts}} <- compile_all(modules, target) do
-      bundle_opts = [
-        minify: minify,
-        sourcemap: sourcemap,
-        target: target,
-        define: define
-      ]
+    env_define = Volt.Env.define(mode: mode, root: File.cwd!())
+    define = Map.merge(env_define, define)
 
-      write_output(js_files, css_parts, outdir, name, hash, bundle_opts)
+    results =
+      Enum.map(entries, fn entry ->
+        entry_name = name || entry |> Path.basename() |> Path.rootname()
+
+        with {:ok, modules} <- collect_modules(entry, node_modules, resolve_dirs, aliases, plugins),
+             {:ok, {js_files, css_parts}} <- compile_all(modules, target, plugins) do
+          bundle_opts = [
+            minify: minify,
+            sourcemap: sourcemap,
+            target: target,
+            define: define
+          ]
+
+          write_output(js_files, css_parts, outdir, entry_name, hash, bundle_opts, plugins)
+        end
+      end)
+
+    case Enum.split_with(results, &match?({:ok, _}, &1)) do
+      {successes, []} when successes != [] ->
+        if length(successes) == 1 do
+          hd(successes)
+        else
+          merged = merge_build_results(successes)
+          {:ok, merged}
+        end
+
+      {_, [first_error | _]} ->
+        first_error
     end
   end
 
-  defp collect_modules(entry_path, node_modules, resolve_dirs) do
-    label = Path.basename(entry_path)
+  defp merge_build_results(results) do
+    Enum.reduce(results, %{js: [], css: nil, manifest: %{}}, fn {:ok, result}, acc ->
+      js = [result.js | acc.js]
+      css = result.css || acc.css
+      manifest = Map.merge(acc.manifest, result.manifest)
+      %{js: js, css: css, manifest: manifest}
+    end)
+  end
 
-    case do_collect(entry_path, label, node_modules, resolve_dirs, [], MapSet.new()) do
+  defp collect_modules(entry_path, node_modules, resolve_dirs, aliases, plugins) do
+    label = Path.basename(entry_path)
+    ctx = %{node_modules: node_modules, resolve_dirs: resolve_dirs, aliases: aliases, plugins: plugins}
+
+    case do_collect(entry_path, label, ctx, [], MapSet.new()) do
       {:ok, files, _seen} -> {:ok, Enum.reverse(files)}
       {:error, _} = error -> error
     end
   end
 
-  defp do_collect(abs_path, label, node_modules, resolve_dirs, files, seen) do
+  defp do_collect(abs_path, label, ctx, files, seen) do
     if MapSet.member?(seen, abs_path) do
       {:ok, files, seen}
     else
@@ -79,7 +118,7 @@ defmodule Volt.Builder do
 
           case extract_imports(source, abs_path) do
             {:ok, specifiers} ->
-              collect_imports(specifiers, abs_path, node_modules, resolve_dirs, files, seen)
+              collect_imports(specifiers, abs_path, ctx, files, seen)
 
             {:error, _} = error ->
               error
@@ -124,21 +163,21 @@ defmodule Volt.Builder do
     end
   end
 
-  defp collect_imports([], _importer, _node_modules, _resolve_dirs, files, seen) do
+  defp collect_imports([], _importer, _ctx, files, seen) do
     {:ok, files, seen}
   end
 
-  defp collect_imports([specifier | rest], importer, node_modules, resolve_dirs, files, seen) do
-    case resolve_specifier(specifier, importer, node_modules, resolve_dirs) do
+  defp collect_imports([specifier | rest], importer, ctx, files, seen) do
+    case resolve_specifier(specifier, importer, ctx) do
       :skip ->
-        collect_imports(rest, importer, node_modules, resolve_dirs, files, seen)
+        collect_imports(rest, importer, ctx, files, seen)
 
       {:ok, resolved_path} ->
         label = if relative?(specifier), do: Path.basename(resolved_path), else: specifier
 
-        case do_collect(resolved_path, label, node_modules, resolve_dirs, files, seen) do
+        case do_collect(resolved_path, label, ctx, files, seen) do
           {:ok, files, seen} ->
-            collect_imports(rest, importer, node_modules, resolve_dirs, files, seen)
+            collect_imports(rest, importer, ctx, files, seen)
 
           {:error, _} = error ->
             error
@@ -149,10 +188,10 @@ defmodule Volt.Builder do
     end
   end
 
-  defp compile_all(modules, target) do
+  defp compile_all(modules, target, plugins) do
     result =
       Enum.reduce_while(modules, {[], []}, fn {path, label, source}, {js_acc, css_acc} ->
-        case compile_module(path, label, source, target) do
+        case compile_module(path, label, source, target, plugins) do
           {:ok, js, css} ->
             {:cont, {[{label, js} | js_acc], if(css, do: [css | css_acc], else: css_acc)}}
 
@@ -170,14 +209,37 @@ defmodule Volt.Builder do
     end
   end
 
-  defp compile_module(path, _label, source, target) do
+  defp compile_module(path, _label, source, target, plugins) do
     ext = Path.extname(path)
 
-    if ext == ".vue" do
-      compile_vue_module(source, path)
-    else
-      compile_js_module(source, path, target)
+    cond do
+      ext == ".vue" ->
+        compile_vue_module(source, path)
+
+      Volt.CSSModules.css_module?(path) ->
+        compile_css_module(source, path)
+
+      ext == ".json" ->
+        {:ok, "export default #{source};\n", nil}
+
+      Volt.Assets.asset?(path) ->
+        case Volt.Assets.to_js_module(path) do
+          {:ok, js} -> {:ok, js, nil}
+          {:error, _} = error -> error
+        end
+
+      true ->
+        result = compile_js_module(source, path, target)
+        with {:ok, js, css} <- result do
+          js = Volt.PluginRunner.transform(plugins, js, path)
+          {:ok, js, css}
+        end
     end
+  end
+
+  defp compile_css_module(source, path) do
+    {:ok, js, scoped_css} = Volt.CSSModules.compile(source, Path.basename(path))
+    {:ok, js, scoped_css}
   end
 
   defp compile_vue_module(source, path) do
@@ -195,12 +257,13 @@ defmodule Volt.Builder do
     end
   end
 
-  defp write_output(js_files, css_parts, outdir, name, hash?, bundle_opts) do
+  defp write_output(js_files, css_parts, outdir, name, hash?, bundle_opts, plugins) do
     File.mkdir_p!(outdir)
 
     case OXC.bundle(js_files, bundle_opts) do
       {:ok, bundle_result} ->
         {js_code, js_sourcemap} = extract_bundle(bundle_result)
+        js_code = Volt.PluginRunner.render_chunk(plugins, js_code, %{name: name, type: :js})
         js_filename = if hash?, do: "#{name}-#{content_hash(js_code)}.js", else: "#{name}.js"
         js_path = Path.join(outdir, js_filename)
         File.write!(js_path, js_code)
@@ -259,12 +322,28 @@ defmodule Volt.Builder do
     :crypto.hash(:sha256, content) |> Base.encode16(case: :lower) |> binary_part(0, 8)
   end
 
-  defp resolve_specifier(specifier, importer, node_modules, resolve_dirs) do
-    cond do
-      String.starts_with?(specifier, "node:") -> :skip
-      relative?(specifier) -> resolve_relative(specifier, importer)
-      true -> resolve_bare(specifier, node_modules, resolve_dirs)
+  defp resolve_specifier(specifier, importer, ctx) do
+    case Volt.PluginRunner.resolve(ctx.plugins, specifier, importer) do
+      {:ok, _} = resolved ->
+        resolved
+
+      nil ->
+        case Volt.Resolver.resolve(specifier, ctx.aliases) do
+          {:ok, aliased} ->
+            resolve_relative_path(aliased, importer)
+
+          :pass ->
+            cond do
+              String.starts_with?(specifier, "node:") -> :skip
+              relative?(specifier) -> resolve_relative(specifier, importer)
+              true -> resolve_bare(specifier, ctx.node_modules, ctx.resolve_dirs)
+            end
+        end
     end
+  end
+
+  defp resolve_relative_path(path, _importer) do
+    try_resolve(Path.expand(path))
   end
 
   defp relative?(specifier) do

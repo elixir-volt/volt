@@ -73,9 +73,16 @@ defmodule Volt.DevServerTest do
       refute conn.halted
     end
 
-    test "passes through non-compilable extensions" do
+    test "serves static assets with correct MIME type" do
       File.write!(Path.join(@fixture_dir, "src/image.png"), "binary")
       conn = call_dev_server("/assets/image.png")
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "image/png"
+    end
+
+    test "passes through unknown extensions" do
+      File.write!(Path.join(@fixture_dir, "src/data.xyz"), "binary")
+      conn = call_dev_server("/assets/data.xyz")
       refute conn.halted
     end
 

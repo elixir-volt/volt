@@ -28,13 +28,14 @@ defmodule Mix.Tasks.Volt.Build do
     {parsed, _argv, _invalid} =
       OptionParser.parse(args,
         strict: [
-          entry: :string,
+          entry: [:string, :keep],
           outdir: :string,
           target: :string,
           minify: :boolean,
           sourcemap: :boolean,
           name: :string,
           hash: :boolean,
+          mode: :string,
           resolve_dir: [:string, :keep],
           tailwind: :boolean,
           tailwind_css: :string,
@@ -54,14 +55,18 @@ defmodule Mix.Tasks.Volt.Build do
   end
 
   defp build_js(parsed, resolve_dirs, outdir, minify) do
+    entries = Keyword.get_values(parsed, :entry)
+    entries = if entries == [], do: ["assets/js/app.ts"], else: entries
+
     opts = [
-      entry: Keyword.get(parsed, :entry, "assets/js/app.ts"),
+      entry: if(length(entries) == 1, do: hd(entries), else: entries),
       outdir: Path.join(outdir, "js"),
       target: Keyword.get(parsed, :target, "es2020"),
       minify: minify,
       sourcemap: Keyword.get(parsed, :sourcemap, true),
       resolve_dirs: resolve_dirs,
       hash: Keyword.get(parsed, :hash, true),
+      mode: Keyword.get(parsed, :mode, "production"),
       name: parsed[:name]
     ]
 

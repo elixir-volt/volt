@@ -17,6 +17,7 @@ defmodule Volt.Pipeline do
   @vue_ext ".vue"
   @js_exts ~w(.ts .tsx .js .jsx .mts .mjs)
   @css_exts ~w(.css)
+  @json_ext ".json"
 
   @doc """
   Compile a source file to browser-ready output.
@@ -29,26 +30,49 @@ defmodule Volt.Pipeline do
     * `:minify` — minify output (default: `false`)
     * `:vapor` — use Vue Vapor mode (default: `false`)
     * `:rewrite_import` — function `(specifier -> {:rewrite, new} | :keep)` for import rewriting
+    * `:plugins` — list of `Volt.Plugin` modules to run
   """
   @spec compile(String.t(), String.t(), keyword()) :: {:ok, compiled()} | {:error, term()}
   def compile(path, source, opts \\ []) do
+    plugins = Keyword.get(opts, :plugins, [])
+
+    {source, opts} =
+      case Volt.PluginRunner.load(plugins, path) do
+        {:ok, code, _content_type} -> {code, opts}
+        {:ok, code} -> {code, opts}
+        nil -> {source, opts}
+      end
+
     ext = Path.extname(path)
 
     result =
       cond do
         ext == @vue_ext -> compile_vue(path, source, opts)
         ext in @js_exts -> compile_js(path, source, opts)
+        Volt.CSSModules.css_module?(path) -> compile_css_module(path, source, opts)
         ext in @css_exts -> compile_css(source, opts)
+        ext == @json_ext -> compile_json(source)
         true -> {:error, {:unsupported, ext}}
       end
 
-    with {:ok, compiled} <- result,
-         rewrite_fn when is_function(rewrite_fn) <- Keyword.get(opts, :rewrite_import) do
-      rewrite_compiled_imports(compiled, path, rewrite_fn)
-    else
-      nil -> result
-      other -> other
+    with {:ok, compiled} <- result do
+      compiled = apply_transforms(compiled, path, plugins)
+
+      case Keyword.get(opts, :rewrite_import) do
+        rewrite_fn when is_function(rewrite_fn) ->
+          rewrite_compiled_imports(compiled, path, rewrite_fn)
+
+        nil ->
+          {:ok, compiled}
+      end
     end
+  end
+
+  defp apply_transforms(compiled, _path, []), do: compiled
+
+  defp apply_transforms(compiled, path, plugins) do
+    code = Volt.PluginRunner.transform(plugins, compiled.code, path)
+    %{compiled | code: code}
   end
 
   defp rewrite_compiled_imports(compiled, path, rewrite_fn) do
@@ -110,5 +134,22 @@ defmodule Volt.Pipeline do
       {:ok, result} ->
         {:ok, %{code: result.code, sourcemap: nil, css: nil, hashes: nil}}
     end
+  end
+
+  defp compile_css_module(path, source, opts) do
+    {:ok, js, scoped_css} = Volt.CSSModules.compile(source, Path.basename(path))
+    minify = Keyword.get(opts, :minify, false)
+
+    scoped_css =
+      case Vize.compile_css(scoped_css, minify: minify) do
+        {:ok, %{code: minified}} -> minified
+        _ -> scoped_css
+      end
+
+    {:ok, %{code: js, sourcemap: nil, css: scoped_css, hashes: nil}}
+  end
+
+  defp compile_json(source) do
+    {:ok, %{code: "export default #{source};\n", sourcemap: nil, css: nil, hashes: nil}}
   end
 end

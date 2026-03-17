@@ -78,9 +78,25 @@ defmodule Volt.PipelineTest do
     end
   end
 
+  describe "compile/3 with JSON" do
+    test "wraps JSON as ES module" do
+      {:ok, result} = Volt.Pipeline.compile("data.json", ~s({"key":"value"}))
+      assert result.code =~ "export default"
+      assert result.code =~ ~s("key")
+    end
+  end
+
+  describe "compile/3 with CSS Modules" do
+    test "compiles .module.css to JS + scoped CSS" do
+      {:ok, result} = Volt.Pipeline.compile("btn.module.css", ".btn { color: red }")
+      assert result.code =~ "export default"
+      assert result.css =~ "_btn_"
+    end
+  end
+
   describe "compile/3 errors" do
     test "returns error for unsupported extensions" do
-      {:error, {:unsupported, ".png"}} = Volt.Pipeline.compile("image.png", "binary")
+      {:error, {:unsupported, ".xyz"}} = Volt.Pipeline.compile("data.xyz", "binary")
     end
 
     test "returns error for invalid TypeScript" do
