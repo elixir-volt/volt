@@ -37,6 +37,8 @@ defmodule Mix.Tasks.Volt.Build do
           hash: :boolean,
           mode: :string,
           resolve_dir: [:string, :keep],
+          external: [:string, :keep],
+          code_splitting: :boolean,
           tailwind: :boolean,
           tailwind_css: :string,
           tailwind_source: [:string, :keep]
@@ -44,6 +46,7 @@ defmodule Mix.Tasks.Volt.Build do
       )
 
     resolve_dirs = Keyword.get_values(parsed, :resolve_dir)
+    externals = Keyword.get_values(parsed, :external)
     minify = Keyword.get(parsed, :minify, true)
     outdir = Keyword.get(parsed, :outdir, "priv/static/assets")
 
@@ -51,10 +54,10 @@ defmodule Mix.Tasks.Volt.Build do
       build_tailwind(parsed, outdir, minify)
     end
 
-    build_js(parsed, resolve_dirs, outdir, minify)
+    build_js(parsed, resolve_dirs, externals, outdir, minify)
   end
 
-  defp build_js(parsed, resolve_dirs, outdir, minify) do
+  defp build_js(parsed, resolve_dirs, externals, outdir, minify) do
     entries = Keyword.get_values(parsed, :entry)
     entries = if entries == [], do: ["assets/js/app.ts"], else: entries
 
@@ -65,8 +68,10 @@ defmodule Mix.Tasks.Volt.Build do
       minify: minify,
       sourcemap: Keyword.get(parsed, :sourcemap, true),
       resolve_dirs: resolve_dirs,
+      external: externals,
       hash: Keyword.get(parsed, :hash, true),
       mode: Keyword.get(parsed, :mode, "production"),
+      code_splitting: Keyword.get(parsed, :code_splitting, true),
       name: parsed[:name]
     ]
 
