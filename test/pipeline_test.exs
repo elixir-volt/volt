@@ -54,6 +54,21 @@ defmodule Volt.PipelineTest do
       {:ok, result} = Volt.Pipeline.compile("app.css", ".foo {\n  color: red;\n}", minify: true)
       refute result.code =~ "\n"
     end
+
+    test "inlines @import from disk" do
+      dir = Path.expand("fixtures/css_import", __DIR__)
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "reset.css"), "* { margin: 0 }")
+      File.write!(Path.join(dir, "app.css"), "@import \"./reset.css\";\n.app { color: red }")
+
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      path = Path.join(dir, "app.css")
+      {:ok, result} = Volt.Pipeline.compile(path, File.read!(path))
+      assert result.code =~ "margin"
+      assert result.code =~ "color"
+      refute result.code =~ "@import"
+    end
   end
 
   describe "compile/3 with import rewriting" do

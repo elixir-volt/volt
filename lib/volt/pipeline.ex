@@ -50,7 +50,7 @@ defmodule Volt.Pipeline do
         ext == @vue_ext -> compile_vue(path, source, opts)
         ext in @js_exts -> compile_js(path, source, opts)
         Volt.CSSModules.css_module?(path) -> compile_css_module(path, source, opts)
-        ext in @css_exts -> compile_css(source, opts)
+        ext in @css_exts -> compile_css(path, source, opts)
         ext == @json_ext -> compile_json(source)
         true -> {:error, {:unsupported, ext}}
       end
@@ -127,12 +127,19 @@ defmodule Volt.Pipeline do
     end
   end
 
-  defp compile_css(source, opts) do
+  defp compile_css(path, source, opts) do
     minify = Keyword.get(opts, :minify, false)
 
-    case Vize.compile_css(source, minify: minify) do
-      {:ok, result} ->
-        {:ok, %{code: result.code, sourcemap: nil, css: nil, hashes: nil}}
+    result =
+      if File.regular?(path) and source =~ ~r/@import\s/ do
+        Vize.bundle_css(path, minify: minify)
+      else
+        Vize.compile_css(source, minify: minify)
+      end
+
+    case result do
+      {:ok, %{code: code}} ->
+        {:ok, %{code: code, sourcemap: nil, css: nil, hashes: nil}}
     end
   end
 
