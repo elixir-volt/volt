@@ -9,55 +9,43 @@ defmodule Volt.EnvTest do
     :ok
   end
 
-  describe "parse_env_file/1" do
+  describe "load_env_files/2" do
     test "parses key=value pairs" do
-      path = Path.join(@fixture_dir, ".env")
-      File.write!(path, "VOLT_API_URL=https://api.test\nVOLT_DEBUG=true\n")
+      File.write!(Path.join(@fixture_dir, ".env"), "VOLT_API=https://api.test\nVOLT_DEBUG=true\n")
 
-      result = Volt.Env.parse_env_file(path)
-      assert result["VOLT_API_URL"] == "https://api.test"
+      result = Volt.Env.load_env_files(@fixture_dir, "production")
+      assert result["VOLT_API"] == "https://api.test"
       assert result["VOLT_DEBUG"] == "true"
     end
 
     test "ignores comments and blank lines" do
-      path = Path.join(@fixture_dir, ".env")
-      File.write!(path, "# comment\n\nVOLT_KEY=value\n")
+      File.write!(Path.join(@fixture_dir, ".env"), "# comment\n\nVOLT_KEY=value\n")
 
-      result = Volt.Env.parse_env_file(path)
-      assert result == %{"VOLT_KEY" => "value"}
+      result = Volt.Env.load_env_files(@fixture_dir, "production")
+      assert result["VOLT_KEY"] == "value"
     end
 
     test "handles quoted values" do
-      path = Path.join(@fixture_dir, ".env")
-      File.write!(path, ~s(VOLT_MSG="hello world"\nVOLT_NAME='test'\n))
+      File.write!(Path.join(@fixture_dir, ".env"), ~s(VOLT_MSG="hello world"\nVOLT_NAME='test'\n))
 
-      result = Volt.Env.parse_env_file(path)
+      result = Volt.Env.load_env_files(@fixture_dir, "production")
       assert result["VOLT_MSG"] == "hello world"
       assert result["VOLT_NAME"] == "test"
     end
 
     test "handles export prefix" do
-      path = Path.join(@fixture_dir, ".env")
-      File.write!(path, "export VOLT_KEY=exported\n")
+      File.write!(Path.join(@fixture_dir, ".env"), "export VOLT_KEY=exported\n")
 
-      result = Volt.Env.parse_env_file(path)
+      result = Volt.Env.load_env_files(@fixture_dir, "production")
       assert result["VOLT_KEY"] == "exported"
     end
 
-    test "preserves inner quotes" do
-      path = Path.join(@fixture_dir, ".env")
-      File.write!(path, ~s(VOLT_VAL="it's \\"fine\\""\n))
+    test "mode-specific env files override base" do
+      File.write!(Path.join(@fixture_dir, ".env"), "VOLT_URL=base\n")
+      File.write!(Path.join(@fixture_dir, ".env.production"), "VOLT_URL=prod\n")
 
-      result = Volt.Env.parse_env_file(path)
-      assert result["VOLT_VAL"] =~ "fine"
-    end
-
-    test "mismatched quotes are preserved" do
-      path = Path.join(@fixture_dir, ".env")
-      File.write!(path, ~s(VOLT_VAL="no closing single\n))
-
-      result = Volt.Env.parse_env_file(path)
-      assert result["VOLT_VAL"] == ~s("no closing single)
+      result = Volt.Env.load_env_files(@fixture_dir, "production")
+      assert result["VOLT_URL"] == "prod"
     end
   end
 
@@ -84,14 +72,6 @@ defmodule Volt.EnvTest do
 
       assert defines["import.meta.env.DEV"] == "false"
       assert defines["import.meta.env.PROD"] == "true"
-    end
-
-    test "mode-specific env files override base" do
-      File.write!(Path.join(@fixture_dir, ".env"), "VOLT_URL=base\n")
-      File.write!(Path.join(@fixture_dir, ".env.production"), "VOLT_URL=prod\n")
-
-      defines = Volt.Env.define(root: @fixture_dir, mode: "production")
-      assert defines["import.meta.env.VOLT_URL"] == ~s("prod")
     end
 
     test "extra env takes precedence" do

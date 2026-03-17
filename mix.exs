@@ -36,6 +36,7 @@ defmodule Volt.MixProject do
       {:vize, "~> 0.8.0"},
       {:oxide_ex, "~> 0.2.0"},
       {:quickbeam, "~> 0.7.1"},
+      {:dotenvy, "~> 1.1"},
       {:floki, "~> 0.38"},
       {:plug, "~> 1.16"},
       {:websock_adapter, "~> 0.5"},

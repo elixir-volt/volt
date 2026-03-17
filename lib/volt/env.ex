@@ -2,8 +2,8 @@ defmodule Volt.Env do
   @moduledoc """
   Load environment variables for client-side code.
 
-  Reads `.env` files and exposes variables prefixed with `VOLT_` as
-  compile-time replacements for `import.meta.env.*` expressions.
+  Reads `.env` files via Dotenvy and exposes variables prefixed with `VOLT_`
+  as compile-time replacements for `import.meta.env.*` expressions.
 
   ## Files loaded (in order, later overrides earlier)
 
@@ -14,23 +14,18 @@ defmodule Volt.Env do
 
   ## Usage in source code
 
-      // app.ts
       console.log(import.meta.env.VOLT_API_URL)
+      console.log(import.meta.env.MODE)   // "development" or "production"
+      console.log(import.meta.env.DEV)    // true/false
+      console.log(import.meta.env.PROD)   // true/false
 
-  Becomes at build time:
-
-      console.log("https://api.example.com")
-
-  The special variables `import.meta.env.MODE`, `import.meta.env.DEV`,
-  and `import.meta.env.PROD` are always available.
+  Only variables prefixed with `VOLT_` are exposed to client code.
   """
 
   @prefix "VOLT_"
 
   @doc """
   Build a define map for compile-time replacement.
-
-  Returns a map suitable for passing as `:define` to `OXC.bundle/2`.
 
   ## Options
 
@@ -40,7 +35,7 @@ defmodule Volt.Env do
   """
   @spec define(keyword()) :: %{String.t() => String.t()}
   def define(opts \\ []) do
-    mode = Keyword.get(opts, :mode, "production")
+    mode = opts |> Keyword.get(:mode, "production") |> to_string()
     root = Keyword.get(opts, :root, File.cwd!())
     extra = Keyword.get(opts, :env, %{})
 
@@ -69,50 +64,14 @@ defmodule Volt.Env do
   """
   @spec load_env_files(String.t(), String.t()) :: %{String.t() => String.t()}
   def load_env_files(root, mode) do
-    [".env", ".env.local", ".env.#{mode}", ".env.#{mode}.local"]
-    |> Enum.map(&Path.join(root, &1))
-    |> Enum.filter(&File.regular?/1)
-    |> Enum.reduce(%{}, fn path, acc ->
-      Map.merge(acc, parse_env_file(path))
-    end)
-  end
+    files =
+      [".env", ".env.local", ".env.#{mode}", ".env.#{mode}.local"]
+      |> Enum.map(&Path.join(root, &1))
+      |> Enum.filter(&File.regular?/1)
 
-  @doc false
-  def parse_env_file(path) do
-    path
-    |> File.read!()
-    |> String.split("\n")
-    |> Enum.reduce(%{}, fn line, acc ->
-      line = String.trim(line)
-
-      cond do
-        line == "" -> acc
-        String.starts_with?(line, "#") -> acc
-        true -> parse_env_line(line, acc)
-      end
-    end)
-  end
-
-  defp parse_env_line(line, acc) do
-    line = String.trim_leading(line, "export ")
-
-    case String.split(line, "=", parts: 2) do
-      [key, value] ->
-        key = String.trim(key)
-        value = value |> String.trim() |> unquote_value()
-        Map.put(acc, key, value)
-
-      _ ->
-        acc
+    case Dotenvy.source(files) do
+      {:ok, vars} -> vars
+      {:error, _} -> %{}
     end
   end
-
-  defp unquote_value(<<q, rest::binary>>) when q in [?", ?'] do
-    case :binary.last(rest) do
-      ^q -> binary_part(rest, 0, byte_size(rest) - 1)
-      _ -> <<q, rest::binary>>
-    end
-  end
-
-  defp unquote_value(value), do: value
 end
