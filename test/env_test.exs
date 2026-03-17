@@ -35,6 +35,30 @@ defmodule Volt.EnvTest do
       assert result["VOLT_MSG"] == "hello world"
       assert result["VOLT_NAME"] == "test"
     end
+
+    test "handles export prefix" do
+      path = Path.join(@fixture_dir, ".env")
+      File.write!(path, "export VOLT_KEY=exported\n")
+
+      result = Volt.Env.parse_env_file(path)
+      assert result["VOLT_KEY"] == "exported"
+    end
+
+    test "preserves inner quotes" do
+      path = Path.join(@fixture_dir, ".env")
+      File.write!(path, ~s(VOLT_VAL="it's \\"fine\\""\n))
+
+      result = Volt.Env.parse_env_file(path)
+      assert result["VOLT_VAL"] =~ "fine"
+    end
+
+    test "mismatched quotes are preserved" do
+      path = Path.join(@fixture_dir, ".env")
+      File.write!(path, ~s(VOLT_VAL="no closing single\n))
+
+      result = Volt.Env.parse_env_file(path)
+      assert result["VOLT_VAL"] == ~s("no closing single)
+    end
   end
 
   describe "define/1" do

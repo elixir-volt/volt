@@ -94,6 +94,8 @@ defmodule Volt.Env do
   end
 
   defp parse_env_line(line, acc) do
+    line = String.trim_leading(line, "export ")
+
     case String.split(line, "=", parts: 2) do
       [key, value] ->
         key = String.trim(key)
@@ -105,12 +107,11 @@ defmodule Volt.Env do
     end
   end
 
-  defp unquote_value(~s(") <> rest) do
-    String.trim_trailing(rest, ~s("))
-  end
-
-  defp unquote_value("'" <> rest) do
-    String.trim_trailing(rest, "'")
+  defp unquote_value(<<q, rest::binary>>) when q in [?", ?'] do
+    case :binary.last(rest) do
+      ^q -> binary_part(rest, 0, byte_size(rest) - 1)
+      _ -> <<q, rest::binary>>
+    end
   end
 
   defp unquote_value(value), do: value
