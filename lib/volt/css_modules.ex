@@ -3,8 +3,8 @@ defmodule Volt.CSSModules do
   CSS Modules support for `.module.css` files.
 
   Uses LightningCSS (via Vize) for proper CSS parsing and class name scoping.
-  LightningCSS handles all the complexity: selectors, keyframes, custom
-  identifiers, `composes`, and nested rules.
+  LightningCSS handles selectors, keyframes, custom identifiers, `composes`,
+  nested rules, and all other CSS constructs correctly.
 
   ## Example
 
@@ -32,48 +32,9 @@ defmodule Volt.CSSModules do
   def compile(source, filename, opts \\ []) do
     minify = Keyword.get(opts, :minify, false)
 
-    case Vize.compile_css(source, minify: minify, css_modules: true, filename: filename) do
-      {:ok, %{exports: exports} = result} when is_map(exports) and map_size(exports) > 0 ->
-        js = "export default #{Jason.encode!(exports)};\n"
-        {:ok, js, result.code}
+    {:ok, result} = Vize.compile_css(source, minify: minify, css_modules: true, filename: filename)
 
-      _no_css_modules_support ->
-        # Vize version without css_modules support — fall back to regex scoping,
-        # then run through LightningCSS for minification/autoprefixing.
-        {js, scoped_css} = regex_fallback(source, filename)
-
-        scoped_css =
-          case Vize.compile_css(scoped_css, minify: minify) do
-            {:ok, %{code: processed}} -> processed
-            _ -> scoped_css
-          end
-
-        {:ok, js, scoped_css}
-    end
-  end
-
-  # Temporary fallback until Vize ships with css_modules support.
-  # Uses regex — only handles simple class selectors.
-  defp regex_fallback(source, filename) do
-    hash = :crypto.hash(:md5, filename) |> Base.encode16(case: :lower) |> binary_part(0, 5)
-
-    class_names =
-      ~r/\.([a-zA-Z_][\w-]*)/
-      |> Regex.scan(source)
-      |> Enum.map(fn [_, name] -> name end)
-      |> Enum.uniq()
-
-    mapping = Map.new(class_names, fn name -> {name, "_#{name}_#{hash}"} end)
-
-    scoped_css =
-      Regex.replace(~r/\.([a-zA-Z_][\w-]*)/, source, fn _full, name ->
-        case Map.fetch(mapping, name) do
-          {:ok, scoped} -> ".#{scoped}"
-          :error -> ".#{name}"
-        end
-      end)
-
-    js = "export default #{Jason.encode!(mapping)};\n"
-    {js, scoped_css}
+    js = "export default #{Jason.encode!(result.exports)};\n"
+    {:ok, js, result.code}
   end
 end

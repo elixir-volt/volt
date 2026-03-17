@@ -19,8 +19,9 @@ defmodule Volt.CSSModulesTest do
 
       assert js =~ "export default"
       assert js =~ "primary"
-      assert css =~ "_primary_"
-      refute css =~ ".primary "
+      refute css =~ ~r/\.primary[^_]/
+      assert css =~ "primary"
+      assert css =~ "color"
     end
 
     test "handles multiple classes" do
@@ -32,7 +33,12 @@ defmodule Volt.CSSModulesTest do
 
       {:ok, js, css} = Volt.CSSModules.compile(source, "heading.module.css")
 
-      mapping = Jason.decode!(String.trim_leading(js, "export default ") |> String.trim_trailing(";\n"))
+      mapping =
+        js
+        |> String.trim_leading("export default ")
+        |> String.trim_trailing(";\n")
+        |> Jason.decode!()
+
       assert Map.has_key?(mapping, "title")
       assert Map.has_key?(mapping, "subtitle")
       assert Map.has_key?(mapping, "active")
@@ -42,13 +48,14 @@ defmodule Volt.CSSModulesTest do
       end
     end
 
-    test "different files produce different hashes" do
-      {:ok, _js1, css1} = Volt.CSSModules.compile(".box { }", "a.module.css")
-      {:ok, _js2, css2} = Volt.CSSModules.compile(".box { }", "b.module.css")
+    test "different files produce different scoped names" do
+      {:ok, js1, _css1} = Volt.CSSModules.compile(".box { }", "a.module.css")
+      {:ok, js2, _css2} = Volt.CSSModules.compile(".box { }", "b.module.css")
 
-      [scoped1] = Regex.run(~r/\._box_\w+/, css1)
-      [scoped2] = Regex.run(~r/\._box_\w+/, css2)
-      assert scoped1 != scoped2
+      map1 = js1 |> String.trim_leading("export default ") |> String.trim_trailing(";\n") |> Jason.decode!()
+      map2 = js2 |> String.trim_leading("export default ") |> String.trim_trailing(";\n") |> Jason.decode!()
+
+      assert map1["box"] != map2["box"]
     end
   end
 
@@ -58,7 +65,8 @@ defmodule Volt.CSSModulesTest do
         Volt.Pipeline.compile("button.module.css", ".btn { color: red }")
 
       assert result.code =~ "export default"
-      assert result.css =~ "_btn_"
+      assert result.css =~ "btn"
+      assert result.css =~ "color"
     end
   end
 end
