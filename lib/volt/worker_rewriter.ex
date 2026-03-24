@@ -29,7 +29,7 @@ defmodule Volt.WorkerRewriter do
   end
 
   defp maybe_patch_worker(
-         %{type: "NewExpression", callee: %{type: "Identifier", name: "URL"}, arguments: [source_node, %{type: "MetaProperty"} | _]},
+         %{type: "NewExpression", callee: %{type: "Identifier", name: "URL"}, arguments: [source_node, %{type: "MemberExpression", object: %{type: "MetaProperty"}} | _]},
          rewrite_fn,
          patches
        ) do

@@ -168,7 +168,7 @@ defmodule Volt.BuilderTest do
       assert Path.basename(result.js.path) =~ ~r/^worker-[a-f0-9]{8}\.js$/
     end
 
-    test "builds parent entry with worker syntax preserved" do
+    test "rewrites worker URL to hashed filename in parent bundle" do
       File.write!(Path.join(@fixture_dir, "src/worker.ts"), "self.postMessage('ready')")
       File.write!(Path.join(@fixture_dir, "src/worker_app.ts"), """
       const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
@@ -186,6 +186,10 @@ defmodule Volt.BuilderTest do
       assert File.regular?(result.js.path)
       js = File.read!(result.js.path)
       assert js =~ "new Worker"
+      assert js =~ ~r/worker-[a-f0-9]{8}\.js/
+
+      manifest = Path.join(@outdir, "manifest.json") |> File.read!() |> :json.decode()
+      assert Map.has_key?(manifest, "worker_app.js")
     end
 
     test "accepts custom name" do

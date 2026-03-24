@@ -146,7 +146,7 @@ defmodule Volt.Builder.Collector do
   defp extract_vue_imports(source), do: Volt.VueImports.extract(source)
 
   defp maybe_add_worker(
-         %{type: "NewExpression", callee: %{type: "Identifier", name: "URL"}, arguments: [source_node, %{type: "MetaProperty"} | _]},
+         %{type: "NewExpression", callee: %{type: "Identifier", name: "URL"}, arguments: [source_node, %{type: "MemberExpression", object: %{type: "MetaProperty"}} | _]},
          acc
        ) do
     case source_node do
@@ -162,7 +162,8 @@ defmodule Volt.Builder.Collector do
     Enum.reduce(worker_specs, {workers, []}, fn specifier, {acc_workers, resolved_specs} ->
       case Resolver.resolve(specifier, importer, ctx) do
         {:ok, resolved_path} ->
-          acc_workers = put_in(acc_workers, [importer, specifier], resolved_path)
+          importer_map = Map.get(acc_workers, importer, %{})
+          acc_workers = Map.put(acc_workers, importer, Map.put(importer_map, specifier, resolved_path))
           {acc_workers, [{specifier, resolved_path} | resolved_specs]}
 
         _ ->

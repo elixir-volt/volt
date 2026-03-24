@@ -61,6 +61,7 @@ defmodule Volt.MixProject do
         "ex_dna",
         "dialyzer"
       ],
+      setup: ["deps.get", "volt.vendor.tailwind"],
       ci: ["lint", "cmd MIX_ENV=test mix test"]
     ]
   end
@@ -69,7 +70,7 @@ defmodule Volt.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w[lib mix.exs README.md LICENSE]
+      files: ~w[lib priv/tailwind.js mix.exs README.md LICENSE]
     ]
   end
 

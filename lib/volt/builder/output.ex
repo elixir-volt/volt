@@ -191,7 +191,7 @@ defmodule Volt.Builder.Output do
   end
 
   defp worker_patch(
-         %{type: "NewExpression", callee: %{type: "Identifier", name: "URL"}, arguments: [source_node, %{type: "MetaProperty"} | _]},
+         %{type: "NewExpression", callee: %{type: "Identifier", name: "URL"}, arguments: [source_node, %{type: "MemberExpression", object: %{type: "MetaProperty"}} | _]},
          module_to_chunk,
          chunk_url_map
        ) do

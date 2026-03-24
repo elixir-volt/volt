@@ -26,3 +26,6 @@ volt-*.tar
 /node_modules/
 /npm.lock
 
+# Generated Tailwind runtime (regenerate with: mix volt.vendor.tailwind)
+/priv/tailwind.js
+
