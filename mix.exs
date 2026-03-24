@@ -1,7 +1,7 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
-  @version "0.4.1"
+  @version "0.4.2"
   @source_url "https://github.com/elixir-volt/volt"
 
   def project do
@@ -10,7 +10,6 @@ defmodule Volt.MixProject do
       version: @version,
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
-
       deps: deps(),
       aliases: aliases(),
       dialyzer: [plt_add_apps: [:mix]],
@@ -61,7 +60,7 @@ defmodule Volt.MixProject do
         "ex_dna",
         "dialyzer"
       ],
-      setup: ["deps.get", "volt.vendor.tailwind"],
+      setup: ["deps.get"],
       ci: ["lint", "cmd MIX_ENV=test mix test"]
     ]
   end
@@ -70,7 +69,7 @@ defmodule Volt.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w[lib priv/tailwind.js mix.exs README.md LICENSE]
+      files: ~w[lib mix.exs README.md LICENSE]
     ]
   end
 

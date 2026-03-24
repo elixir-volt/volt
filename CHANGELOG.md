@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Fix fresh installs for Tailwind support by removing the generated `priv/tailwind.js` workflow
+- Assemble the Tailwind runtime on first use from the `tailwindcss` package in the `npm_ex` cache
+- Bump QuickBEAM to 0.8.0 and npm_ex to 0.5.1
+
 ## 0.4.1
 
 ### TypeScript Assets
@@ -12,13 +18,10 @@ inline Elixir heredocs to separate TypeScript files in `priv/ts/`.
 
 - `mix volt.js.check` — run oxfmt format check and oxlint via npx
 - `mix volt.js.fmt` — format TypeScript assets via npx
-- `mix volt.npm` — install JS tooling deps (tailwindcss, etc.) via npm_ex
-- `mix volt.vendor.tailwind` — regenerate `priv/tailwind.js` from installed tailwindcss
 
 ### Tailwind Vendoring
 
-`priv/tailwind.js` is now generated from the `tailwindcss` npm package by
-`mix volt.vendor.tailwind` instead of being maintained by hand. The runtime
+The Tailwind runtime is now assembled from the `tailwindcss` npm package at runtime using the npm_ex cache. The runtime
 shows a clear error if the file is missing.
 
 ### Build Improvements

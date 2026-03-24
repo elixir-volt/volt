@@ -20,7 +20,7 @@ defmodule Volt.Tailwind do
 
   use GenServer
 
-  defp bundle_path, do: Application.app_dir(:volt, "priv/tailwind.js")
+  @tailwind_version "^4.2.2"
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -69,7 +69,7 @@ defmodule Volt.Tailwind do
   defp ensure_runtime(%{runtime: nil} = state) do
     {:ok, rt} = QuickBEAM.start()
     {:ok, _} = QuickBEAM.eval(rt, "globalThis.process = {env: {NODE_ENV: 'production'}};")
-    {:ok, _} = QuickBEAM.eval(rt, read_bundle!())
+    {:ok, _} = QuickBEAM.eval(rt, runtime_source())
 
     scanner =
       if state.sources != [] do
@@ -149,6 +149,7 @@ defmodule Volt.Tailwind do
 
   @impl true
   def terminate(_reason, %{runtime: nil}), do: :ok
+
   def terminate(_reason, %{runtime: rt}) do
     QuickBEAM.stop(rt)
     :ok
@@ -192,25 +193,74 @@ defmodule Volt.Tailwind do
     }
   end
 
-  defp read_bundle! do
-    path = bundle_path()
+  defp runtime_source do
+    NPM.install(%{"tailwindcss" => @tailwind_version}, __skip_project_check__: true)
 
-    case File.read(path) do
-      {:ok, contents} ->
-        contents
+    nm_dir = NPM.node_modules_dir!()
+    tw_dir = Path.join(nm_dir, "tailwindcss")
+    source = File.read!(Path.join([tw_dir, "dist", "lib.js"]))
+    theme = File.read!(Path.join(tw_dir, "theme.css"))
+    preflight = File.read!(Path.join(tw_dir, "preflight.css"))
+    utilities = File.read!(Path.join(tw_dir, "utilities.css"))
 
-      {:error, :enoent} ->
-        raise """
-        Missing generated Tailwind runtime at #{path}.
+    wrap_runtime(source, theme, preflight, utilities)
+  end
 
-        Regenerate it with:
+  defp wrap_runtime(source, theme, preflight, utilities) do
+    """
+    var TW = (() => {
+      var module = { exports: {} };
+      var exports = module.exports;
+      #{source}
+      return {
+        compileCss: async function(inputCss, candidates) {
+          var css = inputCss == null ? '@import "tailwindcss";' : inputCss;
+          var compiler = await module.exports.compile(css, {
+            from: 'app.css',
+            loadStylesheet: async function(id) {
+              if (id === 'tailwindcss') {
+                return {
+                  base: '.',
+                  content: '@import "tailwindcss/theme.css" layer(theme);\\n@import "tailwindcss/preflight.css" layer(base);\\n@import "tailwindcss/utilities.css" layer(utilities);'
+                };
+              }
 
-            mix volt.npm
-            mix volt.vendor.tailwind
-        """
+              if (id === 'tailwindcss/theme.css') {
+                return { base: '.', content: module.exports.Features ? requireAsset('theme') : '' };
+              }
 
-      {:error, reason} ->
-        raise File.Error, reason: reason, action: "read file", path: path
-    end
+              if (id === 'tailwindcss/preflight.css') {
+                return { base: '.', content: requireAsset('preflight') };
+              }
+
+              if (id === 'tailwindcss/utilities.css') {
+                return { base: '.', content: requireAsset('utilities') };
+              }
+
+              throw new Error('Unsupported stylesheet: ' + id);
+            }
+          });
+
+          return compiler.build(candidates || []);
+        }
+      };
+
+      function requireAsset(kind) {
+        if (kind === 'theme') {
+          return #{Jason.encode!(theme)};
+        }
+
+        if (kind === 'preflight') {
+          return #{Jason.encode!(preflight)};
+        }
+
+        if (kind === 'utilities') {
+          return #{Jason.encode!(utilities)};
+        }
+
+        return '';
+      }
+    })();
+    """
   end
 end

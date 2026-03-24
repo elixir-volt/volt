@@ -68,8 +68,6 @@ CLI flags override config values for one-off use.
 Install maintainer JS tooling when needed:
 
 ```bash
-mix volt.npm
-mix volt.vendor.tailwind
 mix volt.js.check
 mix volt.js.fmt
 ```
@@ -242,7 +240,7 @@ Hooks: `resolve/2`, `load/1`, `transform/2`, `render_chunk/2` — all optional.
 
 ## Tailwind CSS
 
-Volt compiles Tailwind CSS natively at runtime. The vendored runtime at `priv/tailwind.js` is generated with `mix volt.vendor.tailwind` and should not be edited by hand.
+Volt compiles Tailwind CSS natively at runtime and installs the Tailwind compiler into the npm_ex cache on first use.
 
 [Oxide](https://hex.pm/packages/oxide_ex) scans your source files in parallel for candidate class names, then the Tailwind v4 compiler (running in [QuickBEAM](https://hex.pm/packages/quickbeam)) generates the CSS. [LightningCSS](https://hex.pm/packages/vize) handles minification.
 
