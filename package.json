@@ -1,6 +1,0 @@
-{
-  "private": true,
-  "devDependencies": {
-    "tailwindcss": "^4.2.2"
-  }
-}

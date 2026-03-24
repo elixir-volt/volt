@@ -22,8 +22,6 @@ volt-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
-# npm_ex artifacts
-/node_modules/
-/npm.lock
+
 
 

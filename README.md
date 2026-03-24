@@ -26,7 +26,7 @@ Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https:/
 
 ```elixir
 def deps do
-  [{:volt, "~> 0.4.0"}]
+  [{:volt, "~> 0.4.2"}]
 end
 ```
 
@@ -64,13 +64,6 @@ CLI flags override config values for one-off use.
 ## Quick Start
 
 ### Dev Server
-
-Install maintainer JS tooling when needed:
-
-```bash
-mix volt.js.check
-mix volt.js.fmt
-```
 
 Add the Plug to your Phoenix endpoint:
 
