@@ -68,6 +68,7 @@ defmodule Volt.BuilderTest do
       assert File.regular?(manifest_path)
       manifest = manifest_path |> File.read!() |> :json.decode()
       assert Map.has_key?(manifest, "app.js")
+      assert manifest["app.js"]["file"] =~ ~r/^app-[a-f0-9]{8}\.js$/
     end
 
     test "minifies by default" do
@@ -119,6 +120,72 @@ defmodule Volt.BuilderTest do
       assert result.css != nil
       css = File.read!(result.css.path)
       assert css =~ "color"
+
+      manifest = Path.join(@outdir, "manifest.json") |> File.read!() |> :json.decode()
+      assert manifest["main.js"]["css"] == [Path.basename(result.css.path)]
+      assert manifest["main.css"]["assets"] == [Path.basename(result.css.path)]
+    end
+
+    test "builds standalone CSS entries from HTML manifests" do
+      File.write!(Path.join(@fixture_dir, "src/site.css"), ".site { color: blue }")
+      File.write!(Path.join(@fixture_dir, "src/index.html"), """
+      <html>
+        <head>
+          <link rel="stylesheet" href="./site.css">
+        </head>
+        <body></body>
+      </html>
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/index.html"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert result.css != nil
+      assert File.regular?(result.css.path)
+
+      manifest = Path.join(@outdir, "manifest.json") |> File.read!() |> :json.decode()
+      assert manifest["site.css"]["file"] =~ ~r/^site-[a-f0-9]{8}\.css$/
+      assert manifest["site.css"]["assets"] == [manifest["site.css"]["file"]]
+    end
+
+    test "builds worker entry as a standalone bundle" do
+      File.write!(Path.join(@fixture_dir, "src/worker.ts"), "self.postMessage('ready')")
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/worker.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert File.regular?(result.js.path)
+      assert Path.basename(result.js.path) =~ ~r/^worker-[a-f0-9]{8}\.js$/
+    end
+
+    test "builds parent entry with worker syntax preserved" do
+      File.write!(Path.join(@fixture_dir, "src/worker.ts"), "self.postMessage('ready')")
+      File.write!(Path.join(@fixture_dir, "src/worker_app.ts"), """
+      const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
+      console.log(worker)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/worker_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert File.regular?(result.js.path)
+      js = File.read!(result.js.path)
+      assert js =~ "new Worker"
     end
 
     test "accepts custom name" do

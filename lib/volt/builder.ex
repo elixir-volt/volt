@@ -42,7 +42,7 @@ defmodule Volt.Builder do
   """
   @spec build(keyword()) :: {:ok, build_result()} | {:error, term()}
   def build(opts) do
-    entries = opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&Path.expand/1) |> expand_html_entries()
+    entries = opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&Path.expand/1)
     outdir = Keyword.get(opts, :outdir, "priv/static/assets") |> Path.expand()
     target = opts |> Keyword.get(:target, "") |> to_string()
     minify = Keyword.get(opts, :minify, true)
@@ -81,9 +81,11 @@ defmodule Volt.Builder do
     ]
 
     results =
-      Enum.map(entries, fn entry ->
-        entry_name = name || entry |> Path.basename() |> Path.rootname()
-        build_entry(entry, entry_name, ctx, outdir, target, hash, bundle_opts, code_splitting)
+      Enum.flat_map(entries, fn entry ->
+        expand_entry(entry, name)
+        |> Enum.map(fn {entry_path, entry_type, entry_name} ->
+          build_entry(entry_path, entry_type, entry_name, ctx, outdir, target, hash, bundle_opts, code_splitting)
+        end)
       end)
 
     case Enum.split_with(results, &match?({:ok, _}, &1)) do
@@ -93,10 +95,16 @@ defmodule Volt.Builder do
     end
   end
 
-  defp build_entry(entry, name, ctx, outdir, target, hash, bundle_opts, code_splitting) do
-    with {:ok, modules, dep_map} <- Collector.collect(entry, ctx),
+  defp build_entry(entry, :script, name, ctx, outdir, target, hash, bundle_opts, code_splitting) do
+    with {:ok, modules, dep_map, workers} <- Collector.collect(entry, ctx),
          {:ok, compiled} <- compile_all(modules, target, ctx.plugins) do
-      output_ctx = %{plugins: ctx.plugins, external_set: ctx.external, external_globals: ctx.external_globals}
+      output_ctx = %{
+        plugins: ctx.plugins,
+        external_set: ctx.external,
+        external_globals: ctx.external_globals,
+        workers: workers,
+        worker_results: build_worker_results(workers, ctx, outdir, target, hash, bundle_opts)
+      }
 
       if code_splitting and has_dynamic_imports?(dep_map) do
         Output.build_chunks(entry, name, modules, dep_map, compiled, outdir, hash, bundle_opts, output_ctx)
@@ -106,8 +114,29 @@ defmodule Volt.Builder do
     end
   end
 
+  defp build_entry(entry, :style, name, _ctx, outdir, _target, hash, bundle_opts, _code_splitting) do
+    with {:ok, source} <- File.read(entry),
+         {:ok, compiled} <- Volt.Pipeline.compile(entry, source, minify: bundle_opts[:minify] || false) do
+      Output.build_style_entry(name, compiled.code, outdir, hash)
+    end
+  end
+
   defp has_dynamic_imports?(dep_map) do
     Enum.any?(dep_map, fn {_, %{dynamic: dyn}} -> dyn != [] end)
+  end
+
+  defp build_worker_results(workers, ctx, outdir, target, hash, bundle_opts) do
+    workers
+    |> Enum.flat_map(fn {_importer, spec_map} -> Map.to_list(spec_map) end)
+    |> Enum.uniq_by(fn {_specifier, resolved_path} -> resolved_path end)
+    |> Enum.reduce(%{}, fn {_specifier, resolved_path}, acc ->
+      worker_name = resolved_path |> Path.basename() |> Path.rootname()
+
+      case build_entry(resolved_path, :script, worker_name, %{ctx | plugins: ctx.plugins}, outdir, target, hash, bundle_opts, true) do
+        {:ok, %{js: %{path: path}}} -> Map.put(acc, resolved_path, Path.basename(path))
+        _ -> acc
+      end
+    end)
   end
 
   # ── Module compilation ──────────────────────────────────────────────
@@ -175,15 +204,17 @@ defmodule Volt.Builder do
     end
   end
 
-  defp expand_html_entries(entries) do
-    Enum.flat_map(entries, fn entry ->
-      if Volt.HTMLEntry.html?(entry) do
-        {:ok, %{scripts: scripts}} = Volt.HTMLEntry.extract(entry)
-        scripts
-      else
-        [entry]
-      end
-    end)
+  defp expand_entry(entry, override_name) do
+    if Volt.HTMLEntry.html?(entry) do
+      {:ok, %{scripts: scripts, styles: styles}} = Volt.HTMLEntry.extract(entry)
+
+      Enum.map(scripts, &{&1, :script, Path.basename(&1) |> Path.rootname()}) ++
+        Enum.map(styles, &{&1, :style, Path.basename(&1) |> Path.rootname()})
+    else
+      type = if Path.extname(entry) == ".css", do: :style, else: :script
+      entry_name = override_name || entry |> Path.basename() |> Path.rootname()
+      [{entry, type, entry_name}]
+    end
   end
 
   defp normalize_external(externals) when is_map(externals) do

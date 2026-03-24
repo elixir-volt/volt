@@ -22,7 +22,14 @@ defmodule Volt.PackageResolver do
     case File.read(pkg_json) do
       {:ok, content} ->
         pkg = :json.decode(content)
-        entry = resolve_exports(pkg) || pkg["module"] || pkg["main"] || "index.js"
+
+        entry =
+          resolve_exports(pkg) ||
+            pkg["browser"] ||
+            pkg["module"] ||
+            pkg["main"] ||
+            "index.js"
+
         try_resolve.(Path.expand(Path.join(package_dir, entry)))
 
       {:error, _} ->
@@ -34,13 +41,15 @@ defmodule Volt.PackageResolver do
   def resolve_exports(%{"exports" => %{"." => entry}}) when is_binary(entry), do: entry
 
   def resolve_exports(%{"exports" => %{"." => conditions}}) when is_map(conditions) do
-    resolve_condition(conditions["import"] || conditions["default"] || conditions["require"])
+    resolve_condition(
+      conditions["browser"] || conditions["import"] || conditions["default"] || conditions["require"]
+    )
   end
 
   def resolve_exports(_), do: nil
 
   def resolve_condition(value) when is_binary(value), do: value
-  def resolve_condition(%{} = m), do: m["default"] || m["import"] || m["require"]
+  def resolve_condition(%{} = m), do: m["browser"] || m["default"] || m["import"] || m["require"]
   def resolve_condition(_), do: nil
 
   def find_node_modules(dir) do

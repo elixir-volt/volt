@@ -3,7 +3,7 @@ defmodule Volt.Builder.Resolver do
 
   alias Volt.PackageResolver
 
-  @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".vue", ".json"]
+  @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cjs", ".cts", ".vue", ".json"]
   @index_files ~w(/index.ts /index.tsx /index.js /index.jsx)
 
   @doc """

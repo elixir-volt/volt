@@ -69,7 +69,7 @@ defmodule Volt.Tailwind do
   defp ensure_runtime(%{runtime: nil} = state) do
     {:ok, rt} = QuickBEAM.start()
     {:ok, _} = QuickBEAM.eval(rt, "globalThis.process = {env: {NODE_ENV: 'production'}};")
-    {:ok, _} = QuickBEAM.eval(rt, File.read!(bundle_path()))
+    {:ok, _} = QuickBEAM.eval(rt, read_bundle!())
 
     scanner =
       if state.sources != [] do
@@ -190,5 +190,27 @@ defmodule Volt.Tailwind do
       pattern: pattern,
       negated: Map.get(source, :negated, false)
     }
+  end
+
+  defp read_bundle! do
+    path = bundle_path()
+
+    case File.read(path) do
+      {:ok, contents} ->
+        contents
+
+      {:error, :enoent} ->
+        raise """
+        Missing generated Tailwind runtime at #{path}.
+
+        Regenerate it with:
+
+            mix volt.npm
+            mix volt.vendor.tailwind
+        """
+
+      {:error, reason} ->
+        raise File.Error, reason: reason, action: "read file", path: path
+    end
   end
 end

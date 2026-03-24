@@ -58,6 +58,15 @@ defmodule Volt.DevServer do
     |> Plug.Conn.halt()
   end
 
+  def call(%Plug.Conn{method: "POST", request_path: "/@volt/console"} = conn, _config) do
+    {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Volt.DevConsoleForwarder.log(body)
+
+    conn
+    |> Plug.Conn.send_resp(204, "")
+    |> Plug.Conn.halt()
+  end
+
   def call(%Plug.Conn{request_path: "/@vendor/" <> specifier_js} = conn, _config) do
     specifier = specifier_js |> String.trim_trailing(".js") |> Volt.Vendor.decode_specifier()
 
@@ -137,20 +146,23 @@ defmodule Volt.DevServer do
       import_source: config.import_source,
       vapor: config.vapor,
       sourcemap: true,
-      plugins: config.plugins
+      plugins: config.plugins,
+      rewrite_import: &rewrite_dev_specifier(&1, file_path, config)
     ]
 
     case Volt.Pipeline.compile(file_path, source, pipeline_opts) do
       {:ok, result} ->
+        code = maybe_inject_dev_console_forwarder(result.code, content_type)
+
         entry = %{
-          code: result.code,
+          code: code,
           sourcemap: result.sourcemap,
           css: result.css,
           content_type: content_type
         }
 
         Volt.Cache.put(file_path, mtime, entry)
-        send_compiled(conn, result.code, result.sourcemap, content_type)
+        send_compiled(conn, code, result.sourcemap, content_type)
 
       {:error, errors} ->
         conn
@@ -194,26 +206,42 @@ defmodule Volt.DevServer do
     end
   end
 
+  defp maybe_inject_dev_console_forwarder(code, "application/javascript") do
+    Volt.DevConsoleForwarder.inject(code)
+  end
+
+  defp maybe_inject_dev_console_forwarder(code, _content_type), do: code
+
+  defp rewrite_dev_specifier(specifier, importer, config) do
+    cond do
+      String.starts_with?(specifier, ".") ->
+        resolved = Path.expand(Path.join(Path.dirname(importer), specifier))
+
+        if String.starts_with?(resolved, config.root) do
+          relative = Path.relative_to(resolved, config.root)
+          {:rewrite, Path.join(config.prefix, relative)}
+        else
+          :keep
+        end
+
+      true ->
+        :keep
+    end
+  end
+
   defp file_mtime(path), do: Volt.Format.file_mtime(path)
 
   defp error_overlay(errors) do
     msg =
       errors
       |> List.wrap()
-      |> Enum.map_join("\\n", fn
+      |> Enum.map_join("\n", fn
         %{message: m} -> m
         e when is_binary(e) -> e
         e -> inspect(e)
       end)
 
-    """
-    console.error("[Volt] Compilation error:\\n#{msg}");
-    if (typeof document !== 'undefined') {
-      const d = document.createElement('div');
-      d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);color:#ff6b6b;font:14px/1.6 monospace;padding:2em;white-space:pre-wrap;overflow:auto';
-      d.textContent = "[Volt] Compilation error:\\n\\n#{msg}";
-      document.body.appendChild(d);
-    }
-    """
+    overlay = Volt.JSAsset.read!("error-overlay.ts")
+    overlay <> "\nrenderErrorOverlay(#{inspect(msg)})\n"
   end
 end

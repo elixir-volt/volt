@@ -10,6 +10,7 @@ defmodule Volt.MixProject do
       version: @version,
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
+
       deps: deps(),
       aliases: aliases(),
       dialyzer: [plt_add_apps: [:mix]],
@@ -42,6 +43,7 @@ defmodule Volt.MixProject do
       {:websock_adapter, "~> 0.5"},
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
+      {:npm, "~> 0.4.4"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
@@ -54,6 +56,7 @@ defmodule Volt.MixProject do
     [
       lint: [
         "format --check-formatted",
+        "volt.js.check",
         "credo --strict",
         "ex_dna",
         "dialyzer"

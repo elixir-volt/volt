@@ -6,7 +6,7 @@ Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https:/
 
 ## Features
 
-- **Zero JavaScript toolchain** — no `node_modules`, no npm, no npx
+- **No JavaScript app bundler** — Volt builds app assets natively without esbuild or Vite
 - **JS/TS bundling** — parse, transform, minify via OXC (Rust)
 - **Vue SFC support** — single-file components with scoped CSS and Vapor IR
 - **Tailwind CSS v4** — parallel content scanning + full compiler, ~40ms builds
@@ -65,6 +65,15 @@ CLI flags override config values for one-off use.
 
 ### Dev Server
 
+Install maintainer JS tooling when needed:
+
+```bash
+mix volt.npm
+mix volt.vendor.tailwind
+mix volt.js.check
+mix volt.js.fmt
+```
+
 Add the Plug to your Phoenix endpoint:
 
 ```elixir
@@ -105,10 +114,10 @@ Dynamic imports are automatically split into separate chunks:
 
 ```typescript
 // Loaded immediately
-import { setup } from './core'
+import { setup } from "./core";
 
 // Loaded on demand — becomes a separate chunk
-const admin = await import('./admin')
+const admin = await import("./admin");
 ```
 
 Produces:
@@ -139,12 +148,14 @@ Files ending in `.module.css` get scoped class names via LightningCSS:
 
 ```css
 /* button.module.css */
-.primary { color: blue }
+.primary {
+  color: blue;
+}
 ```
 
 ```typescript
-import styles from './button.module.css'
-console.log(styles.primary) // "ewq3O_primary"
+import styles from "./button.module.css";
+console.log(styles.primary); // "ewq3O_primary"
 ```
 
 ## Static Assets
@@ -152,15 +163,15 @@ console.log(styles.primary) // "ewq3O_primary"
 Images, fonts, and other files are handled automatically:
 
 ```typescript
-import logo from './logo.svg'    // small → data:image/svg+xml;base64,...
-import photo from './photo.jpg'  // large → /assets/photo-a1b2c3d4.jpg
+import logo from "./logo.svg"; // small → data:image/svg+xml;base64,...
+import photo from "./photo.jpg"; // large → /assets/photo-a1b2c3d4.jpg
 ```
 
 ## JSON Imports
 
 ```typescript
-import config from './config.json'
-console.log(config.apiUrl)
+import config from "./config.json";
+console.log(config.apiUrl);
 ```
 
 ## Environment Variables
@@ -175,10 +186,10 @@ VOLT_DEBUG=true
 Access in your code:
 
 ```typescript
-console.log(import.meta.env.VOLT_API_URL)
-console.log(import.meta.env.MODE)  // "development" or "production"
-console.log(import.meta.env.DEV)   // true/false
-console.log(import.meta.env.PROD)  // true/false
+console.log(import.meta.env.VOLT_API_URL);
+console.log(import.meta.env.MODE); // "development" or "production"
+console.log(import.meta.env.DEV); // true/false
+console.log(import.meta.env.PROD); // true/false
 ```
 
 Files loaded: `.env`, `.env.local`, `.env.{mode}`, `.env.{mode}.local`
@@ -190,7 +201,7 @@ config :volt, aliases: %{"@" => "assets/src"}
 ```
 
 ```typescript
-import { Button } from '@/components/Button'
+import { Button } from "@/components/Button";
 // resolves to assets/src/components/Button
 ```
 
@@ -231,7 +242,7 @@ Hooks: `resolve/2`, `load/1`, `transform/2`, `render_chunk/2` — all optional.
 
 ## Tailwind CSS
 
-Volt compiles Tailwind CSS natively — no CLI binary, no CDN.
+Volt compiles Tailwind CSS natively at runtime. The vendored runtime at `priv/tailwind.js` is generated with `mix volt.vendor.tailwind` and should not be edited by hand.
 
 [Oxide](https://hex.pm/packages/oxide_ex) scans your source files in parallel for candidate class names, then the Tailwind v4 compiler (running in [QuickBEAM](https://hex.pm/packages/quickbeam)) generates the CSS. [LightningCSS](https://hex.pm/packages/vize) handles minification.
 
@@ -255,11 +266,11 @@ In dev mode, only changed files are re-scanned. If a `.heex` template adds new T
 
 The file watcher monitors your asset and template directories:
 
-| File type | Action |
-|-----------|--------|
+| File type                                    | Action                                             |
+| -------------------------------------------- | -------------------------------------------------- |
 | `.ts`, `.tsx`, `.js`, `.jsx`, `.vue`, `.css` | Recompile via Pipeline, push update over WebSocket |
-| `.ex`, `.heex`, `.eex` | Incremental Tailwind rebuild, CSS hot-swap |
-| `.vue` (style-only change) | CSS hot-swap, no page reload |
+| `.ex`, `.heex`, `.eex`                       | Incremental Tailwind rebuild, CSS hot-swap         |
+| `.vue` (style-only change)                   | CSS hot-swap, no page reload                       |
 
 The browser client auto-reconnects on disconnect and shows compilation errors as an overlay.
 

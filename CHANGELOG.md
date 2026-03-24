@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.1
+
+### TypeScript Assets
+
+Browser JavaScript (HMR client, error overlay, dev console forwarder) moved from
+inline Elixir heredocs to separate TypeScript files in `priv/ts/`.
+`Volt.JSAsset.read!/1` loads them at runtime.
+
+### Maintainer Tooling
+
+- `mix volt.js.check` — run oxfmt format check and oxlint via npx
+- `mix volt.js.fmt` — format TypeScript assets via npx
+- `mix volt.npm` — install JS tooling deps (tailwindcss, etc.) via npm_ex
+- `mix volt.vendor.tailwind` — regenerate `priv/tailwind.js` from installed tailwindcss
+
+### Tailwind Vendoring
+
+`priv/tailwind.js` is now generated from the `tailwindcss` npm package by
+`mix volt.vendor.tailwind` instead of being maintained by hand. The runtime
+shows a clear error if the file is missing.
+
+### Build Improvements
+
+- Structured manifest entries with `file`, `src`, `assets`, and `css` fields
+- Standalone CSS entries in the manifest
+- Worker entry groundwork
+- Hardened package resolution with `browser`/`import`/`default`/`require` and CJS support
+- Dev console forwarding from browser to terminal
+
 ## 0.4.0
 
 ### External Globals
@@ -35,10 +64,10 @@ mix volt.build --entry index.html
 Glob patterns are expanded at build time via OXC AST:
 
 ```typescript
-const pages = import.meta.glob('./pages/*.ts')
+const pages = import.meta.glob("./pages/*.ts");
 // → { "./pages/home.ts": () => import("./pages/home.ts"), ... }
 
-const eager = import.meta.glob('./pages/*.ts', { eager: true })
+const eager = import.meta.glob("./pages/*.ts", { eager: true });
 // → static imports with namespace bindings
 ```
 

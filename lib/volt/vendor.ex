@@ -157,7 +157,7 @@ defmodule Volt.Vendor do
     {:error, :no_node_modules}
   end
 
-  @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mjs"]
+  @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".cts"]
 
   defp try_resolve(base) do
     Enum.find_value(@extensions, fn ext ->

@@ -77,8 +77,12 @@ defmodule Volt.Pipeline do
   end
 
   defp rewrite_compiled_imports(compiled, path, rewrite_fn) do
-    case Volt.ImportRewriter.rewrite(compiled.code, Path.basename(path), rewrite_fn) do
-      {:ok, rewritten} -> {:ok, %{compiled | code: rewritten}}
+    filename = Path.basename(path)
+
+    with {:ok, imports_rewritten} <- Volt.ImportRewriter.rewrite(compiled.code, filename, rewrite_fn),
+         {:ok, workers_rewritten} <- Volt.WorkerRewriter.rewrite(imports_rewritten, filename, rewrite_fn) do
+      {:ok, %{compiled | code: workers_rewritten}}
+    else
       {:error, _} -> {:ok, compiled}
     end
   end

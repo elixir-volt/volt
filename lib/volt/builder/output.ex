@@ -11,6 +11,7 @@ defmodule Volt.Builder.Output do
       {:ok, bundle_result} ->
         {js_code, js_sourcemap} = extract_bundle(bundle_result)
         js_code = inject_external_preamble(js_code, js_files, ctx)
+        js_code = rewrite_worker_urls(js_code, entry_worker_map(js_files, ctx), name)
         js_code = Volt.PluginRunner.render_chunk(ctx.plugins, js_code, %{name: name, type: :entry})
 
         js_filename = hashed_name(name, js_code, ".js", hash)
@@ -67,6 +68,7 @@ defmodule Volt.Builder.Output do
         chunk_js = select_chunk_files(chunk.modules, js_map)
         code = inject_external_preamble(code, chunk_js, ctx)
         code = rewrite_dynamic_imports(code, graph.module_to_chunk, chunk_url_map)
+        code = rewrite_worker_urls(code, entry_worker_map(chunk_js, ctx), chunk_id)
         code = Volt.PluginRunner.render_chunk(ctx.plugins, code, %{name: chunk_id, type: chunk.type})
 
         filename = hashed_name(
@@ -83,13 +85,22 @@ defmodule Volt.Builder.Output do
     manifest =
       js_results
       |> Enum.reduce(%{}, fn js, acc ->
-        Map.put(acc, Path.basename(js.path), Path.basename(js.path))
+        filename = Path.basename(js.path)
+        Map.put(acc, filename, %{"file" => filename, "src" => filename})
       end)
-      |> Map.put("#{name}.js", Path.basename(entry_js.path))
+      |> Map.put("#{name}.js", %{"file" => Path.basename(entry_js.path), "src" => "#{name}.js"})
 
     manifest =
       if css_result do
-        Map.put(manifest, "#{name}.css", Path.basename(css_result.path))
+        css_filename = Path.basename(css_result.path)
+
+        manifest
+        |> put_in(["#{name}.js", "css"], [css_filename])
+        |> Map.put("#{name}.css", %{
+          "file" => css_filename,
+          "src" => "#{name}.css",
+          "assets" => [css_filename]
+        })
       else
         manifest
       end
@@ -117,7 +128,9 @@ defmodule Volt.Builder.Output do
     case OXC.parse(code, "chunk.js") do
       {:ok, ast} ->
         patches = collect_dynamic_import_patches(ast, module_to_chunk, chunk_url_map)
-        if patches == [], do: code, else: OXC.patch_string(code, patches)
+        worker_patches = collect_worker_patches(ast, module_to_chunk, chunk_url_map)
+        all_patches = patches ++ worker_patches
+        if all_patches == [], do: code, else: OXC.patch_string(code, all_patches)
 
       {:error, _} ->
         code
@@ -132,6 +145,23 @@ defmodule Volt.Builder.Output do
           case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
             nil -> {node, patches}
             url -> {node, [%{start: s, end: e, change: "'./#{url}'"} | patches]}
+          end
+
+        node, patches ->
+          {node, patches}
+      end)
+
+    patches
+  end
+
+  defp collect_worker_patches(ast, module_to_chunk, chunk_url_map) do
+    {_ast, patches} =
+      OXC.postwalk(ast, [], fn
+        %{type: "NewExpression", callee: %{type: "Identifier", name: worker_type}, arguments: [first_arg | _]} = node, patches
+        when worker_type in ["Worker", "SharedWorker"] ->
+          case worker_patch(first_arg, module_to_chunk, chunk_url_map) do
+            nil -> {node, patches}
+            patch -> {node, [patch | patches]}
           end
 
         node, patches ->
@@ -158,6 +188,59 @@ defmodule Volt.Builder.Output do
       end)
 
     if chunk_id, do: chunk_url_map[chunk_id]
+  end
+
+  defp worker_patch(
+         %{type: "NewExpression", callee: %{type: "Identifier", name: "URL"}, arguments: [source_node, %{type: "MetaProperty"} | _]},
+         module_to_chunk,
+         chunk_url_map
+       ) do
+    case source_node do
+      %{value: spec, start: s, end: e} when is_binary(spec) and is_integer(s) and is_integer(e) ->
+        case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
+          nil -> nil
+          url -> %{start: s, end: e, change: "'./#{url}'"}
+        end
+
+      %{type: "StringLiteral", value: spec, start: s, end: e}
+      when is_binary(spec) and is_integer(s) and is_integer(e) ->
+        case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
+          nil -> nil
+          url -> %{start: s, end: e, change: "'./#{url}'"}
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp worker_patch(_, _, _), do: nil
+
+  defp entry_worker_map(js_files, ctx) do
+    importers = Enum.map(js_files, fn {label, _code} -> label end)
+
+    ctx.workers
+    |> Enum.filter(fn {importer, _} -> Path.basename(importer) in importers end)
+    |> Enum.flat_map(fn {_importer, spec_map} -> Map.to_list(spec_map) end)
+    |> Map.new(fn {specifier, resolved_path} ->
+      {specifier, Map.get(ctx.worker_results, resolved_path)}
+    end)
+    |> Enum.reject(fn {_specifier, filename} -> is_nil(filename) end)
+    |> Map.new()
+  end
+
+  defp rewrite_worker_urls(code, worker_map, _filename) when worker_map == %{}, do: code
+
+  defp rewrite_worker_urls(code, worker_map, filename) do
+    case Volt.WorkerRewriter.rewrite(code, to_string(filename), fn specifier ->
+           case Map.fetch(worker_map, specifier) do
+             {:ok, worker_filename} -> {:rewrite, "./#{worker_filename}"}
+             :error -> :keep
+           end
+         end) do
+      {:ok, rewritten} -> rewritten
+      {:error, _} -> code
+    end
   end
 
   # ── External globals ─────────────────────────────────────────────────
@@ -230,15 +313,53 @@ defmodule Volt.Builder.Output do
     %{path: css_path, size: byte_size(css_code)}
   end
 
+  def build_style_entry(name, css_code, outdir, hash) do
+    File.mkdir_p!(outdir)
+
+    css_filename = hashed_name(name, css_code, ".css", hash)
+    css_path = Path.join(outdir, css_filename)
+    File.write!(css_path, css_code)
+
+    manifest = %{
+      "#{name}.css" => %{
+        "file" => css_filename,
+        "src" => "#{name}.css",
+        "assets" => [css_filename]
+      }
+    }
+
+    write_manifest(outdir, manifest)
+
+    {:ok,
+     %{
+       js: [],
+       css: %{path: css_path, size: byte_size(css_code)},
+       manifest: manifest
+     }}
+  end
+
   def write_manifest(outdir, manifest) do
     File.write!(Path.join(outdir, "manifest.json"), :json.encode(manifest))
   end
 
   def build_manifest(name, js_filename, css_result) do
-    manifest = %{"#{name}.js" => js_filename}
+    js_entry = %{
+      "file" => js_filename,
+      "src" => "#{name}.js"
+    }
+
+    manifest = %{"#{name}.js" => js_entry}
 
     if css_result do
-      Map.put(manifest, "#{name}.css", Path.basename(css_result.path))
+      css_filename = Path.basename(css_result.path)
+
+      manifest
+      |> put_in(["#{name}.js", "css"], [css_filename])
+      |> Map.put("#{name}.css", %{
+        "file" => css_filename,
+        "src" => "#{name}.css",
+        "assets" => [css_filename]
+      })
     else
       manifest
     end
