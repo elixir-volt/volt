@@ -51,7 +51,7 @@ defmodule Demo.MixProject do
       {:volt, path: "../..", override: true},
       {:oxc, "~> 0.5.2", override: true},
       {:vize, "~> 0.8.0", override: true},
-      {:phoenix_vapor, path: "../../../phoenix_vapor"}
+      {:phoenix_vapor, "~> 0.2.1"}
     ]
   end
 
