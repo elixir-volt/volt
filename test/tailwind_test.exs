@@ -69,6 +69,73 @@ defmodule Volt.TailwindTest do
     end
   end
 
+  describe "typography plugin" do
+    test "generates prose styles from @plugin directive" do
+      File.write!(Path.join(@fixture_dir, "article.html"), """
+      <article class="prose prose-lg dark:prose-invert">
+        <h1>Hello World</h1>
+      </article>
+      """)
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css: "@import \"tailwindcss\";\n@plugin \"@tailwindcss/typography\";"
+        )
+
+      assert css =~ ".prose"
+      assert css =~ "--tw-prose-body"
+      assert css =~ "max-width: 65ch"
+    end
+
+    test "generates prose size variants" do
+      File.write!(Path.join(@fixture_dir, "article.html"), """
+      <article class="prose prose-sm prose-lg prose-xl prose-2xl"></article>
+      """)
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css: "@import \"tailwindcss\";\n@plugin \"@tailwindcss/typography\";"
+        )
+
+      assert css =~ ".prose-sm"
+      assert css =~ ".prose-lg"
+      assert css =~ ".prose-xl"
+      assert css =~ ".prose-2xl"
+    end
+
+    test "generates prose color themes" do
+      File.write!(Path.join(@fixture_dir, "article.html"), """
+      <article class="prose prose-slate prose-invert"></article>
+      """)
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css: "@import \"tailwindcss\";\n@plugin \"@tailwindcss/typography\";"
+        )
+
+      assert css =~ ".prose-slate"
+      assert css =~ ".prose-invert"
+    end
+
+    test "generates prose element variant classes" do
+      File.write!(Path.join(@fixture_dir, "article.html"), """
+      <article class="prose prose-headings:underline prose-a:text-blue-600"></article>
+      """)
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css: "@import \"tailwindcss\";\n@plugin \"@tailwindcss/typography\";"
+        )
+
+      assert css =~ "prose-headings"
+      assert css =~ "prose-a"
+    end
+  end
+
   describe "rebuild/2" do
     test "returns :unchanged when no new candidates" do
       {:ok, _css} =

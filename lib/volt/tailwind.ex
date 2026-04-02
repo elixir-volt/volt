@@ -16,11 +16,17 @@ defmodule Volt.Tailwind do
 
       # Generate CSS:
       {:ok, css} = Volt.Tailwind.build()
+
+  ## Plugin support
+
+  Volt natively supports `@plugin "@tailwindcss/typography"` in your CSS input.
+  The plugin runs inside QuickBEAM — no Node.js required.
   """
 
   use GenServer
 
   @tailwind_version "^4.2.2"
+  @typography_plugin_path Path.expand("../../priv/typography-plugin.js", __DIR__)
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -199,23 +205,37 @@ defmodule Volt.Tailwind do
     nm_dir = NPM.node_modules_dir!()
     tw_dir = Path.join(nm_dir, "tailwindcss")
     source = File.read!(Path.join([tw_dir, "dist", "lib.js"]))
+    plugin_helper = File.read!(Path.join([tw_dir, "dist", "plugin.js"]))
     theme = File.read!(Path.join(tw_dir, "theme.css"))
     preflight = File.read!(Path.join(tw_dir, "preflight.css"))
     utilities = File.read!(Path.join(tw_dir, "utilities.css"))
+    typography = load_typography_plugin()
 
-    wrap_runtime(source, theme, preflight, utilities)
+    wrap_runtime(source, plugin_helper, theme, preflight, utilities, typography)
   end
 
-  defp wrap_runtime(source, theme, preflight, utilities) do
+  defp load_typography_plugin do
+    case File.read(@typography_plugin_path) do
+      {:ok, js} -> js
+      {:error, _} -> nil
+    end
+  end
+
+  defp wrap_runtime(source, plugin_helper, theme, preflight, utilities, typography) do
     """
     var TW = (() => {
       var module = { exports: {} };
       var exports = module.exports;
       #{source}
+      var twExports = module.exports;
+
+      #{plugin_shim(plugin_helper)}
+      #{typography_shim(typography)}
+
       return {
         compileCss: async function(inputCss, candidates) {
           var css = inputCss == null ? '@import "tailwindcss";' : inputCss;
-          var compiler = await module.exports.compile(css, {
+          var compiler = await twExports.compile(css, {
             from: 'app.css',
             loadStylesheet: async function(id) {
               if (id === 'tailwindcss') {
@@ -226,7 +246,7 @@ defmodule Volt.Tailwind do
               }
 
               if (id === 'tailwindcss/theme.css') {
-                return { base: '.', content: module.exports.Features ? requireAsset('theme') : '' };
+                return { base: '.', content: twExports.Features ? requireAsset('theme') : '' };
               }
 
               if (id === 'tailwindcss/preflight.css') {
@@ -238,6 +258,13 @@ defmodule Volt.Tailwind do
               }
 
               throw new Error('Unsupported stylesheet: ' + id);
+            },
+            loadModule: async function(id) {
+              if (id === '@tailwindcss/typography' && typographyPlugin) {
+                return { module: typographyPlugin, base: '.' };
+              }
+
+              throw new Error('Unsupported plugin: ' + id + '. Volt natively supports @tailwindcss/typography.');
             }
           });
 
@@ -260,6 +287,35 @@ defmodule Volt.Tailwind do
 
         return '';
       }
+    })();
+    """
+  end
+
+  defp plugin_shim(plugin_helper) do
+    """
+    var twPlugin = (function() {
+      var module = { exports: {} };
+      var exports = module.exports;
+      #{plugin_helper}
+      return module.exports;
+    })();
+    """
+  end
+
+  defp typography_shim(nil), do: "var typographyPlugin = null;"
+
+  defp typography_shim(typography_source) do
+    """
+    var typographyPlugin = (function() {
+      var _require = function(id) {
+        if (id === 'tailwindcss/plugin') return twPlugin;
+        throw new Error('Cannot require module: ' + id);
+      };
+      var module = { exports: {} };
+      var exports = module.exports;
+      var require = _require;
+      #{typography_source}
+      return module.exports;
     })();
     """
   end
