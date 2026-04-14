@@ -8,7 +8,6 @@ defmodule Volt.Builder do
   """
 
   alias Volt.Builder.{Collector, Output}
-  alias Volt.PackageResolver
 
   @type build_result :: %{
           js:
@@ -61,7 +60,7 @@ defmodule Volt.Builder do
 
     node_modules =
       Keyword.get(opts, :node_modules) ||
-        PackageResolver.find_node_modules(Path.dirname(first_entry))
+        NPM.PackageResolver.find_node_modules(Path.dirname(first_entry))
 
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
     hash = Keyword.get(opts, :hash, true)

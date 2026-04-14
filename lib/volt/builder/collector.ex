@@ -72,7 +72,7 @@ defmodule Volt.Builder.Collector do
 
       {:ok, resolved_path, original_specifier} ->
         label =
-          if Resolver.relative?(original_specifier),
+          if NPM.PackageResolver.relative?(original_specifier),
             do: Path.basename(resolved_path),
             else: original_specifier
 

@@ -1,19 +1,16 @@
 defmodule Volt.Tailwind.Resolver do
   @moduledoc "Resolves stylesheet and module paths for the Tailwind runtime."
 
-  alias Volt.Builder.Resolver, as: BaseResolver
-  alias Volt.PackageResolver
-
   @module_extensions ["", ".js", ".cjs", ".json"]
   @module_index_files ["/index.js", "/index.cjs", "/index.json"]
   @stylesheet_extensions ["", ".css"]
   @stylesheet_index_files ["/index.css"]
-  @cjs_order PackageResolver.cjs_condition_order()
+  @cjs_conditions ["require", "default", "browser", "import"]
 
   def resolve_stylesheet_path!(id, base) do
     base = normalize_base(base)
 
-    if BaseResolver.relative?(id) or BaseResolver.absolute?(id) do
+    if NPM.PackageResolver.relative?(id) or absolute?(id) do
       resolve_path!(base, id, @stylesheet_extensions, @stylesheet_index_files)
     else
       resolve_bare_path!(id, base, @stylesheet_extensions, @stylesheet_index_files, "stylesheet")
@@ -23,19 +20,21 @@ defmodule Volt.Tailwind.Resolver do
   def resolve_module_path!(id, base, kind) do
     base = normalize_base(base)
 
-    if BaseResolver.relative?(id) or BaseResolver.absolute?(id) do
+    if NPM.PackageResolver.relative?(id) or absolute?(id) do
       resolve_path!(base, id, @module_extensions, @module_index_files)
     else
       resolve_bare_path!(id, base, @module_extensions, @module_index_files, kind)
     end
   end
 
-  def node_builtin_specifier?(specifier), do: BaseResolver.node_builtin?(specifier)
-  def relative_specifier?(specifier), do: BaseResolver.relative?(specifier)
-  def absolute_specifier?(specifier), do: BaseResolver.absolute?(specifier)
+  def node_builtin_specifier?(specifier), do: NPM.PackageResolver.node_builtin?(specifier)
+  def relative_specifier?(specifier), do: NPM.PackageResolver.relative?(specifier)
+  def absolute_specifier?(specifier), do: absolute?(specifier)
+
+  defp absolute?(id), do: Volt.Builder.Resolver.absolute?(id)
 
   defp resolve_bare_path!(id, base, extensions, index_files, kind) do
-    {package_name, subpath} = PackageResolver.split_specifier(id)
+    {package_name, subpath} = NPM.PackageResolver.split_specifier(id)
 
     resolved =
       [find_node_modules_for(base), installed_node_modules_dir()]
@@ -46,9 +45,9 @@ defmodule Volt.Tailwind.Resolver do
 
         result =
           if subpath do
-            resolve_package_subpath(package_dir, package_name, subpath, extensions, index_files)
+            resolve_package_subpath(package_dir, subpath, extensions, index_files)
           else
-            resolve_package_entry(package_dir, package_name, extensions, index_files)
+            resolve_package_entry(package_dir, extensions, index_files)
           end
 
         case result do
@@ -66,55 +65,34 @@ defmodule Volt.Tailwind.Resolver do
     end
   end
 
-  defp resolve_package_entry(package_dir, package_name, extensions, index_files) do
-    with {:ok, package} <- read_package(package_dir, package_name) do
-      entry =
-        PackageResolver.resolve_export(package, ".", @cjs_order) ||
-          package["browser"] ||
-          package["main"] ||
-          package["module"] ||
-          "index.js"
+  defp resolve_package_entry(package_dir, extensions, index_files) do
+    case NPM.PackageResolver.resolve_entry(package_dir, conditions: @cjs_conditions) do
+      {:ok, _} = ok ->
+        ok
 
-      BaseResolver.try_resolve(
-        Path.expand(Path.join(package_dir, entry)),
-        extensions,
-        index_files
-      )
+      :error ->
+        try_resolve(Path.join(package_dir, "index"), extensions, index_files)
     end
   end
 
-  defp resolve_package_subpath(package_dir, package_name, subpath, extensions, index_files) do
-    with {:ok, package} <- read_package(package_dir, package_name) do
-      case PackageResolver.resolve_export(package, "./#{subpath}", @cjs_order) do
-        nil ->
-          BaseResolver.try_resolve(Path.join(package_dir, subpath), extensions, index_files)
+  defp resolve_package_subpath(package_dir, subpath, extensions, index_files) do
+    case NPM.PackageResolver.resolve_entry(package_dir,
+           subpath: subpath,
+           conditions: @cjs_conditions
+         ) do
+      {:ok, _} = ok ->
+        ok
 
-        entry ->
-          BaseResolver.try_resolve(
-            Path.expand(Path.join(package_dir, entry)),
-            extensions,
-            index_files
-          )
-      end
-    end
-  end
-
-  defp read_package(package_dir, package_name) do
-    package_json = Path.join(package_dir, "package.json")
-
-    with {:ok, content} <- File.read(package_json),
-         {:ok, package} <- Jason.decode(content) do
-      {:ok, package}
-    else
-      {:error, reason} ->
-        {:error, {:package_resolution_failed, package_name, reason}}
+      :error ->
+        subpath_bare = String.trim_leading(subpath, "./")
+        try_resolve(Path.join(package_dir, subpath_bare), extensions, index_files)
     end
   end
 
   defp resolve_path!(base, id, extensions, index_files) do
-    target = if BaseResolver.absolute?(id), do: Path.expand(id), else: Path.expand(id, base)
+    target = if absolute?(id), do: Path.expand(id), else: Path.expand(id, base)
 
-    case BaseResolver.try_resolve(target, extensions, index_files) do
+    case try_resolve(target, extensions, index_files) do
       {:ok, path} ->
         path
 
@@ -123,11 +101,22 @@ defmodule Volt.Tailwind.Resolver do
     end
   end
 
+  defp try_resolve(base, extensions, index_files) do
+    Enum.find_value(extensions, fn ext ->
+      path = base <> ext
+      if File.regular?(path), do: {:ok, path}
+    end) ||
+      Enum.find_value(index_files, fn index ->
+        path = base <> index
+        if File.regular?(path), do: {:ok, path}
+      end) || {:error, :not_found}
+  end
+
   def normalize_base(base) when base in [nil, "", "."], do: File.cwd!()
   def normalize_base(base), do: Path.expand(base)
 
   defp find_node_modules_for(base) do
-    base |> normalize_base() |> PackageResolver.find_node_modules()
+    base |> normalize_base() |> NPM.PackageResolver.find_node_modules()
   end
 
   defp installed_node_modules_dir, do: NPM.node_modules_dir!()

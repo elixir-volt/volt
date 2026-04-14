@@ -11,7 +11,6 @@ defmodule Volt.Vendor do
 
   alias QuickBEAM.JS.Bundler
   alias Volt.Builder.BundleResult
-  alias Volt.PackageResolver
 
   defp cache_dir do
     build_path = System.get_env("MIX_BUILD_PATH") || "_build"
@@ -33,7 +32,7 @@ defmodule Volt.Vendor do
   def prebundle(opts) do
     root = Keyword.fetch!(opts, :root)
     force = Keyword.get(opts, :force, false)
-    node_modules = opts[:node_modules] || PackageResolver.find_node_modules(root)
+    node_modules = opts[:node_modules] || NPM.PackageResolver.find_node_modules(root)
 
     with {:ok, specifiers} <- scan_bare_imports(root),
          :ok <- ensure_cache_dir() do
@@ -84,7 +83,7 @@ defmodule Volt.Vendor do
         filename = Path.basename(file)
 
         case extract_imports(source, filename) do
-          {:ok, imports} -> Enum.filter(imports, &Volt.Builder.Resolver.bare?/1)
+          {:ok, imports} -> Enum.filter(imports, &NPM.PackageResolver.bare?/1)
           {:error, _} -> []
         end
       end)
@@ -124,29 +123,22 @@ defmodule Volt.Vendor do
             error
         end
 
-      {:error, _} = error ->
-        error
+      :error ->
+        {:error, {:not_found, specifier}}
     end
   end
 
   defp resolve_package_entry(specifier, node_modules) when is_binary(node_modules) do
-    {package_name, subpath} = PackageResolver.split_specifier(specifier)
+    {package_name, subpath} = NPM.PackageResolver.split_specifier(specifier)
     package_dir = Path.join(node_modules, package_name)
 
-    if subpath do
-      Volt.Builder.Resolver.try_resolve(Path.join(package_dir, subpath))
-    else
-      PackageResolver.resolve_package_entry(
-        package_dir,
-        package_name,
-        &Volt.Builder.Resolver.try_resolve/1
-      )
-    end
+    NPM.PackageResolver.resolve_entry(package_dir,
+      subpath: subpath || ".",
+      extensions: Volt.Extensions.resolvable()
+    )
   end
 
-  defp resolve_package_entry(_specifier, nil) do
-    {:error, :no_node_modules}
-  end
+  defp resolve_package_entry(_specifier, nil), do: :error
 
   defp ensure_cache_dir do
     File.mkdir_p!(cache_dir())

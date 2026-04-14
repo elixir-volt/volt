@@ -214,7 +214,7 @@ defmodule Volt.DevServer do
 
   defp rewrite_dev_specifier(specifier, importer, config) do
     cond do
-      Volt.Builder.Resolver.relative?(specifier) ->
+      NPM.PackageResolver.relative?(specifier) ->
         resolved = Path.expand(Path.join(Path.dirname(importer), specifier))
 
         if String.starts_with?(resolved, config.root) do

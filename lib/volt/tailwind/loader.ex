@@ -102,89 +102,61 @@ defmodule Volt.Tailwind.Loader do
   end
 
   defp rewrite_bundle_source(source, abs_path) do
-    with {:ok, ast} <- OXC.parse(source, Path.basename(abs_path)),
-         {:ok, patches, resolved_paths} <- collect_bundle_patches(ast, abs_path) do
-      {:ok, OXC.patch_string(source, patches), resolved_paths}
-    else
-      {:error, errors} when is_list(errors) -> {:error, {:parse_error, abs_path, errors}}
-      {:error, _} = error -> error
+    case OXC.parse(source, Path.basename(abs_path)) do
+      {:ok, ast} ->
+        {patches, resolved_paths} = collect_specifier_patches(ast, abs_path)
+        {:ok, OXC.patch_string(source, patches), resolved_paths}
+
+      {:error, errors} ->
+        {:error, {:parse_error, abs_path, errors}}
     end
   end
 
-  defp collect_bundle_patches(ast, abs_path) do
-    {_ast, {patches, paths, error}} =
-      OXC.postwalk(ast, {[], [], nil}, fn
-        _node, {_patches, _paths, error} = acc when error != nil ->
-          {nil, acc}
-
-        %{type: type, source: %{value: specifier, start: start_pos, end: end_pos}},
-        {patches, paths, nil}
+  defp collect_specifier_patches(ast, abs_path) do
+    {_ast, {patches, paths}} =
+      OXC.postwalk(ast, {[], []}, fn
+        %{type: type, source: %{value: specifier, start: s, end: e}}, acc
         when type in ["ImportDeclaration", "ExportAllDeclaration", "ExportNamedDeclaration"] ->
-          case bundle_specifier(specifier, abs_path) do
-            :skip ->
-              {nil, {patches, paths, nil}}
-
-            {:ok, nil, resolved_path} ->
-              {nil, {patches, [resolved_path | paths], nil}}
-
-            {:ok, replacement, resolved_path} ->
-              patch = %{start: start_pos, end: end_pos, change: inspect(replacement)}
-              {nil, {[patch | patches], [resolved_path | paths], nil}}
-
-            {:error, _} = err ->
-              {nil, {patches, paths, err}}
-          end
+          {nil, accumulate_patch(specifier, s, e, abs_path, acc)}
 
         %{
           type: "ImportExpression",
-          source: %{type: "Literal", value: specifier, start: start_pos, end: end_pos}
+          source: %{type: "Literal", value: specifier, start: s, end: e}
         } = node,
-        {patches, paths, nil}
+        acc
         when is_binary(specifier) ->
-          case bundle_specifier(specifier, abs_path) do
-            :skip ->
-              {node, {patches, paths, nil}}
-
-            {:ok, nil, resolved_path} ->
-              {node, {patches, [resolved_path | paths], nil}}
-
-            {:ok, replacement, resolved_path} ->
-              patch = %{start: start_pos, end: end_pos, change: inspect(replacement)}
-              {node, {[patch | patches], [resolved_path | paths], nil}}
-
-            {:error, _} = err ->
-              {node, {patches, paths, err}}
-          end
+          {node, accumulate_patch(specifier, s, e, abs_path, acc)}
 
         %{
           type: "CallExpression",
           callee: %{type: "Identifier", name: "require"},
-          arguments: [%{value: specifier, start: start_pos, end: end_pos}]
+          arguments: [%{value: specifier, start: s, end: e}]
         },
-        {patches, paths, nil}
+        acc
         when is_binary(specifier) ->
-          case bundle_specifier(specifier, abs_path) do
-            :skip ->
-              {nil, {patches, paths, nil}}
-
-            {:ok, nil, resolved_path} ->
-              {nil, {patches, [resolved_path | paths], nil}}
-
-            {:ok, replacement, resolved_path} ->
-              patch = %{start: start_pos, end: end_pos, change: inspect(replacement)}
-              {nil, {[patch | patches], [resolved_path | paths], nil}}
-
-            {:error, _} = err ->
-              {nil, {patches, paths, err}}
-          end
+          {nil, accumulate_patch(specifier, s, e, abs_path, acc)}
 
         node, acc ->
           {node, acc}
       end)
 
-    case error do
-      nil -> {:ok, Enum.reverse(patches), Enum.reverse(paths)}
-      err -> err
+    {Enum.reverse(patches), Enum.reverse(paths)}
+  end
+
+  defp accumulate_patch(specifier, start_pos, end_pos, abs_path, {patches, paths}) do
+    case bundle_specifier(specifier, abs_path) do
+      :skip ->
+        {patches, paths}
+
+      {:ok, nil, resolved_path} ->
+        {patches, [resolved_path | paths]}
+
+      {:ok, replacement, resolved_path} ->
+        patch = %{start: start_pos, end: end_pos, change: inspect(replacement)}
+        {[patch | patches], [resolved_path | paths]}
+
+      {:error, _} ->
+        {patches, paths}
     end
   end
 
@@ -205,7 +177,8 @@ defmodule Volt.Tailwind.Loader do
             {:ok, nil, resolved_path}
 
           true ->
-            {:ok, relative_bundle_path(abs_path, resolved_path), resolved_path}
+            relative = compute_relative_path(abs_path, resolved_path)
+            {:ok, relative, resolved_path}
         end
     end
   rescue
@@ -213,30 +186,20 @@ defmodule Volt.Tailwind.Loader do
       {:error, Exception.message(error)}
   end
 
-  defp relative_bundle_path(importer_path, resolved_path) do
+  defp compute_relative_path(importer_path, resolved_path) do
     {importer_rest, resolved_rest} =
-      drop_common_path_segments(
+      drop_shared_segments(
         Path.dirname(importer_path) |> Path.split(),
         Path.split(resolved_path)
       )
 
-    (List.duplicate("..", length(importer_rest)) ++ resolved_rest)
-    |> Enum.join("/")
-    |> ensure_relative_prefix()
+    path =
+      (List.duplicate("..", length(importer_rest)) ++ resolved_rest)
+      |> Enum.join("/")
+
+    if String.starts_with?(path, ["./", "../"]), do: path, else: "./" <> path
   end
 
-  defp drop_common_path_segments([segment | importer_rest], [segment | resolved_rest]) do
-    drop_common_path_segments(importer_rest, resolved_rest)
-  end
-
-  defp drop_common_path_segments(importer_parts, resolved_parts),
-    do: {importer_parts, resolved_parts}
-
-  defp ensure_relative_prefix(path) do
-    if String.starts_with?(path, ["./", "../"]) do
-      path
-    else
-      "./" <> path
-    end
-  end
+  defp drop_shared_segments([s | rest_a], [s | rest_b]), do: drop_shared_segments(rest_a, rest_b)
+  defp drop_shared_segments(a, b), do: {a, b}
 end
