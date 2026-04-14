@@ -1,10 +1,27 @@
 defmodule Volt.Builder.Resolver do
-  @moduledoc false
+  @moduledoc "Resolve import specifiers to absolute file paths for the build graph."
 
   alias Volt.PackageResolver
 
-  @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs", ".cjs", ".cts", ".vue", ".json"]
-  @index_files ~w(/index.ts /index.tsx /index.js /index.jsx)
+  @default_extensions [
+    "",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mts",
+    ".mjs",
+    ".cjs",
+    ".cts",
+    ".vue",
+    ".json"
+  ]
+  @default_index_files ~w(/index.ts /index.tsx /index.js /index.jsx)
+
+  @node_builtin_specifiers ~w(
+    assert buffer child_process crypto events fs http https
+    os path stream tty url util zlib
+  )
 
   @doc """
   Resolve an import specifier to an absolute file path.
@@ -30,7 +47,7 @@ defmodule Volt.Builder.Resolver do
 
   defp resolve_by_type(specifier, importer, ctx) do
     cond do
-      String.starts_with?(specifier, "node:") -> :skip
+      node_builtin?(specifier) -> :skip
       relative?(specifier) -> resolve_relative(specifier, importer)
       true -> resolve_bare(specifier, ctx.node_modules, ctx.resolve_dirs)
     end
@@ -38,6 +55,33 @@ defmodule Volt.Builder.Resolver do
 
   def relative?(specifier) do
     String.starts_with?(specifier, "./") or String.starts_with?(specifier, "../")
+  end
+
+  def absolute?(specifier), do: String.starts_with?(specifier, "/")
+
+  def bare?(specifier) do
+    not relative?(specifier) and not absolute?(specifier) and
+      not String.contains?(specifier, "://")
+  end
+
+  def node_builtin?(specifier) do
+    specifier in @node_builtin_specifiers or String.starts_with?(specifier, "node:")
+  end
+
+  def try_resolve(
+        base,
+        extensions \\ Volt.Extensions.resolvable(),
+        index_files \\ Volt.Extensions.resolvable_index()
+      ) do
+    Enum.find_value(extensions, fn ext ->
+      path = base <> ext
+      if File.regular?(path), do: {:ok, path}
+    end) ||
+      Enum.find_value(index_files, fn idx ->
+        path = base <> idx
+        if File.regular?(path), do: {:ok, path}
+      end) ||
+      {:error, {:not_found, base}}
   end
 
   defp external?(specifier, external) do
@@ -70,17 +114,5 @@ defmodule Volt.Builder.Resolver do
     else
       PackageResolver.resolve_package_entry(package_dir, package_name, &try_resolve/1)
     end
-  end
-
-  def try_resolve(base) do
-    Enum.find_value(@extensions, fn ext ->
-      path = base <> ext
-      if File.regular?(path), do: {:ok, path}
-    end) ||
-      Enum.find_value(@index_files, fn idx ->
-        path = base <> idx
-        if File.regular?(path), do: {:ok, path}
-      end) ||
-      {:error, {:not_found, base}}
   end
 end

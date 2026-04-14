@@ -9,6 +9,8 @@ defmodule Volt.Vendor do
   Bundled files are cached on disk in `_build/volt/vendor/`.
   """
 
+  alias QuickBEAM.JS.Bundler
+  alias Volt.Builder.BundleResult
   alias Volt.PackageResolver
 
   defp cache_dir do
@@ -72,8 +74,9 @@ defmodule Volt.Vendor do
 
   defp scan_bare_imports(root) do
     source_files =
-      Path.join(root, "**/*.{ts,tsx,js,jsx,mts,mjs,vue}")
-      |> Path.wildcard()
+      ["ts", "tsx", "js", "jsx", "mts", "mjs", "vue"]
+      |> Enum.flat_map(&Path.wildcard(Path.join(root, "**/*.#{&1}")))
+      |> Enum.uniq()
 
     specifiers =
       Enum.flat_map(source_files, fn file ->
@@ -81,7 +84,7 @@ defmodule Volt.Vendor do
         filename = Path.basename(file)
 
         case extract_imports(source, filename) do
-          {:ok, imports} -> Enum.filter(imports, &bare_specifier?/1)
+          {:ok, imports} -> Enum.filter(imports, &Volt.Builder.Resolver.bare?/1)
           {:error, _} -> []
         end
       end)
@@ -93,18 +96,10 @@ defmodule Volt.Vendor do
     ext = Path.extname(filename)
 
     if ext == ".vue" do
-      extract_vue_imports(source)
+      Volt.VueImports.extract(source)
     else
       OXC.imports(source, filename)
     end
-  end
-
-  defp extract_vue_imports(source), do: Volt.VueImports.extract(source)
-
-  defp bare_specifier?(spec) do
-    not String.starts_with?(spec, ".") and
-      not String.starts_with?(spec, "/") and
-      not String.contains?(spec, "://")
   end
 
   defp bundle_vendor(specifier, node_modules, force) do
@@ -120,17 +115,9 @@ defmodule Volt.Vendor do
   defp do_bundle_vendor(specifier, node_modules, output_path) do
     case resolve_package_entry(specifier, node_modules) do
       {:ok, entry_path} ->
-        source = File.read!(entry_path)
-        filename = Path.basename(entry_path)
-        files = [{filename, source}]
-
-        case OXC.bundle(files) do
-          {:ok, code} when is_binary(code) ->
-            File.write!(output_path, code)
-            {:ok, output_path}
-
-          {:ok, %{code: code}} ->
-            File.write!(output_path, code)
+        case Bundler.bundle_file(entry_path, node_modules: node_modules) do
+          {:ok, result} ->
+            File.write!(output_path, BundleResult.code(result))
             {:ok, output_path}
 
           {:error, _} = error ->
@@ -147,23 +134,18 @@ defmodule Volt.Vendor do
     package_dir = Path.join(node_modules, package_name)
 
     if subpath do
-      try_resolve(Path.join(package_dir, subpath))
+      Volt.Builder.Resolver.try_resolve(Path.join(package_dir, subpath))
     else
-      PackageResolver.resolve_package_entry(package_dir, package_name, &try_resolve/1)
+      PackageResolver.resolve_package_entry(
+        package_dir,
+        package_name,
+        &Volt.Builder.Resolver.try_resolve/1
+      )
     end
   end
 
   defp resolve_package_entry(_specifier, nil) do
     {:error, :no_node_modules}
-  end
-
-  @extensions ["", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".cts"]
-
-  defp try_resolve(base) do
-    Enum.find_value(@extensions, fn ext ->
-      path = base <> ext
-      if File.regular?(path), do: {:ok, path}
-    end) || {:error, {:not_found, base}}
   end
 
   defp ensure_cache_dir do
@@ -175,14 +157,14 @@ defmodule Volt.Vendor do
     Path.join(cache_dir(), encode_specifier(specifier) <> ".js")
   end
 
-  @doc false
+  @doc "Encode a specifier for use in URLs (escaping @ and /)."
   def encode_specifier(specifier) do
     specifier
     |> String.replace("@", "__at__")
     |> String.replace("/", "__slash__")
   end
 
-  @doc false
+  @doc "Decode a URL-safe specifier back to its original form."
   def decode_specifier(encoded) do
     encoded
     |> String.replace("__slash__", "/")

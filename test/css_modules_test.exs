@@ -52,8 +52,17 @@ defmodule Volt.CSSModulesTest do
       {:ok, js1, _css1} = Volt.CSSModules.compile(".box { }", "a.module.css")
       {:ok, js2, _css2} = Volt.CSSModules.compile(".box { }", "b.module.css")
 
-      map1 = js1 |> String.trim_leading("export default ") |> String.trim_trailing(";\n") |> Jason.decode!()
-      map2 = js2 |> String.trim_leading("export default ") |> String.trim_trailing(";\n") |> Jason.decode!()
+      map1 =
+        js1
+        |> String.trim_leading("export default ")
+        |> String.trim_trailing(";\n")
+        |> Jason.decode!()
+
+      map2 =
+        js2
+        |> String.trim_leading("export default ")
+        |> String.trim_trailing(";\n")
+        |> Jason.decode!()
 
       assert map1["box"] != map2["box"]
     end

@@ -128,6 +128,7 @@ defmodule Volt.BuilderTest do
 
     test "builds standalone CSS entries from HTML manifests" do
       File.write!(Path.join(@fixture_dir, "src/site.css"), ".site { color: blue }")
+
       File.write!(Path.join(@fixture_dir, "src/index.html"), """
       <html>
         <head>
@@ -170,6 +171,7 @@ defmodule Volt.BuilderTest do
 
     test "rewrites worker URL to hashed filename in parent bundle" do
       File.write!(Path.join(@fixture_dir, "src/worker.ts"), "self.postMessage('ready')")
+
       File.write!(Path.join(@fixture_dir, "src/worker_app.ts"), """
       const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
       console.log(worker)

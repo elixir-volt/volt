@@ -1,5 +1,14 @@
 defmodule Volt.Builder.Externals do
-  @moduledoc false
+  @moduledoc "Rewrite external imports into global variable access for production builds."
+
+  @doc """
+  Rewrite external import declarations into direct global access.
+  """
+  def rewrite_imports(js_files, external_set, external_globals) do
+    Enum.map(js_files, fn {label, code} ->
+      {label, rewrite_imports_in_module(code, external_set, external_globals)}
+    end)
+  end
 
   @doc """
   Scan compiled JS files for imports from external specifiers.
@@ -40,12 +49,47 @@ defmodule Volt.Builder.Externals do
     end
   end
 
+  defp rewrite_imports_in_module(code, external_set, external_globals) do
+    case OXC.parse(code, "module.js") do
+      {:ok, ast} ->
+        {_ast, patches} =
+          OXC.postwalk(ast, [], fn
+            %{
+              type: "ImportDeclaration",
+              source: %{value: spec},
+              start: start_pos,
+              end: end_pos,
+              specifiers: specifiers
+            } = node,
+            patches ->
+              if MapSet.member?(external_set, spec) do
+                names = Enum.map(specifiers, &classify_specifier/1)
+                global = Map.get(external_globals, spec, derive_global(spec))
+                replacement = emit_global_access(global, names)
+                patch = %{start: start_pos, end: end_pos, change: replacement}
+                {node, [patch | patches]}
+              else
+                {node, patches}
+              end
+
+            node, patches ->
+              {node, patches}
+          end)
+
+        OXC.patch_string(code, patches)
+
+      {:error, _} ->
+        code
+    end
+  end
+
   defp extract_external_imports(code, external_set) do
     case OXC.parse(code, "module.js") do
       {:ok, ast} ->
         {_ast, imports} =
           OXC.postwalk(ast, [], fn
-            %{type: "ImportDeclaration", source: %{value: spec}, specifiers: specifiers} = node, acc ->
+            %{type: "ImportDeclaration", source: %{value: spec}, specifiers: specifiers} = node,
+            acc ->
               if MapSet.member?(external_set, spec) do
                 names = Enum.map(specifiers, &classify_specifier/1)
                 {node, [{spec, names} | acc]}
@@ -64,7 +108,11 @@ defmodule Volt.Builder.Externals do
     end
   end
 
-  defp classify_specifier(%{type: "ImportSpecifier", imported: %{name: name}, local: %{name: local}}) do
+  defp classify_specifier(%{
+         type: "ImportSpecifier",
+         imported: %{name: name},
+         local: %{name: local}
+       }) do
     if name == local, do: {:named, name}, else: {:named, name, local}
   end
 
@@ -94,9 +142,7 @@ defmodule Volt.Builder.Externals do
         _ -> false
       end)
 
-    parts = []
-
-    parts =
+    named_part =
       if named != [] do
         destructured =
           Enum.map_join(named, ", ", fn
@@ -104,19 +150,21 @@ defmodule Volt.Builder.Externals do
             {:named, name, local} -> "#{name}: #{local}"
           end)
 
-        [~s(const { #{destructured} } = #{global};) | parts]
+        [~s(const { #{destructured} } = #{global};)]
       else
-        parts
+        []
       end
 
-    parts =
-      Enum.reduce(others, parts, fn
-        {:default, name}, p -> [~s(const #{name} = #{global}.default;) | p]
-        {:namespace, name}, p -> [~s(const #{name} = #{global};) | p]
-        nil, p -> p
+    other_parts =
+      others
+      |> Enum.map(fn
+        {:default, name} -> ~s(const #{name} = #{global}.default;)
+        {:namespace, name} -> ~s(const #{name} = #{global};)
+        nil -> nil
       end)
+      |> Enum.reject(&is_nil/1)
 
-    parts |> Enum.reverse() |> Enum.join("\n")
+    Enum.join(named_part ++ other_parts, "\n")
   end
 
   defp derive_global(specifier), do: Volt.Builder.derive_global_name(specifier)

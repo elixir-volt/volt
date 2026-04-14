@@ -1,5 +1,5 @@
 defmodule Volt.Builder.Collector do
-  @moduledoc false
+  @moduledoc "Walks the dependency graph from entry files, collecting modules and workers."
 
   alias Volt.Builder.Resolver
 
@@ -13,57 +13,83 @@ defmodule Volt.Builder.Collector do
   """
   def collect(entry_path, ctx) do
     label = Path.basename(entry_path)
+    state = %{ctx: ctx, files: [], seen: MapSet.new(), dep_map: %{}, workers: %{}}
 
-    case do_collect(entry_path, label, ctx, [], MapSet.new(), %{}, %{}) do
-      {:ok, files, _seen, dep_map, workers} -> {:ok, Enum.reverse(files), dep_map, workers}
+    case do_collect(entry_path, label, state) do
+      {:ok, state} -> {:ok, Enum.reverse(state.files), state.dep_map, state.workers}
       {:error, _} = error -> error
     end
   end
 
-  defp do_collect(abs_path, label, ctx, files, seen, dep_map, workers) do
-    if MapSet.member?(seen, abs_path) do
-      {:ok, files, seen, dep_map, workers}
+  defp do_collect(abs_path, label, state) do
+    if MapSet.member?(state.seen, abs_path) do
+      {:ok, state}
     else
       case File.read(abs_path) do
-        {:ok, source} ->
-          seen = MapSet.put(seen, abs_path)
-          files = [{abs_path, label, source} | files]
-
-          case extract_typed_imports(source, abs_path) do
-            {:ok, %{imports: typed_imports, workers: worker_specs}} ->
-              dep_map = Map.put(dep_map, abs_path, split_imports(typed_imports))
-              {workers, worker_specs} = resolve_workers(worker_specs, abs_path, ctx, workers)
-              specifiers = Enum.map(typed_imports, fn {_type, spec} -> spec end)
-              worker_imports = Enum.map(worker_specs, fn {specifier, resolved_path} -> {:resolved, specifier, resolved_path} end)
-
-              collect_imports(specifiers ++ worker_imports, abs_path, ctx, files, seen, dep_map, workers)
-
-            {:error, _} = error ->
-              error
-          end
-
-        {:error, reason} ->
-          {:error, {:file_read_error, abs_path, reason}}
+        {:ok, source} -> process_source(abs_path, label, source, state)
+        {:error, reason} -> {:error, {:file_read_error, abs_path, reason}}
       end
     end
   end
 
-  defp collect_imports([], _importer, _ctx, files, seen, dep_map, workers) do
-    {:ok, files, seen, dep_map, workers}
+  defp process_source(abs_path, label, source, state) do
+    state = %{
+      state
+      | seen: MapSet.put(state.seen, abs_path),
+        files: [{abs_path, label, source} | state.files]
+    }
+
+    case extract_typed_imports(source, abs_path) do
+      {:ok, %{imports: typed_imports, workers: worker_specs}} ->
+        state = %{
+          state
+          | dep_map: Map.put(state.dep_map, abs_path, split_imports(typed_imports))
+        }
+
+        {state, worker_specs} = resolve_workers(worker_specs, abs_path, state)
+        specifiers = Enum.map(typed_imports, fn {_type, spec} -> spec end)
+
+        worker_imports =
+          Enum.map(worker_specs, fn {specifier, resolved_path} ->
+            {:resolved, specifier, resolved_path}
+          end)
+
+        collect_imports(specifiers ++ worker_imports, abs_path, state)
+
+      {:error, _} = error ->
+        error
+    end
   end
 
-  defp collect_imports([specifier | rest], importer, ctx, files, seen, dep_map, workers) do
-    case resolve_specifier(specifier, importer, ctx) do
+  defp collect_imports([], _importer, state) do
+    {:ok, state}
+  end
+
+  defp collect_imports([specifier | rest], importer, state) do
+    case resolve_specifier(specifier, importer, state.ctx) do
       :skip ->
-        collect_imports(rest, importer, ctx, files, seen, dep_map, workers)
+        collect_imports(rest, importer, state)
 
       {:ok, resolved_path, original_specifier} ->
-        label = if Resolver.relative?(original_specifier), do: Path.basename(resolved_path), else: original_specifier
-        dep_map = resolve_dep_map_specifier(dep_map, importer, original_specifier, resolved_path)
+        label =
+          if Resolver.relative?(original_specifier),
+            do: Path.basename(resolved_path),
+            else: original_specifier
 
-        case do_collect(resolved_path, label, ctx, files, seen, dep_map, workers) do
-          {:ok, files, seen, dep_map, workers} ->
-            collect_imports(rest, importer, ctx, files, seen, dep_map, workers)
+        state = %{
+          state
+          | dep_map:
+              resolve_dep_map_specifier(
+                state.dep_map,
+                importer,
+                original_specifier,
+                resolved_path
+              )
+        }
+
+        case do_collect(resolved_path, label, state) do
+          {:ok, state} ->
+            collect_imports(rest, importer, state)
 
           {:error, _} = error ->
             error
@@ -82,10 +108,11 @@ defmodule Volt.Builder.Collector do
       deps ->
         deps =
           Map.new(deps, fn {type, specs} ->
-            {type, Enum.map(specs, fn
-              ^specifier -> resolved_path
-              other -> other
-            end)}
+            {type,
+             Enum.map(specs, fn
+               ^specifier -> resolved_path
+               other -> other
+             end)}
           end)
 
         Map.put(dep_map, importer, deps)
@@ -97,7 +124,7 @@ defmodule Volt.Builder.Collector do
     filename = Path.basename(path)
 
     if ext == ".vue" do
-      case extract_vue_imports(source) do
+      case Volt.VueImports.extract(source) do
         {:ok, specs} -> {:ok, %{imports: Enum.map(specs, &{:static, &1}), workers: []}}
         error -> error
       end
@@ -125,9 +152,17 @@ defmodule Volt.Builder.Collector do
             when is_binary(spec) ->
               {node, update_in(acc.imports, &[{:dynamic, spec} | &1])}
 
-            %{type: "NewExpression", callee: %{type: "Identifier", name: worker_type}, arguments: [first_arg | _]} = node, acc
+            %{
+              type: "NewExpression",
+              callee: %{type: "Identifier", name: worker_type},
+              arguments: [first_arg | _]
+            } = node,
+            acc
             when worker_type in ["Worker", "SharedWorker"] ->
-              {node, maybe_add_worker(first_arg, acc)}
+              case Volt.WorkerRewriter.extract_specifier(first_arg) do
+                {:ok, spec, _s, _e} -> {node, update_in(acc.workers, &[spec | &1])}
+                nil -> {node, acc}
+              end
 
             node, acc ->
               {node, acc}
@@ -143,34 +178,31 @@ defmodule Volt.Builder.Collector do
     end
   end
 
-  defp extract_vue_imports(source), do: Volt.VueImports.extract(source)
-
-  defp maybe_add_worker(
-         %{type: "NewExpression", callee: %{type: "Identifier", name: "URL"}, arguments: [source_node, %{type: "MemberExpression", object: %{type: "MetaProperty"}} | _]},
-         acc
-       ) do
-    case source_node do
-      %{value: spec} when is_binary(spec) -> update_in(acc.workers, &[spec | &1])
-      %{type: "StringLiteral", value: spec} when is_binary(spec) -> update_in(acc.workers, &[spec | &1])
-      _ -> acc
-    end
-  end
-
-  defp maybe_add_worker(_, acc), do: acc
-
-  defp resolve_workers(worker_specs, importer, ctx, workers) do
-    Enum.reduce(worker_specs, {workers, []}, fn specifier, {acc_workers, resolved_specs} ->
-      case Resolver.resolve(specifier, importer, ctx) do
+  defp resolve_workers(worker_specs, importer, state) do
+    Enum.reduce(worker_specs, {state, []}, fn specifier, {acc_state, resolved_specs} ->
+      case Resolver.resolve(specifier, importer, acc_state.ctx) do
         {:ok, resolved_path} ->
-          importer_map = Map.get(acc_workers, importer, %{})
-          acc_workers = Map.put(acc_workers, importer, Map.put(importer_map, specifier, resolved_path))
-          {acc_workers, [{specifier, resolved_path} | resolved_specs]}
+          importer_map = Map.get(acc_state.workers, importer, %{})
+
+          acc_state = %{
+            acc_state
+            | workers:
+                Map.put(
+                  acc_state.workers,
+                  importer,
+                  Map.put(importer_map, specifier, resolved_path)
+                )
+          }
+
+          {acc_state, [{specifier, resolved_path} | resolved_specs]}
 
         _ ->
-          {acc_workers, resolved_specs}
+          {acc_state, resolved_specs}
       end
     end)
-    |> then(fn {resolved_workers, resolved_specs} -> {resolved_workers, Enum.reverse(resolved_specs)} end)
+    |> then(fn {resolved_state, resolved_specs} ->
+      {resolved_state, Enum.reverse(resolved_specs)}
+    end)
   end
 
   defp resolve_specifier(specifier, importer, ctx) when is_binary(specifier) do

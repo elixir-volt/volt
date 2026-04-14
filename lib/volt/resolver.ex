@@ -24,7 +24,7 @@ defmodule Volt.Resolver do
 
   def resolve(specifier, aliases) do
     aliases
-    |> Enum.sort_by(fn {k, _} -> -byte_size(k) end)
+    |> Enum.sort_by(fn {k, _} -> byte_size(k) end, :desc)
     |> Enum.find_value(:pass, fn {prefix, target} ->
       match_alias(specifier, prefix, target)
     end)

@@ -11,7 +11,9 @@ defmodule Volt.Builder do
   alias Volt.PackageResolver
 
   @type build_result :: %{
-          js: %{path: String.t(), size: non_neg_integer()} | [%{path: String.t(), size: non_neg_integer()}],
+          js:
+            %{path: String.t(), size: non_neg_integer()}
+            | [%{path: String.t(), size: non_neg_integer()}],
           css: %{path: String.t(), size: non_neg_integer()} | nil,
           manifest: %{String.t() => String.t()}
         }
@@ -56,13 +58,17 @@ defmodule Volt.Builder do
     {external_set, external_globals} = normalize_external(external_raw)
 
     first_entry = hd(entries)
-    node_modules = Keyword.get(opts, :node_modules) || PackageResolver.find_node_modules(Path.dirname(first_entry))
+
+    node_modules =
+      Keyword.get(opts, :node_modules) ||
+        PackageResolver.find_node_modules(Path.dirname(first_entry))
+
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
     hash = Keyword.get(opts, :hash, true)
     name = Keyword.get(opts, :name)
 
     env_define = Volt.Env.define(mode: mode, root: File.cwd!())
-    define = Map.merge(env_define, define)
+    all_define = Map.merge(env_define, define)
 
     ctx = %{
       node_modules: node_modules,
@@ -77,14 +83,22 @@ defmodule Volt.Builder do
       minify: minify,
       sourcemap: sourcemap,
       target: target,
-      define: define
+      define: all_define
     ]
+
+    build_ctx = %{
+      outdir: outdir,
+      target: target,
+      hash: hash,
+      bundle_opts: bundle_opts,
+      code_splitting: code_splitting
+    }
 
     results =
       Enum.flat_map(entries, fn entry ->
         expand_entry(entry, name)
         |> Enum.map(fn {entry_path, entry_type, entry_name} ->
-          build_entry(entry_path, entry_type, entry_name, ctx, outdir, target, hash, bundle_opts, code_splitting)
+          build_entry(entry_path, entry_type, entry_name, ctx, build_ctx)
         end)
       end)
 
@@ -95,7 +109,15 @@ defmodule Volt.Builder do
     end
   end
 
-  defp build_entry(entry, :script, name, ctx, outdir, target, hash, bundle_opts, code_splitting) do
+  defp build_entry(entry, :script, name, ctx, build_ctx) do
+    %{
+      outdir: outdir,
+      target: target,
+      hash: hash,
+      bundle_opts: bundle_opts,
+      code_splitting: code_splitting
+    } = build_ctx
+
     with {:ok, modules, dep_map, workers} <- Collector.collect(entry, ctx),
          {:ok, compiled} <- compile_all(modules, target, ctx.plugins) do
       output_ctx = %{
@@ -103,20 +125,25 @@ defmodule Volt.Builder do
         external_set: ctx.external,
         external_globals: ctx.external_globals,
         workers: workers,
-        worker_results: build_worker_results(workers, ctx, outdir, target, hash, bundle_opts)
+        worker_results: build_worker_results(workers, ctx, build_ctx)
       }
 
+      out = %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: output_ctx}
+
       if code_splitting and has_dynamic_imports?(dep_map) do
-        Output.build_chunks(entry, name, modules, dep_map, compiled, outdir, hash, bundle_opts, output_ctx)
+        Output.build_chunks(entry, name, compiled, {modules, dep_map}, out)
       else
-        Output.build_single(name, compiled, outdir, hash, bundle_opts, output_ctx)
+        Output.build_single(entry, name, compiled, out)
       end
     end
   end
 
-  defp build_entry(entry, :style, name, _ctx, outdir, _target, hash, bundle_opts, _code_splitting) do
+  defp build_entry(entry, :style, name, _ctx, build_ctx) do
+    %{outdir: outdir, hash: hash, bundle_opts: bundle_opts} = build_ctx
+
     with {:ok, source} <- File.read(entry),
-         {:ok, compiled} <- Volt.Pipeline.compile(entry, source, minify: bundle_opts[:minify] || false) do
+         {:ok, compiled} <-
+           Volt.Pipeline.compile(entry, source, minify: bundle_opts[:minify] || false) do
       Output.build_style_entry(name, compiled.code, outdir, hash)
     end
   end
@@ -125,16 +152,26 @@ defmodule Volt.Builder do
     Enum.any?(dep_map, fn {_, %{dynamic: dyn}} -> dyn != [] end)
   end
 
-  defp build_worker_results(workers, ctx, outdir, target, hash, bundle_opts) do
+  defp build_worker_results(workers, ctx, build_ctx) do
     workers
     |> Enum.flat_map(fn {_importer, spec_map} -> Map.to_list(spec_map) end)
     |> Enum.uniq_by(fn {_specifier, resolved_path} -> resolved_path end)
     |> Enum.reduce(%{}, fn {_specifier, resolved_path}, acc ->
-      worker_name = resolved_path |> Path.basename() |> Path.rootname()
+      if Map.has_key?(acc, resolved_path) do
+        acc
+      else
+        worker_name = resolved_path |> Path.basename() |> Path.rootname()
 
-      case build_entry(resolved_path, :script, worker_name, %{ctx | plugins: ctx.plugins}, outdir, target, hash, bundle_opts, true) do
-        {:ok, %{js: %{path: path}}} -> Map.put(acc, resolved_path, Path.basename(path))
-        _ -> acc
+        case build_entry(
+               resolved_path,
+               :script,
+               worker_name,
+               ctx,
+               %{build_ctx | code_splitting: false}
+             ) do
+          {:ok, %{js: %{path: path}}} -> Map.put(acc, resolved_path, Path.basename(path))
+          _ -> acc
+        end
       end
     end)
   end
@@ -189,9 +226,10 @@ defmodule Volt.Builder do
     end
   end
 
+  # Adapts Pipeline's map result to Builder's {code, css} tuple convention
   defp compile_vue(source, path) do
-    case Vize.compile_sfc(source, filename: Path.basename(path)) do
-      {:ok, result} -> {:ok, result.code, result.css}
+    case Volt.Pipeline.compile(path, source) do
+      {:ok, %{code: code, css: css}} -> {:ok, code, css}
       {:error, reason} -> {:error, reason}
     end
   end

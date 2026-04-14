@@ -6,6 +6,8 @@ defmodule Volt.Pipeline do
   Returns compiled output with optional sourcemaps.
   """
 
+  @type rewrite_fn :: (String.t() -> {:rewrite, String.t()} | :keep)
+
   @type compiled :: %{
           code: String.t(),
           sourcemap: String.t() | nil,
@@ -15,7 +17,6 @@ defmodule Volt.Pipeline do
         }
 
   @vue_ext ".vue"
-  @js_exts ~w(.ts .tsx .js .jsx .mts .mjs)
   @css_exts ~w(.css)
   @json_ext ".json"
 
@@ -49,7 +50,7 @@ defmodule Volt.Pipeline do
     result =
       cond do
         ext == @vue_ext -> compile_vue(path, source, opts)
-        ext in @js_exts -> compile_js(path, source, opts)
+        ext in Volt.Extensions.js() -> compile_js(path, source, opts)
         Volt.CSSModules.css_module?(path) -> compile_css_module(path, source, opts)
         ext in @css_exts -> compile_css(path, source, opts)
         ext == @json_ext -> compile_json(source)
@@ -79,8 +80,10 @@ defmodule Volt.Pipeline do
   defp rewrite_compiled_imports(compiled, path, rewrite_fn) do
     filename = Path.basename(path)
 
-    with {:ok, imports_rewritten} <- Volt.ImportRewriter.rewrite(compiled.code, filename, rewrite_fn),
-         {:ok, workers_rewritten} <- Volt.WorkerRewriter.rewrite(imports_rewritten, filename, rewrite_fn) do
+    with {:ok, imports_rewritten} <-
+           Volt.ImportRewriter.rewrite(compiled.code, filename, rewrite_fn),
+         {:ok, workers_rewritten} <-
+           Volt.WorkerRewriter.rewrite(imports_rewritten, filename, rewrite_fn) do
       {:ok, %{compiled | code: workers_rewritten}}
     else
       {:error, _} -> {:ok, compiled}
@@ -111,14 +114,11 @@ defmodule Volt.Pipeline do
 
   defp compile_js(path, source, opts) do
     sourcemap = Keyword.get(opts, :sourcemap, true)
-    target = opts |> Keyword.get(:target) |> stringify()
-    import_source = opts |> Keyword.get(:import_source) |> stringify()
 
-    transform_opts = [
-      sourcemap: sourcemap,
-      target: target,
-      import_source: import_source
-    ]
+    transform_opts =
+      [sourcemap: sourcemap]
+      |> maybe_put(:target, Keyword.get(opts, :target))
+      |> maybe_put(:import_source, Keyword.get(opts, :import_source))
 
     case OXC.transform(source, Path.basename(path), transform_opts) do
       {:ok, result} when is_map(result) ->
@@ -164,7 +164,10 @@ defmodule Volt.Pipeline do
     {:ok, %{code: "export default #{source};\n", sourcemap: nil, css: nil, hashes: nil}}
   end
 
-  defp stringify(nil), do: ""
-  defp stringify(atom) when is_atom(atom), do: Atom.to_string(atom)
-  defp stringify(str) when is_binary(str), do: str
+  defp maybe_put(opts, _key, nil), do: opts
+
+  defp maybe_put(opts, key, value) when is_atom(value),
+    do: Keyword.put(opts, key, Atom.to_string(value))
+
+  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 end

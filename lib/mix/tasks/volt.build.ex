@@ -181,7 +181,7 @@ defmodule Mix.Tasks.Volt.Build do
 
         filename =
           if hash,
-            do: "#{name}-#{content_hash(css)}.css",
+            do: "#{name}-#{Volt.Format.content_hash(css)}.css",
             else: "#{name}.css"
 
         path = Path.join(css_outdir, filename)
@@ -195,9 +195,6 @@ defmodule Mix.Tasks.Volt.Build do
         exit({:shutdown, 1})
     end
   end
-
-  defp content_hash(content), do: Volt.Format.content_hash(content)
-
 
   defp format_file(path) do
     Volt.Format.format_with_gzip(File.read!(path))

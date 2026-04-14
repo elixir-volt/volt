@@ -22,17 +22,32 @@ defmodule Volt.PackageResolverTest do
       })
     )
 
-    File.write!(Path.join(@fixture_dir, "node_modules/pkg/browser.js"), "export default 'browser'")
+    File.write!(
+      Path.join(@fixture_dir, "node_modules/pkg/browser.js"),
+      "export default 'browser'"
+    )
+
     File.write!(Path.join(@fixture_dir, "node_modules/pkg/module.js"), "export default 'module'")
-    File.write!(Path.join(@fixture_dir, "node_modules/pkg/default.js"), "export default 'default'")
-    File.write!(Path.join(@fixture_dir, "node_modules/pkg/require.js"), "module.exports = 'require'")
+
+    File.write!(
+      Path.join(@fixture_dir, "node_modules/pkg/default.js"),
+      "export default 'default'"
+    )
+
+    File.write!(
+      Path.join(@fixture_dir, "node_modules/pkg/require.js"),
+      "module.exports = 'require'"
+    )
 
     File.write!(
       Path.join(@fixture_dir, "node_modules/cjs-pkg/package.json"),
       :json.encode(%{"name" => "cjs-pkg", "main" => "./index.cjs"})
     )
 
-    File.write!(Path.join(@fixture_dir, "node_modules/cjs-pkg/index.cjs"), "module.exports = { value: 1 }")
+    File.write!(
+      Path.join(@fixture_dir, "node_modules/cjs-pkg/index.cjs"),
+      "module.exports = { value: 1 }"
+    )
 
     on_exit(fn -> File.rm_rf!(@fixture_dir) end)
     :ok

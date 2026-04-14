@@ -83,7 +83,7 @@ defmodule Volt.Assets do
     content = File.read!(source_path)
     ext = Path.extname(source_path)
     name = Path.basename(source_path, ext)
-    hash = content_hash(content)
+    hash = Volt.Format.content_hash(content)
     filename = "#{name}-#{hash}#{ext}"
     dest = Path.join(outdir, filename)
 
@@ -120,6 +120,4 @@ defmodule Volt.Assets do
         {:ok, ~s(export default "#{prefix}/#{filename}";\n)}
     end
   end
-
-  defp content_hash(content), do: Volt.Format.content_hash(content)
 end
