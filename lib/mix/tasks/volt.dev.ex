@@ -103,13 +103,15 @@ defmodule Mix.Tasks.Volt.Dev do
         outdir = Keyword.get(parsed, :tailwind_outdir, "priv/static/assets/css")
         File.mkdir_p!(outdir)
         File.write!(Path.join(outdir, "app.css"), css)
-        Mix.shell().info("[Volt] Initial Tailwind build: #{Volt.Format.format_size(byte_size(css))}")
+
+        Mix.shell().info(
+          "[Volt] Initial Tailwind build: #{Volt.Format.format_size(byte_size(css))}"
+        )
 
       {:error, reason} ->
         Mix.shell().error("[Volt] Tailwind build failed: #{inspect(reason)}")
     end
   end
-
 
   defp iex_running? do
     Code.ensure_loaded?(IEx) and IEx.started?()

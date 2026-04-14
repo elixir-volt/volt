@@ -58,7 +58,9 @@ defmodule Volt.ChunkGraph do
       end)
 
     entry_modules = static_reachable
-    all_async_modules = Enum.flat_map(async_chunks, fn {_, _, mods} -> MapSet.to_list(mods) end) |> MapSet.new()
+
+    all_async_modules =
+      Enum.flat_map(async_chunks, fn {_, _, mods} -> MapSet.to_list(mods) end) |> MapSet.new()
 
     shared =
       entry_modules
