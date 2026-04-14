@@ -3,21 +3,6 @@ defmodule Volt.Builder.Resolver do
 
   alias Volt.PackageResolver
 
-  @default_extensions [
-    "",
-    ".ts",
-    ".tsx",
-    ".js",
-    ".jsx",
-    ".mts",
-    ".mjs",
-    ".cjs",
-    ".cts",
-    ".vue",
-    ".json"
-  ]
-  @default_index_files ~w(/index.ts /index.tsx /index.js /index.jsx)
-
   @node_builtin_specifiers ~w(
     assert buffer child_process crypto events fs http https
     os path stream tty url util zlib

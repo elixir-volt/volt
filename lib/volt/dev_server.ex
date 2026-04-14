@@ -155,6 +155,7 @@ defmodule Volt.DevServer do
           code: code,
           sourcemap: result.sourcemap,
           css: result.css,
+          hashes: result.hashes,
           content_type: content_type
         }
 
@@ -213,7 +214,7 @@ defmodule Volt.DevServer do
 
   defp rewrite_dev_specifier(specifier, importer, config) do
     cond do
-      String.starts_with?(specifier, ".") ->
+      Volt.Builder.Resolver.relative?(specifier) ->
         resolved = Path.expand(Path.join(Path.dirname(importer), specifier))
 
         if String.starts_with?(resolved, config.root) do

@@ -132,39 +132,6 @@ defmodule Volt.Builder.Rewriter do
     if chunk_id, do: chunk_url_map[chunk_id]
   end
 
-  defp worker_patch(
-         %{
-           type: "NewExpression",
-           callee: %{type: "Identifier", name: "URL"},
-           arguments: [
-             source_node,
-             %{type: "MemberExpression", property: %{type: "Identifier", name: "url"}} | _
-           ]
-         },
-         module_to_chunk,
-         chunk_url_map
-       ) do
-    case source_node do
-      %{value: spec, start: s, end: e} when is_binary(spec) and is_integer(s) and is_integer(e) ->
-        case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
-          nil -> nil
-          url -> %{start: s, end: e, change: "'./#{url}'"}
-        end
-
-      %{type: "StringLiteral", value: spec, start: s, end: e}
-      when is_binary(spec) and is_integer(s) and is_integer(e) ->
-        case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
-          nil -> nil
-          url -> %{start: s, end: e, change: "'./#{url}'"}
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  defp worker_patch(_, _, _), do: nil
-
   defp inject_into_iife(code, preamble) do
     case find_iife_body_start(code) do
       {:ok, offset} ->

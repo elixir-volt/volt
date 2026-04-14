@@ -159,7 +159,7 @@ defmodule Volt.Pipeline do
   end
 
   defp compile_json(source) do
-    {:ok, %{code: "export default #{source};\n", sourcemap: nil, css: nil, hashes: nil}}
+    {:ok, compiled("export default #{source};\n")}
   end
 
   defp compiled(code, opts \\ []) do

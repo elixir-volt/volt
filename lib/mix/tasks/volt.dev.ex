@@ -113,6 +113,7 @@ defmodule Mix.Tasks.Volt.Dev do
     end
   end
 
+  @dialyzer {:nowarn_function, iex_running?: 0}
   defp iex_running? do
     Code.ensure_loaded?(IEx) and IEx.started?()
   end
