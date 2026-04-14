@@ -48,6 +48,8 @@ defmodule Volt.Config do
     vapor: false
   }
 
+  @build_keys Map.keys(@defaults)
+
   @server_defaults %{
     prefix: "/assets",
     watch_dirs: []
@@ -61,7 +63,7 @@ defmodule Volt.Config do
   """
   @spec build(keyword()) :: map()
   def build(overrides \\ []) do
-    app_env = Application.get_all_env(:volt) |> Keyword.drop([:tailwind, :server])
+    app_env = Application.get_all_env(:volt) |> Keyword.take(@build_keys)
 
     @defaults
     |> Map.merge(Map.new(app_env))
@@ -87,5 +89,4 @@ defmodule Volt.Config do
   def tailwind do
     Application.get_env(:volt, :tailwind, [])
   end
-
 end

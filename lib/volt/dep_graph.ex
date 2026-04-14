@@ -8,13 +8,10 @@ defmodule Volt.DepGraph do
 
   @table :volt_dep_graph
 
-  @doc "Initialize the dependency graph table. Idempotent."
-  @spec init :: :ok
-  def init do
-    if :ets.whereis(@table) == :undefined do
-      :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
-    end
-
+  @doc "Create the dependency graph ETS table. Called once from Application.start/2."
+  @spec create_table :: :ok
+  def create_table do
+    :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
     :ok
   end
 

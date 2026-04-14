@@ -2,7 +2,6 @@ defmodule Volt.CacheTest do
   use ExUnit.Case, async: false
 
   setup do
-    Volt.Cache.init()
     Volt.Cache.clear()
     :ok
   end

@@ -20,11 +20,12 @@ defmodule Volt.Watcher do
   use GenServer
   require Logger
 
+  @dialyzer {:nowarn_function, update_dep_graph: 2, detect_changes: 2}
+
   @debounce_ms 50
   @tailwind_debounce_ms 100
 
-  @js_exts ~w(.vue .ts .tsx .js .jsx .mts .mjs .css)
-  @template_exts ~w(.ex .heex .eex .leex .sface)
+  @write_events [:created, :modified, :closed]
 
   defstruct [
     :root,
@@ -59,9 +60,6 @@ defmodule Volt.Watcher do
         FileSystem.subscribe(pid)
         pid
       end)
-
-    Volt.Cache.init()
-    Volt.DepGraph.init()
 
     state = %__MODULE__{
       root: root,
@@ -101,16 +99,16 @@ defmodule Volt.Watcher do
 
   @impl true
   def handle_info({:file_event, _pid, {path, events}}, state) do
-    if :modified in events do
+    if relevant_write_event?(events) do
       ext = Path.extname(path)
 
       cond do
-        ext in @js_exts ->
+        ext in Volt.Extensions.watchable_js() ->
           state = schedule_rebuild(state, path)
           state = maybe_schedule_tailwind(state, path)
           {:noreply, state}
 
-        ext in @template_exts and state.config[:tailwind] ->
+        ext in Volt.Extensions.template() and state.config[:tailwind] ->
           state = maybe_schedule_tailwind(state, path)
           {:noreply, state}
 
@@ -143,6 +141,10 @@ defmodule Volt.Watcher do
     {:noreply, state}
   end
 
+  defp relevant_write_event?(events) do
+    Enum.any?(@write_events, &(&1 in events))
+  end
+
   defp schedule_rebuild(state, path) do
     case Map.get(state.pending, path) do
       nil -> :ok
@@ -167,7 +169,7 @@ defmodule Volt.Watcher do
   defp handle_js_change(path, state) do
     relative = Path.relative_to(path, state.root)
 
-    old_mtime = file_mtime(path)
+    old_mtime = Volt.Format.file_mtime(path)
     old_entry = Volt.Cache.get(path, old_mtime)
     Volt.Cache.evict(path)
 
@@ -175,7 +177,7 @@ defmodule Volt.Watcher do
       {:ok, source} ->
         case Volt.Pipeline.compile(path, source, Map.to_list(state.config)) do
           {:ok, result} ->
-            mtime = file_mtime(path)
+            mtime = Volt.Format.file_mtime(path)
 
             entry = %{
               code: result.code,
@@ -262,7 +264,11 @@ defmodule Volt.Watcher do
     end)
   end
 
-  defp file_mtime(path), do: Volt.Format.file_mtime(path)
+  @impl true
+  def terminate(_reason, state) do
+    Enum.each(state.fs_pids, &GenServer.stop/1)
+    :ok
+  end
 
   defp maybe_expand(nil), do: nil
   defp maybe_expand(path), do: Path.expand(path)

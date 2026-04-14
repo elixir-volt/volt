@@ -24,8 +24,6 @@ defmodule Volt.DevServer do
 
   @behaviour Plug
 
-  @compilable_exts ~w(.vue .ts .tsx .js .jsx .mts .mjs .css .json)
-
   @impl true
   def init(opts) do
     config = Volt.Config.build(opts)
@@ -98,12 +96,12 @@ defmodule Volt.DevServer do
   end
 
   defp strip_prefix(path, prefix) do
-    prefix_len = byte_size(prefix)
+    case String.replace_prefix(path, prefix <> "/", "") do
+      ^path ->
+        if path == prefix, do: {:ok, ""}, else: :no_match
 
-    case path do
-      <<^prefix::binary-size(prefix_len), "/" <> rest>> -> {:ok, rest}
-      ^prefix -> {:ok, ""}
-      _ -> :no_match
+      rest ->
+        {:ok, rest}
     end
   end
 
@@ -122,11 +120,10 @@ defmodule Volt.DevServer do
     end
   end
 
-  defp compilable?(path), do: Path.extname(path) in @compilable_exts
+  defp compilable?(path), do: Path.extname(path) in Volt.Extensions.compilable()
 
   defp serve_compiled(conn, file_path, relative, config) do
-    Volt.Cache.init()
-    mtime = file_mtime(file_path)
+    mtime = Volt.Format.file_mtime(file_path)
     content_type = content_type_for(file_path)
 
     case Volt.Cache.get(file_path, mtime) do
@@ -228,8 +225,6 @@ defmodule Volt.DevServer do
         :keep
     end
   end
-
-  defp file_mtime(path), do: Volt.Format.file_mtime(path)
 
   defp error_overlay(errors) do
     msg =

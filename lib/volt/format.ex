@@ -6,7 +6,7 @@ defmodule Volt.Format do
 
   def file_mtime(path) do
     case File.stat(path, time: :posix) do
-      {:ok, %{mtime: mtime}} -> mtime
+      {:ok, %{mtime: mtime}} when is_integer(mtime) -> mtime
       _ -> 0
     end
   end

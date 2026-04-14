@@ -12,16 +12,16 @@ defmodule Volt.Cache do
           code: String.t(),
           sourcemap: String.t() | nil,
           css: String.t() | nil,
+          hashes:
+            %{template: String.t() | nil, style: String.t() | nil, script: String.t() | nil}
+            | nil,
           content_type: String.t()
         }
 
-  @doc "Initialize the cache table. Idempotent."
-  @spec init :: :ok
-  def init do
-    if :ets.whereis(@table) == :undefined do
-      :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
-    end
-
+  @doc "Create the cache ETS table. Called once from Application.start/2."
+  @spec create_table :: :ok
+  def create_table do
+    :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
     :ok
   end
 

@@ -6,6 +6,7 @@ defmodule Volt.HMR.Socket do
   and pushes JSON messages to connected browsers.
   """
   @behaviour WebSock
+  require Logger
 
   @impl true
   def init(_args) do
@@ -14,7 +15,8 @@ defmodule Volt.HMR.Socket do
   end
 
   @impl true
-  def handle_in({_text, opcode: :text}, state) do
+  def handle_in({text, opcode: :text}, state) do
+    Logger.debug("[Volt.HMR] Received: #{text}")
     {:ok, state}
   end
 

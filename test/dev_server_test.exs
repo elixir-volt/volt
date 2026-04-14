@@ -15,7 +15,6 @@ defmodule Volt.DevServerTest do
     <script setup>const msg = 'hi'</script>
     """)
 
-    Volt.Cache.init()
     Volt.Cache.clear()
 
     on_exit(fn -> File.rm_rf!(@fixture_dir) end)

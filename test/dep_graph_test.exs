@@ -2,7 +2,6 @@ defmodule Volt.DepGraphTest do
   use ExUnit.Case, async: false
 
   setup do
-    Volt.DepGraph.init()
     Volt.DepGraph.clear()
     :ok
   end

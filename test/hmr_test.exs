@@ -63,12 +63,11 @@ defmodule Volt.HMRTest do
   end
 
   describe "Volt.Watcher" do
-    @watch_dir Path.expand("fixtures/watcher_test", __DIR__)
-
-    setup do
-      File.mkdir_p!(@watch_dir)
-      on_exit(fn -> File.rm_rf!(@watch_dir) end)
-      :ok
+    setup %{test: test_name} do
+      watch_dir = Path.expand("fixtures/watcher_test/#{test_name}", __DIR__)
+      File.mkdir_p!(watch_dir)
+      on_exit(fn -> File.rm_rf!(watch_dir) end)
+      {:ok, watch_dir: watch_dir}
     end
 
     test "broadcasts via registry on dispatch" do
@@ -83,19 +82,19 @@ defmodule Volt.HMRTest do
       assert_receive {:volt_hmr, :update, %{path: "test.ts", changes: [:full]}}
     end
 
-    test "starts and watches a directory" do
-      {:ok, pid} = Volt.Watcher.start_link(root: @watch_dir, name: :test_watcher)
+    test "starts and watches a directory", %{watch_dir: watch_dir} do
+      {:ok, pid} = Volt.Watcher.start_link(root: watch_dir, name: :test_watcher)
       assert Process.alive?(pid)
       GenServer.stop(pid)
     end
 
-    test "detects file changes and broadcasts update" do
+    test "detects file changes and broadcasts update", %{watch_dir: watch_dir} do
       Registry.register(Volt.HMR.Registry, :clients, nil)
 
-      ts_file = Path.join(@watch_dir, "app.ts")
+      ts_file = Path.join(watch_dir, "app.ts")
       File.write!(ts_file, "export const x = 1;")
 
-      {:ok, pid} = Volt.Watcher.start_link(root: @watch_dir, name: :test_watcher_change)
+      {:ok, pid} = Volt.Watcher.start_link(root: watch_dir, name: :test_watcher_change)
 
       Process.sleep(100)
       File.write!(ts_file, "export const x = 2;")
@@ -105,18 +104,18 @@ defmodule Volt.HMRTest do
       GenServer.stop(pid)
     end
 
-    test "triggers tailwind rebuild on template changes" do
+    test "triggers tailwind rebuild on template changes", %{watch_dir: watch_dir} do
       Registry.register(Volt.HMR.Registry, :clients, nil)
 
-      heex_file = Path.join(@watch_dir, "page.heex")
+      heex_file = Path.join(watch_dir, "page.heex")
       File.write!(heex_file, ~s(<div class="flex">hi</div>))
 
-      outdir = Path.join(@watch_dir, "css_out")
+      outdir = Path.join(watch_dir, "css_out")
 
       {:ok, pid} =
         Volt.Watcher.start_link(
-          root: @watch_dir,
-          watch_dirs: [@watch_dir],
+          root: watch_dir,
+          watch_dirs: [watch_dir],
           tailwind: true,
           tailwind_outdir: outdir,
           name: :test_watcher_tw

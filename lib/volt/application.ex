@@ -4,6 +4,9 @@ defmodule Volt.Application do
 
   @impl true
   def start(_type, _args) do
+    Volt.Cache.create_table()
+    Volt.DepGraph.create_table()
+
     children = [
       {Registry, keys: :duplicate, name: Volt.HMR.Registry},
       {Volt.Tailwind, Volt.Config.tailwind()}

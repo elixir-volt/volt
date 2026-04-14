@@ -32,6 +32,10 @@ defmodule Volt.Preload do
 
     manifest
     |> Map.values()
+    |> Enum.map(fn
+      %{"file" => file} -> file
+      file when is_binary(file) -> file
+    end)
     |> Enum.uniq()
     |> Enum.filter(&String.ends_with?(&1, ".js"))
     |> Enum.sort()
