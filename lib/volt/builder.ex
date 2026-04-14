@@ -119,6 +119,8 @@ defmodule Volt.Builder do
 
     with {:ok, modules, dep_map, workers} <- Collector.collect(entry, ctx),
          {:ok, compiled} <- compile_all(modules, target, ctx.plugins) do
+      compiled = rewrite_bare_labels(compiled)
+
       output_ctx = %{
         plugins: ctx.plugins,
         external_set: ctx.external,
@@ -209,6 +211,48 @@ defmodule Volt.Builder do
         {:ok, %{code: code, css: css}} -> {:ok, code, css}
         {:error, _} = error -> error
       end
+    end
+  end
+
+  defp rewrite_bare_labels({js_files, css_parts}) do
+    bare_labels =
+      js_files
+      |> Enum.map(fn {label, _} -> label end)
+      |> Enum.reject(&String.contains?(&1, "."))
+      |> MapSet.new()
+
+    if bare_labels == MapSet.new() do
+      {js_files, css_parts}
+    else
+      label_map = Map.new(bare_labels, fn label -> {label, sanitize_label(label)} end)
+
+      js_files =
+        Enum.map(js_files, fn {label, code} ->
+          new_label = Map.get(label_map, label, label)
+          new_code = rewrite_bare_imports(code, label, label_map)
+          {new_label, new_code}
+        end)
+
+      {js_files, css_parts}
+    end
+  end
+
+  defp sanitize_label(label) do
+    label
+    |> String.replace("@", "_at_")
+    |> String.replace("/", "__")
+    |> Kernel.<>(".js")
+  end
+
+  defp rewrite_bare_imports(code, _label, label_map) do
+    case Volt.ImportRewriter.rewrite(code, "module.js", fn specifier ->
+           case Map.fetch(label_map, specifier) do
+             {:ok, new_label} -> {:rewrite, "./" <> new_label}
+             :error -> :keep
+           end
+         end) do
+      {:ok, rewritten} -> rewritten
+      {:error, _} -> code
     end
   end
 
