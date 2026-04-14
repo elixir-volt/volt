@@ -195,6 +195,8 @@ defmodule Volt.DevServer do
     |> Plug.Conn.halt()
   end
 
+  # All compilable sources serve as JS (JSON is wrapped in `export default`).
+  # Static assets (.svg, .png, etc.) are handled by serve_asset, not this path.
   defp content_type_for(path) do
     case Path.extname(path) do
       ".css" -> "text/css"

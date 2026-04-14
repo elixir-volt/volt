@@ -96,16 +96,14 @@ defmodule Volt.Pipeline do
     case Vize.compile_sfc(source, filename: Path.basename(path), vapor: vapor) do
       {:ok, result} ->
         {:ok,
-         %{
-           code: result.code,
-           sourcemap: nil,
+         compiled(result.code,
            css: result.css,
            hashes: %{
              template: result.template_hash,
              style: result.style_hash,
              script: result.script_hash
            }
-         }}
+         )}
 
       {:error, reason} ->
         {:error, reason}
@@ -122,10 +120,10 @@ defmodule Volt.Pipeline do
 
     case OXC.transform(source, Path.basename(path), transform_opts) do
       {:ok, result} when is_map(result) ->
-        {:ok, %{code: result.code, sourcemap: result.sourcemap, css: nil, hashes: nil}}
+        {:ok, compiled(result.code, sourcemap: result.sourcemap)}
 
       {:ok, code} when is_binary(code) ->
-        {:ok, %{code: code, sourcemap: nil, css: nil, hashes: nil}}
+        {:ok, compiled(code)}
 
       {:error, errors} ->
         {:error, errors}
@@ -144,7 +142,7 @@ defmodule Volt.Pipeline do
 
     case result do
       {:ok, %{code: code}} ->
-        {:ok, %{code: code, sourcemap: nil, css: nil, hashes: nil}}
+        {:ok, compiled(code)}
 
       {:ok, %{errors: errors}} when errors != [] ->
         {:error, errors}
@@ -157,11 +155,20 @@ defmodule Volt.Pipeline do
   defp compile_css_module(path, source, opts) do
     minify = Keyword.get(opts, :minify, false)
     {:ok, js, scoped_css} = Volt.CSSModules.compile(source, Path.basename(path), minify: minify)
-    {:ok, %{code: js, sourcemap: nil, css: scoped_css, hashes: nil}}
+    {:ok, compiled(js, css: scoped_css)}
   end
 
   defp compile_json(source) do
     {:ok, %{code: "export default #{source};\n", sourcemap: nil, css: nil, hashes: nil}}
+  end
+
+  defp compiled(code, opts \\ []) do
+    %{
+      code: code,
+      sourcemap: Keyword.get(opts, :sourcemap),
+      css: Keyword.get(opts, :css),
+      hashes: Keyword.get(opts, :hashes)
+    }
   end
 
   defp maybe_put(opts, _key, nil), do: opts

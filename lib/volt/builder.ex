@@ -144,7 +144,7 @@ defmodule Volt.Builder do
     with {:ok, source} <- File.read(entry),
          {:ok, compiled} <-
            Volt.Pipeline.compile(entry, source, minify: bundle_opts[:minify] || false) do
-      Output.build_style_entry(name, compiled.code, outdir, hash)
+      Volt.Builder.Writer.build_style_entry(name, compiled.code, outdir, hash)
     end
   end
 
@@ -200,45 +200,16 @@ defmodule Volt.Builder do
   end
 
   defp compile_module(path, _label, source, target, plugins) do
-    ext = Path.extname(path)
-
-    cond do
-      ext == ".vue" ->
-        compile_vue(source, path)
-
-      Volt.CSSModules.css_module?(path) ->
-        {:ok, js, css} = Volt.CSSModules.compile(source, Path.basename(path))
-        {:ok, js, css}
-
-      ext == ".json" ->
-        {:ok, "export default #{source};\n", nil}
-
-      Volt.Assets.asset?(path) ->
-        case Volt.Assets.to_js_module(path) do
-          {:ok, js} -> {:ok, js, nil}
-          {:error, _} = error -> error
-        end
-
-      true ->
-        with {:ok, js, css} <- compile_js(source, path, target) do
-          {:ok, Volt.PluginRunner.transform(plugins, js, path), css}
-        end
-    end
-  end
-
-  # Adapts Pipeline's map result to Builder's {code, css} tuple convention
-  defp compile_vue(source, path) do
-    case Volt.Pipeline.compile(path, source) do
-      {:ok, %{code: code, css: css}} -> {:ok, code, css}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp compile_js(source, path, target) do
-    case OXC.transform(source, Path.basename(path), target: target) do
-      {:ok, code} when is_binary(code) -> {:ok, code, nil}
-      {:ok, %{code: code}} -> {:ok, code, nil}
-      {:error, errors} -> {:error, errors}
+    if Volt.Assets.asset?(path) do
+      case Volt.Assets.to_js_module(path) do
+        {:ok, js} -> {:ok, js, nil}
+        {:error, _} = error -> error
+      end
+    else
+      case Volt.Pipeline.compile(path, source, target: target, plugins: plugins) do
+        {:ok, %{code: code, css: css}} -> {:ok, code, css}
+        {:error, _} = error -> error
+      end
     end
   end
 

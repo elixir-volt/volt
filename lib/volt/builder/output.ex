@@ -122,10 +122,6 @@ defmodule Volt.Builder.Output do
      }}
   end
 
-  def build_style_entry(name, css_code, outdir, hash) do
-    Writer.build_style_entry(name, css_code, outdir, hash)
-  end
-
   defp build_chunk_filenames(chunks, name, hash, js_map, bundle_opts, ctx) do
     Enum.reduce(chunks, %{}, fn {chunk_id, chunk}, acc ->
       chunk_js = select_chunk_files(chunk.modules, js_map)
