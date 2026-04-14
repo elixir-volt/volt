@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.5.0
+
+### Generic Tailwind Loader
+
+Replaced the vendored `@tailwindcss/typography` bundle with a generic Tailwind
+loader powered by QuickBEAM. Volt now resolves and prebundles any Tailwind
+plugin or config file on the fly — no vendored JS blobs needed.
+
+- `@plugin "./my-plugin.js"` — local plugins with full `require()` graph
+- `@plugin "@tailwindcss/typography"` — npm package plugins
+- `@config "./tailwind.config.js"` — local config files
+- `@import "./extra.css"` and `@reference "./tokens.css"` — local stylesheets
+- New `:css_base` option for resolving paths relative to input CSS
+
+Module graphs are prebundled in Elixir via OXC's Rolldown-backed bundler,
+so the JS runtime only evaluates self-contained CJS bundles.
+
+### Dependencies
+
+- Upgrade `oxc` to `~> 0.6.2` (Rolldown-backed bundling with `:entry` and `:format` options)
+- Upgrade `quickbeam` to `~> 0.9.0`
+
+### Bug Fixes
+
+- Fix `Preload.tags/2` returning empty output (was filtering map values as strings)
+- Fix ETS table race condition — `Cache` and `DepGraph` tables now created
+  in `Application.start/2` instead of lazy init
+- Fix Dialyzer warning on `Format.file_mtime/1` return type
+- Add `Cache.entry` type field for `:hashes`
+- Stop `FileSystem` processes in `Watcher.terminate/2`
+- Accept `:created`/`:closed` file events in Watcher (not just `:modified`)
+- Use per-test fixture directories in HMR tests to prevent race conditions
+
+### Refactoring
+
+- Split `Builder.Output` (370+ lines) into `Output`, `Writer`, `BundleResult`, `Rewriter`
+- Extract `Tailwind.Loader` and `Tailwind.Resolver` from the Tailwind GenServer
+- Consolidate package.json exports resolution into `PackageResolver` with
+  parameterized condition order (browser-first vs CJS-first)
+- Unify `try_resolve` with optional extension/index params across Builder and Tailwind
+- Centralize specifier predicates (`relative?`, `absolute?`, `bare?`, `node_builtin?`)
+  in `Builder.Resolver`
+- Extract `Volt.Extensions` as single source for file extension lists
+- Extract `WorkerRewriter.extract_specifier/1` to deduplicate worker URL
+  pattern matching across Collector, WorkerRewriter, and Rewriter
+- Remove duplicated `compile_vue`, `extract_vue_imports`, `try_resolve`,
+  `content_hash`/`file_mtime` wrappers, `bare_specifier?`
+- Reduce `Collector.do_collect` from 7 positional args to a state map
+- Reduce `build_entry` from 9 positional args to 5 with a `build_ctx` map
+- Reduce `build_chunks`/`build_single` args with shared `build_ctx`
+- Extract `build_chunk_filenames` and `process_source` to reduce nesting depth
+- Replace `throw`/`catch` in Tailwind loader with error accumulator
+- Replace `stringify` helper with `maybe_put` in Pipeline
+- Simplify `emit_global_access` accumulator in Externals
+- Use `Keyword.take` allowlist in `Config.build`
+- Use `String.replace_prefix` in `DevServer.strip_prefix`
+- Add `Logger.debug` to `HMR.Socket.handle_in`
+- Extract shared Mix task helpers into `Volt.JsHelpers`
+- Rename `Builder.Assets` to `Builder.Writer` to avoid collision with `Volt.Assets`
+- Add `@type rewrite_fn` to Pipeline
+- Add `@moduledoc` to internal modules
+- Document `Vendor.encode_specifier/1` and `decode_specifier/1`
+
 ## 0.4.2
 
 - Fix fresh installs for Tailwind support by removing the generated `priv/tailwind.js` workflow
