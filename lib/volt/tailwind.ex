@@ -17,16 +17,17 @@ defmodule Volt.Tailwind do
       # Generate CSS:
       {:ok, css} = Volt.Tailwind.build()
 
-  ## Plugin support
+  ## Tailwind directives
 
-  Volt natively supports `@plugin "@tailwindcss/typography"` in your CSS input.
-  The plugin runs inside QuickBEAM — no Node.js required.
+  Volt supports Tailwind's CSS-first directives like `@theme`, `@source`,
+  `@utility`, `@variant`, and `@apply` through the Tailwind compiler.
+
+  Volt also resolves local `@import`, `@reference`, `@plugin`, and `@config`
+  files inside QuickBEAM, plus installed package plugins like
+  `@tailwindcss/typography`.
   """
 
   use GenServer
-
-  @tailwind_version "^4.2.2"
-  @typography_plugin_path Path.expand("../../priv/typography-plugin.js", __DIR__)
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -41,6 +42,7 @@ defmodule Volt.Tailwind do
   ## Options
 
     * `:css` — custom input CSS (default: Tailwind's base with theme + preflight + utilities)
+    * `:css_base` — base directory for resolving local `@import`, `@reference`, `@plugin`, and `@config` paths
     * `:sources` — override source patterns (default: from config)
     * `:minify` — minify the output CSS (default: `false`)
   """
@@ -73,17 +75,18 @@ defmodule Volt.Tailwind do
   end
 
   defp ensure_runtime(%{runtime: nil} = state) do
-    {:ok, rt} = QuickBEAM.start()
-    {:ok, _} = QuickBEAM.eval(rt, "globalThis.process = {env: {NODE_ENV: 'production'}};")
-    {:ok, _} = QuickBEAM.eval(rt, runtime_source())
+    {:ok, rt} =
+      QuickBEAM.start(
+        apis: [:browser, :node],
+        handlers: Volt.Tailwind.Loader.handlers(),
+        define: %{
+          "TAILWIND_ROOT" => Volt.Tailwind.Loader.ensure_runtime_root!(),
+          "TAILWIND_DEFAULT_BASE" => File.cwd!()
+        },
+        script: Volt.JSAsset.path_for("tailwind-runtime.ts")
+      )
 
-    scanner =
-      if state.sources != [] do
-        oxide_sources = Enum.map(state.sources, &to_oxide_source/1)
-        Oxide.new(sources: oxide_sources)
-      end
-
-    %{state | runtime: rt, scanner: scanner}
+    %{state | runtime: rt, scanner: build_scanner(state.sources)}
   end
 
   defp ensure_runtime(state), do: state
@@ -91,21 +94,18 @@ defmodule Volt.Tailwind do
   @impl true
   def handle_call({:build, opts}, _from, state) do
     state = ensure_runtime(state)
-    sources = opts[:sources] || state.sources
     css_input = opts[:css]
     minify = Keyword.get(opts, :minify, false)
+    css_base = opts[:css_base] || File.cwd!()
+    sources = opts[:sources] || state.sources
 
     scanner =
-      if opts[:sources] do
-        oxide_sources = Enum.map(sources, &to_oxide_source/1)
-        Oxide.new(sources: oxide_sources)
-      else
-        state.scanner || Oxide.new(sources: [])
-      end
+      if(opts[:sources],
+        do: build_scanner(sources),
+        else: state.scanner || Oxide.new(sources: [])
+      )
 
-    candidates = Oxide.scan(scanner)
-
-    case compile_css(state.runtime, css_input, candidates) do
+    case compile_css(state.runtime, css_input, Oxide.scan(scanner), css_base) do
       {:ok, css} ->
         css = maybe_minify(css, minify)
         {:reply, {:ok, css}, %{state | scanner: scanner, last_css: css}}
@@ -119,6 +119,7 @@ defmodule Volt.Tailwind do
     state = ensure_runtime(state)
     minify = Keyword.get(opts, :minify, false)
     css_input = opts[:css]
+    css_base = opts[:css_base] || File.cwd!()
 
     changed =
       Enum.map(changed_files, fn
@@ -134,14 +135,10 @@ defmodule Volt.Tailwind do
         {:reply, {:error, :no_scanner}, state}
 
       scanner ->
-        new_candidates = Oxide.scan_files(scanner, changed)
-
-        if new_candidates == [] do
+        if Oxide.scan_files(scanner, changed) == [] do
           {:reply, :unchanged, state}
         else
-          all_candidates = Oxide.scan(scanner)
-
-          case compile_css(state.runtime, css_input, all_candidates) do
+          case compile_css(state.runtime, css_input, Oxide.scan(scanner), css_base) do
             {:ok, css} ->
               css = maybe_minify(css, minify)
               {:reply, {:ok, css}, %{state | last_css: css}}
@@ -161,21 +158,19 @@ defmodule Volt.Tailwind do
     :ok
   end
 
-  defp compile_css(runtime, nil, candidates) do
-    candidates_js = Jason.encode!(candidates)
+  defp build_scanner([]), do: nil
 
-    case QuickBEAM.eval(runtime, "TW.compileCss(null, #{candidates_js})") do
-      {:ok, css} when is_binary(css) -> {:ok, css}
-      {:ok, _} -> {:error, :unexpected_result}
-      {:error, _} = error -> error
-    end
+  defp build_scanner(sources) do
+    oxide_sources = Enum.map(sources, &to_oxide_source/1)
+    Oxide.new(sources: oxide_sources)
   end
 
-  defp compile_css(runtime, css_input, candidates) do
-    candidates_js = Jason.encode!(candidates)
-    css_js = Jason.encode!(css_input)
-
-    case QuickBEAM.eval(runtime, "TW.compileCss(#{css_js}, #{candidates_js})") do
+  defp compile_css(runtime, css_input, candidates, css_base) do
+    case QuickBEAM.call(runtime, "compileTailwindCss", [
+           css_input,
+           candidates,
+           Path.expand(css_base)
+         ]) do
       {:ok, css} when is_binary(css) -> {:ok, css}
       {:ok, _} -> {:error, :unexpected_result}
       {:error, _} = error -> error
@@ -197,126 +192,5 @@ defmodule Volt.Tailwind do
       pattern: pattern,
       negated: Map.get(source, :negated, false)
     }
-  end
-
-  defp runtime_source do
-    NPM.install(%{"tailwindcss" => @tailwind_version}, __skip_project_check__: true)
-
-    nm_dir = NPM.node_modules_dir!()
-    tw_dir = Path.join(nm_dir, "tailwindcss")
-    source = File.read!(Path.join([tw_dir, "dist", "lib.js"]))
-    plugin_helper = File.read!(Path.join([tw_dir, "dist", "plugin.js"]))
-    theme = File.read!(Path.join(tw_dir, "theme.css"))
-    preflight = File.read!(Path.join(tw_dir, "preflight.css"))
-    utilities = File.read!(Path.join(tw_dir, "utilities.css"))
-    typography = load_typography_plugin()
-
-    wrap_runtime(source, plugin_helper, theme, preflight, utilities, typography)
-  end
-
-  defp load_typography_plugin do
-    case File.read(@typography_plugin_path) do
-      {:ok, js} -> js
-      {:error, _} -> nil
-    end
-  end
-
-  defp wrap_runtime(source, plugin_helper, theme, preflight, utilities, typography) do
-    """
-    var TW = (() => {
-      var module = { exports: {} };
-      var exports = module.exports;
-      #{source}
-      var twExports = module.exports;
-
-      #{plugin_shim(plugin_helper)}
-      #{typography_shim(typography)}
-
-      return {
-        compileCss: async function(inputCss, candidates) {
-          var css = inputCss == null ? '@import "tailwindcss";' : inputCss;
-          var compiler = await twExports.compile(css, {
-            from: 'app.css',
-            loadStylesheet: async function(id) {
-              if (id === 'tailwindcss') {
-                return {
-                  base: '.',
-                  content: '@import "tailwindcss/theme.css" layer(theme);\\n@import "tailwindcss/preflight.css" layer(base);\\n@import "tailwindcss/utilities.css" layer(utilities);'
-                };
-              }
-
-              if (id === 'tailwindcss/theme.css') {
-                return { base: '.', content: twExports.Features ? requireAsset('theme') : '' };
-              }
-
-              if (id === 'tailwindcss/preflight.css') {
-                return { base: '.', content: requireAsset('preflight') };
-              }
-
-              if (id === 'tailwindcss/utilities.css') {
-                return { base: '.', content: requireAsset('utilities') };
-              }
-
-              throw new Error('Unsupported stylesheet: ' + id);
-            },
-            loadModule: async function(id) {
-              if (id === '@tailwindcss/typography' && typographyPlugin) {
-                return { module: typographyPlugin, base: '.' };
-              }
-
-              throw new Error('Unsupported plugin: ' + id + '. Volt natively supports @tailwindcss/typography.');
-            }
-          });
-
-          return compiler.build(candidates || []);
-        }
-      };
-
-      function requireAsset(kind) {
-        if (kind === 'theme') {
-          return #{Jason.encode!(theme)};
-        }
-
-        if (kind === 'preflight') {
-          return #{Jason.encode!(preflight)};
-        }
-
-        if (kind === 'utilities') {
-          return #{Jason.encode!(utilities)};
-        }
-
-        return '';
-      }
-    })();
-    """
-  end
-
-  defp plugin_shim(plugin_helper) do
-    """
-    var twPlugin = (function() {
-      var module = { exports: {} };
-      var exports = module.exports;
-      #{plugin_helper}
-      return module.exports;
-    })();
-    """
-  end
-
-  defp typography_shim(nil), do: "var typographyPlugin = null;"
-
-  defp typography_shim(typography_source) do
-    """
-    var typographyPlugin = (function() {
-      var _require = function(id) {
-        if (id === 'tailwindcss/plugin') return twPlugin;
-        throw new Error('Cannot require module: ' + id);
-      };
-      var module = { exports: {} };
-      var exports = module.exports;
-      var require = _require;
-      #{typography_source}
-      return module.exports;
-    })();
-    """
   end
 end

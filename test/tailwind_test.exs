@@ -55,6 +55,96 @@ defmodule Volt.TailwindTest do
       assert css =~ "flex"
     end
 
+    test "loads local stylesheets via @import" do
+      File.write!(Path.join(@fixture_dir, "extra.css"), ".banner { color: rebeccapurple; }")
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css: "@import \"./extra.css\";\n@import \"tailwindcss\";",
+          css_base: @fixture_dir
+        )
+
+      assert css =~ ".banner"
+      assert css =~ "rebeccapurple"
+    end
+
+    test "loads local references via @reference" do
+      File.write!(Path.join(@fixture_dir, "reference.css"), """
+      @import "tailwindcss";
+      @theme {
+        --color-brand: #123456;
+      }
+      """)
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css: "@reference \"./reference.css\";\n.btn { @apply text-brand; }",
+          css_base: @fixture_dir
+        )
+
+      assert css =~ ".btn"
+      assert css =~ "var(--color-brand, #123456)"
+    end
+
+    test "loads local plugins via @plugin" do
+      File.write!(Path.join(@fixture_dir, "plugin-utils.js"), """
+      module.exports = {
+        '.content-auto': {
+          contentVisibility: 'auto'
+        }
+      }
+      """)
+
+      File.write!(Path.join(@fixture_dir, "plugin.js"), """
+      const plugin = require('tailwindcss/plugin')
+      const utilities = require('./plugin-utils')
+
+      module.exports = plugin(function ({ addUtilities }) {
+        addUtilities(utilities)
+      })
+      """)
+
+      File.write!(Path.join(@fixture_dir, "plugin.html"), ~S(<div class="content-auto"></div>))
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css: "@import \"tailwindcss\";\n@plugin \"./plugin.js\";",
+          css_base: @fixture_dir
+        )
+
+      assert css =~ ".content-auto"
+      assert css =~ "content-visibility: auto"
+    end
+
+    test "loads local configs via @config" do
+      File.write!(Path.join(@fixture_dir, "brand.html"), ~S(<div class="text-brand"></div>))
+
+      File.write!(Path.join(@fixture_dir, "tailwind.config.js"), """
+      module.exports = {
+        theme: {
+          extend: {
+            colors: {
+              brand: '#123456'
+            }
+          }
+        }
+      }
+      """)
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css: "@import \"tailwindcss\";\n@config \"./tailwind.config.js\";",
+          css_base: @fixture_dir
+        )
+
+      assert css =~ ".text-brand"
+      assert css =~ "#123456"
+    end
+
     test "minifies output" do
       {:ok, normal} =
         Volt.Tailwind.build(sources: [%{base: @fixture_dir, pattern: "**/*.html"}])
