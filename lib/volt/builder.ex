@@ -124,9 +124,9 @@ defmodule Volt.Builder do
       code_splitting: code_splitting
     } = build_ctx
 
-    with {:ok, modules, dep_map, workers} <- Collector.collect(entry, ctx),
+    with {:ok, modules, dep_map, workers, specifier_labels} <- Collector.collect(entry, ctx),
          {:ok, compiled} <- compile_all(modules, target, ctx.plugins) do
-      compiled = rewrite_bare_labels(compiled)
+      compiled = rewrite_nonlocal_labels(compiled, specifier_labels)
 
       output_ctx = %{
         plugins: ctx.plugins,
@@ -232,22 +232,32 @@ defmodule Volt.Builder do
     end
   end
 
-  defp rewrite_bare_labels({js_files, css_parts}) do
-    bare_labels =
+  defp rewrite_nonlocal_labels({js_files, css_parts}, specifier_labels) do
+    nonlocal_labels =
       js_files
       |> Enum.map(fn {label, _} -> label end)
-      |> Enum.reject(&String.contains?(&1, "."))
+      |> Enum.filter(&nonlocal_label?/1)
       |> MapSet.new()
 
-    if bare_labels == MapSet.new() do
+    label_sanitize_map =
+      Map.new(nonlocal_labels, fn label -> {label, sanitize_label(label)} end)
+
+    specifier_rewrite_map =
+      specifier_labels
+      |> Enum.reject(fn {_spec, label} -> label == nil end)
+      |> Map.new(fn {spec, label} ->
+        {spec, Map.get(label_sanitize_map, label, label)}
+      end)
+
+    rewrite_map = Map.merge(label_sanitize_map, specifier_rewrite_map)
+
+    if rewrite_map == %{} do
       {js_files, css_parts}
     else
-      label_map = Map.new(bare_labels, fn label -> {label, sanitize_label(label)} end)
-
       js_files =
         Enum.map(js_files, fn {label, code} ->
-          new_label = Map.get(label_map, label, label)
-          new_code = rewrite_bare_imports(code, label, label_map)
+          new_label = Map.get(label_sanitize_map, label, label)
+          new_code = rewrite_imports_to_labels(code, rewrite_map)
           {new_label, new_code}
         end)
 
@@ -255,14 +265,19 @@ defmodule Volt.Builder do
     end
   end
 
+  defp nonlocal_label?(label) do
+    not String.contains?(label, ".") or
+      (String.contains?(label, "/") and not String.starts_with?(label, "./"))
+  end
+
   defp sanitize_label(label) do
     label
     |> String.replace("@", "_at_")
     |> String.replace("/", "__")
-    |> Kernel.<>(".js")
+    |> then(fn l -> if String.contains?(l, "."), do: l, else: l <> ".js" end)
   end
 
-  defp rewrite_bare_imports(code, _label, label_map) do
+  defp rewrite_imports_to_labels(code, label_map) do
     case OXC.rewrite_specifiers(code, "module.js", fn specifier ->
            case Map.fetch(label_map, specifier) do
              {:ok, new_label} -> {:rewrite, "./" <> new_label}

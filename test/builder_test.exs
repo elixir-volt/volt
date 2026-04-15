@@ -302,5 +302,46 @@ defmodule Volt.BuilderTest do
       chunk_files = Enum.map(result.chunks, &Path.basename(&1.path))
       assert Enum.any?(chunk_files, &(&1 =~ "lib"))
     end
+
+    test "alias-imported Vue SFC resolves bare npm imports" do
+      File.mkdir_p!(Path.join(@fixture_dir, "src/components"))
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/fake-lib"))
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/fake-lib/package.json"),
+        ~s({"name":"fake-lib","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/fake-lib/index.js"),
+        "export const widget = 'fake-widget';\n"
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/components/Widget.vue"), """
+      <template><div>Widget</div></template>
+      <script setup>
+      import { widget } from 'fake-lib'
+      console.log(widget)
+      </script>
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/alias_app.ts"), """
+      import Widget from '@components/Widget.vue'
+      console.log(Widget)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/alias_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          aliases: %{"@components" => Path.join(@fixture_dir, "src/components")},
+          node_modules: Path.join(@fixture_dir, "node_modules")
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "fake-widget"
+    end
   end
 end

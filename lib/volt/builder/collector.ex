@@ -13,11 +13,22 @@ defmodule Volt.Builder.Collector do
   """
   def collect(entry_path, ctx) do
     label = Path.basename(entry_path)
-    state = %{ctx: ctx, files: [], seen: MapSet.new(), dep_map: %{}, workers: %{}}
+
+    state = %{
+      ctx: ctx,
+      files: [],
+      seen: MapSet.new(),
+      dep_map: %{},
+      workers: %{},
+      specifier_labels: %{}
+    }
 
     case do_collect(entry_path, label, state) do
-      {:ok, state} -> {:ok, Enum.reverse(state.files), state.dep_map, state.workers}
-      {:error, _} = error -> error
+      {:ok, state} ->
+        {:ok, Enum.reverse(state.files), state.dep_map, state.workers, state.specifier_labels}
+
+      {:error, _} = error ->
+        error
     end
   end
 
@@ -71,14 +82,12 @@ defmodule Volt.Builder.Collector do
         collect_imports(rest, importer, state)
 
       {:ok, resolved_path, original_specifier} ->
-        label =
-          if NPM.PackageResolver.relative?(original_specifier),
-            do: Path.basename(resolved_path),
-            else: original_specifier
+        label = module_label(original_specifier, resolved_path)
 
         state = %{
           state
-          | dep_map:
+          | specifier_labels: Map.put(state.specifier_labels, original_specifier, label),
+            dep_map:
               resolve_dep_map_specifier(
                 state.dep_map,
                 importer,
@@ -215,6 +224,14 @@ defmodule Volt.Builder.Collector do
 
   defp resolve_specifier({:resolved, specifier, resolved_path}, _importer, _ctx) do
     {:ok, resolved_path, specifier}
+  end
+
+  defp module_label(specifier, resolved_path) do
+    if String.contains?(resolved_path, "/node_modules/") do
+      specifier
+    else
+      Path.basename(resolved_path)
+    end
   end
 
   defp split_imports(typed_imports) do
