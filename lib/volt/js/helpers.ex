@@ -1,4 +1,4 @@
-defmodule Volt.JsHelpers do
+defmodule Volt.JS.Helpers do
   @moduledoc false
 
   @ts_dir Path.expand("priv/ts")

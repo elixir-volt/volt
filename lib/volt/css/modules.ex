@@ -1,4 +1,4 @@
-defmodule Volt.CSSModules do
+defmodule Volt.CSS.Modules do
   @moduledoc """
   CSS Modules support for `.module.css` files.
 

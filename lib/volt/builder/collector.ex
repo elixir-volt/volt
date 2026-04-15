@@ -124,7 +124,7 @@ defmodule Volt.Builder.Collector do
     filename = Path.basename(path)
 
     if ext == ".vue" do
-      case Volt.VueImports.extract(source) do
+      case Volt.JS.VueImports.extract(source) do
         {:ok, specs} -> {:ok, %{imports: Enum.map(specs, &{:static, &1}), workers: []}}
         error -> error
       end
@@ -159,7 +159,7 @@ defmodule Volt.Builder.Collector do
             } = node,
             acc
             when worker_type in ["Worker", "SharedWorker"] ->
-              case Volt.WorkerRewriter.extract_specifier(first_arg) do
+              case Volt.JS.WorkerRewriter.extract_specifier(first_arg) do
                 {:ok, spec, _s, _e} -> {node, update_in(acc.workers, &[spec | &1])}
                 nil -> {node, acc}
               end

@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Volt.Js.Check do
 
   @impl true
   def run(_args) do
-    Volt.JsHelpers.run_npx(["oxfmt", "--check", Volt.JsHelpers.ts_dir()])
-    Volt.JsHelpers.run_npx(["oxlint", Volt.JsHelpers.ts_dir()])
+    Volt.JS.Helpers.run_npx(["oxfmt", "--check", Volt.JS.Helpers.ts_dir()])
+    Volt.JS.Helpers.run_npx(["oxlint", Volt.JS.Helpers.ts_dir()])
   end
 end

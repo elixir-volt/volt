@@ -83,7 +83,7 @@ defmodule Volt.Tailwind do
           "TAILWIND_ROOT" => Volt.Tailwind.Loader.ensure_runtime_root!(),
           "TAILWIND_DEFAULT_BASE" => File.cwd!()
         },
-        script: Volt.JSAsset.path_for("tailwind-runtime.ts")
+        script: Volt.JS.Asset.path_for("tailwind-runtime.ts")
       )
 
     %{state | runtime: rt, scanner: build_scanner(state.sources)}

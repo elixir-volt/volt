@@ -76,9 +76,9 @@ defmodule Volt.DevServer do
   end
 
   def call(%Plug.Conn{request_path: "/@vendor/" <> specifier_js} = conn, _config) do
-    specifier = specifier_js |> String.trim_trailing(".js") |> Volt.Vendor.decode_specifier()
+    specifier = specifier_js |> String.trim_trailing(".js") |> Volt.JS.Vendor.decode_specifier()
 
-    case Volt.Vendor.read(specifier) do
+    case Volt.JS.Vendor.read(specifier) do
       {:ok, code} ->
         conn
         |> Plug.Conn.put_resp_content_type("application/javascript")
@@ -257,7 +257,7 @@ defmodule Volt.DevServer do
   end
 
   defp rewrite_bare(specifier) do
-    {:rewrite, Volt.Vendor.vendor_url(specifier)}
+    {:rewrite, Volt.JS.Vendor.vendor_url(specifier)}
   end
 
   defp resolve_with_extension(path) do
@@ -306,7 +306,7 @@ defmodule Volt.DevServer do
         e -> inspect(e)
       end)
 
-    overlay = Volt.JSAsset.compiled!("error-overlay.ts")
+    overlay = Volt.JS.Asset.compiled!("error-overlay.ts")
     overlay <> "\nrenderErrorOverlay(#{inspect(msg)})\n"
   end
 end

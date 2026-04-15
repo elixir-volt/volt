@@ -1,4 +1,4 @@
-defmodule Volt.TSConfig do
+defmodule Volt.JS.TSConfig do
   @moduledoc """
   Read `compilerOptions.paths` from `tsconfig.json` and convert to Volt aliases.
 

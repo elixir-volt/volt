@@ -1,7 +1,7 @@
-defmodule Volt.JSAsset do
+defmodule Volt.JS.Asset do
   @moduledoc false
 
-  @base_dir Path.expand("../../priv/ts", __DIR__)
+  @base_dir Path.expand("../../../priv/ts", __DIR__)
 
   @spec read!(String.t()) :: String.t()
   def read!(filename) do

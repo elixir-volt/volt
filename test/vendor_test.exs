@@ -1,4 +1,4 @@
-defmodule Volt.VendorTest do
+defmodule Volt.JS.VendorTest do
   use ExUnit.Case, async: false
 
   @fixture_dir Path.expand("fixtures/vendor", __DIR__)
@@ -33,7 +33,7 @@ defmodule Volt.VendorTest do
   describe "prebundle/1" do
     test "detects bare imports and bundles them" do
       {:ok, vendor_map} =
-        Volt.Vendor.prebundle(
+        Volt.JS.Vendor.prebundle(
           root: Path.join(@fixture_dir, "src"),
           node_modules: @node_modules
         )
@@ -42,7 +42,7 @@ defmodule Volt.VendorTest do
     end
 
     test "caches bundled files on disk" do
-      Volt.Vendor.prebundle(
+      Volt.JS.Vendor.prebundle(
         root: Path.join(@fixture_dir, "src"),
         node_modules: @node_modules
       )
@@ -57,7 +57,7 @@ defmodule Volt.VendorTest do
       )
 
       {:ok, vendor_map} =
-        Volt.Vendor.prebundle(
+        Volt.JS.Vendor.prebundle(
           root: Path.join(@fixture_dir, "src"),
           node_modules: @node_modules
         )
@@ -68,27 +68,27 @@ defmodule Volt.VendorTest do
 
   describe "read/1" do
     test "reads pre-bundled vendor file" do
-      Volt.Vendor.prebundle(
+      Volt.JS.Vendor.prebundle(
         root: Path.join(@fixture_dir, "src"),
         node_modules: @node_modules
       )
 
-      {:ok, code} = Volt.Vendor.read("fake-lib")
+      {:ok, code} = Volt.JS.Vendor.read("fake-lib")
       assert code =~ "greet"
     end
 
     test "returns error for missing vendor" do
-      assert {:error, :not_found} = Volt.Vendor.read("nonexistent")
+      assert {:error, :not_found} = Volt.JS.Vendor.read("nonexistent")
     end
   end
 
   describe "vendor_url/1" do
     test "generates URL path for specifier" do
-      assert Volt.Vendor.vendor_url("vue") == "/@vendor/vue.js"
+      assert Volt.JS.Vendor.vendor_url("vue") == "/@vendor/vue.js"
     end
 
     test "handles scoped packages" do
-      url = Volt.Vendor.vendor_url("@vue/reactivity")
+      url = Volt.JS.Vendor.vendor_url("@vue/reactivity")
       assert url =~ "/@vendor/"
       assert url =~ ".js"
 
@@ -96,7 +96,7 @@ defmodule Volt.VendorTest do
         url
         |> String.trim_leading("/@vendor/")
         |> String.trim_trailing(".js")
-        |> Volt.Vendor.decode_specifier()
+        |> Volt.JS.Vendor.decode_specifier()
 
       assert decoded == "@vue/reactivity"
     end

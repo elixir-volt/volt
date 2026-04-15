@@ -101,7 +101,7 @@ defmodule Volt.Config do
       |> Map.merge(Map.new(app_env))
       |> Map.merge(Map.new(overrides))
 
-    tsconfig_paths = Volt.TSConfig.discover_paths()
+    tsconfig_paths = Volt.JS.TSConfig.discover_paths()
     %{config | aliases: Map.merge(tsconfig_paths, config.aliases)}
   end
 

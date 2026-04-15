@@ -55,7 +55,7 @@ defmodule Volt.Builder.Rewriter do
   def rewrite_worker_urls(code, worker_map, _filename) when worker_map == %{}, do: code
 
   def rewrite_worker_urls(code, worker_map, filename) do
-    case Volt.WorkerRewriter.rewrite(code, to_string(filename), fn specifier ->
+    case Volt.JS.WorkerRewriter.rewrite(code, to_string(filename), fn specifier ->
            case Map.fetch(worker_map, specifier) do
              {:ok, worker_filename} -> {:rewrite, "./#{worker_filename}"}
              :error -> :keep
@@ -95,7 +95,7 @@ defmodule Volt.Builder.Rewriter do
         } = node,
         patches
         when worker_type in ["Worker", "SharedWorker"] ->
-          case Volt.WorkerRewriter.extract_specifier(first_arg) do
+          case Volt.JS.WorkerRewriter.extract_specifier(first_arg) do
             {:ok, spec, s, e} ->
               case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
                 nil -> {node, patches}

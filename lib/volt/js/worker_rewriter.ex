@@ -1,4 +1,4 @@
-defmodule Volt.WorkerRewriter do
+defmodule Volt.JS.WorkerRewriter do
   @moduledoc false
 
   @spec rewrite(String.t(), String.t(), (String.t() -> {:rewrite, String.t()} | :keep)) ::

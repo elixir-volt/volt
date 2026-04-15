@@ -1,4 +1,4 @@
-defmodule Volt.VueImports do
+defmodule Volt.JS.VueImports do
   @moduledoc false
 
   @doc "Extract import specifiers from a Vue SFC's script blocks."

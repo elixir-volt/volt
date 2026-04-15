@@ -1,4 +1,4 @@
-defmodule Volt.Vendor do
+defmodule Volt.JS.Vendor do
   @moduledoc """
   Pre-bundle vendor (node_modules) dependencies for dev mode.
 
@@ -95,7 +95,7 @@ defmodule Volt.Vendor do
     ext = Path.extname(filename)
 
     if ext == ".vue" do
-      Volt.VueImports.extract(source)
+      Volt.JS.VueImports.extract(source)
     else
       OXC.imports(source, filename)
     end

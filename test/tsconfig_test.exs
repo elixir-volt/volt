@@ -1,4 +1,4 @@
-defmodule Volt.TSConfigTest do
+defmodule Volt.JS.TSConfigTest do
   use ExUnit.Case, async: true
 
   @fixture_dir Path.expand("fixtures/tsconfig", __DIR__)
@@ -24,7 +24,7 @@ defmodule Volt.TSConfigTest do
         }
       })
 
-      paths = Volt.TSConfig.read_paths(tsconfig_path())
+      paths = Volt.JS.TSConfig.read_paths(tsconfig_path())
       assert paths["@"] =~ "src"
       assert paths["@components"] =~ "src/components"
     end
@@ -39,7 +39,7 @@ defmodule Volt.TSConfigTest do
         }
       })
 
-      paths = Volt.TSConfig.read_paths(tsconfig_path())
+      paths = Volt.JS.TSConfig.read_paths(tsconfig_path())
       assert paths["@"] =~ "frontend/lib"
     end
 
@@ -50,11 +50,11 @@ defmodule Volt.TSConfigTest do
         }
       })
 
-      assert %{} = Volt.TSConfig.read_paths(tsconfig_path())
+      assert %{} = Volt.JS.TSConfig.read_paths(tsconfig_path())
     end
 
     test "returns empty map when file doesn't exist" do
-      assert %{} = Volt.TSConfig.read_paths(Path.join(@fixture_dir, "missing.json"))
+      assert %{} = Volt.JS.TSConfig.read_paths(Path.join(@fixture_dir, "missing.json"))
     end
 
     test "handles exact paths without globs" do
@@ -66,7 +66,7 @@ defmodule Volt.TSConfigTest do
         }
       })
 
-      paths = Volt.TSConfig.read_paths(tsconfig_path())
+      paths = Volt.JS.TSConfig.read_paths(tsconfig_path())
       assert paths["~utils"] =~ "src/utils"
     end
   end

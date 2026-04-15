@@ -13,6 +13,6 @@ defmodule Mix.Tasks.Volt.Js.Fmt do
 
   @impl true
   def run(_args) do
-    Volt.JsHelpers.run_npx(["oxfmt", "--write", Volt.JsHelpers.ts_dir()])
+    Volt.JS.Helpers.run_npx(["oxfmt", "--write", Volt.JS.Helpers.ts_dir()])
   end
 end

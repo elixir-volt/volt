@@ -44,14 +44,14 @@ defmodule Volt.Pipeline do
         nil -> {source, opts}
       end
 
-    source = Volt.GlobImport.transform(source, Path.dirname(path))
+    source = Volt.JS.GlobImport.transform(source, Path.dirname(path))
     ext = Path.extname(path)
 
     result =
       cond do
         ext == @vue_ext -> compile_vue(path, source, opts)
         ext in Volt.Extensions.js() -> compile_js(path, source, opts)
-        Volt.CSSModules.css_module?(path) -> compile_css_module(path, source, opts)
+        Volt.CSS.Modules.css_module?(path) -> compile_css_module(path, source, opts)
         ext in @css_exts -> compile_css(path, source, opts)
         ext == @json_ext -> compile_json(source)
         true -> {:error, {:unsupported, ext}}
@@ -81,9 +81,9 @@ defmodule Volt.Pipeline do
     filename = Path.basename(path)
 
     with {:ok, imports_rewritten} <-
-           Volt.ImportRewriter.rewrite(compiled.code, filename, rewrite_fn),
+           Volt.JS.ImportRewriter.rewrite(compiled.code, filename, rewrite_fn),
          {:ok, workers_rewritten} <-
-           Volt.WorkerRewriter.rewrite(imports_rewritten, filename, rewrite_fn) do
+           Volt.JS.WorkerRewriter.rewrite(imports_rewritten, filename, rewrite_fn) do
       {:ok, %{compiled | code: workers_rewritten}}
     else
       {:error, _} -> {:ok, compiled}
@@ -154,7 +154,7 @@ defmodule Volt.Pipeline do
 
   defp compile_css_module(path, source, opts) do
     minify = Keyword.get(opts, :minify, false)
-    {:ok, js, scoped_css} = Volt.CSSModules.compile(source, Path.basename(path), minify: minify)
+    {:ok, js, scoped_css} = Volt.CSS.Modules.compile(source, Path.basename(path), minify: minify)
     {:ok, compiled(js, css: scoped_css)}
   end
 

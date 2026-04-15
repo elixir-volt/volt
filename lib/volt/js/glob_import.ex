@@ -1,4 +1,4 @@
-defmodule Volt.GlobImport do
+defmodule Volt.JS.GlobImport do
   @moduledoc """
   Transform `import.meta.glob()` calls into static import maps.
 

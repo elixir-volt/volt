@@ -1,4 +1,4 @@
-defmodule Volt.GlobImportTest do
+defmodule Volt.JS.GlobImportTest do
   use ExUnit.Case, async: true
 
   @fixture_dir Path.expand("fixtures/glob", __DIR__)
@@ -14,7 +14,7 @@ defmodule Volt.GlobImportTest do
   describe "transform/2 lazy" do
     test "expands glob into lazy import map" do
       source = "const modules = import.meta.glob('./pages/*.ts')"
-      result = Volt.GlobImport.transform(source, @fixture_dir)
+      result = Volt.JS.GlobImport.transform(source, @fixture_dir)
 
       assert result =~ "\"./pages/about.ts\":"
       assert result =~ "\"./pages/home.ts\":"
@@ -26,7 +26,7 @@ defmodule Volt.GlobImportTest do
   describe "transform/2 eager" do
     test "expands glob into eager imports" do
       source = "const modules = import.meta.glob('./pages/*.ts', { eager: true })"
-      result = Volt.GlobImport.transform(source, @fixture_dir)
+      result = Volt.JS.GlobImport.transform(source, @fixture_dir)
 
       assert result =~ "import * as __glob_"
       assert result =~ "\"./pages/home.ts\":"
@@ -38,7 +38,7 @@ defmodule Volt.GlobImportTest do
   describe "transform/2 no glob" do
     test "passes through code without glob" do
       source = "const x = 42"
-      assert Volt.GlobImport.transform(source, @fixture_dir) == source
+      assert Volt.JS.GlobImport.transform(source, @fixture_dir) == source
     end
   end
 end
