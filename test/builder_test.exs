@@ -1,7 +1,7 @@
 defmodule Volt.BuilderTest do
   use ExUnit.Case, async: false
 
-  defmodule JsLoaderPlugin do
+  defmodule JSLoaderPlugin do
     @behaviour Volt.Plugin
     def name, do: "js-loader"
     def resolve(_, _), do: nil
@@ -381,7 +381,7 @@ defmodule Volt.BuilderTest do
           outdir: @outdir,
           minify: false,
           sourcemap: false,
-          plugins: [JsLoaderPlugin]
+          plugins: [JSLoaderPlugin]
         )
 
       js = File.read!(result.js.path)
