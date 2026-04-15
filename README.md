@@ -19,6 +19,10 @@ Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https:/
 - **JSON imports** — `import data from './data.json'`
 - **Environment variables** — `.env` files with `import.meta.env.VOLT_*`
 - **Import aliases** — `@/components/Button` → `assets/src/components/Button`
+- **tsconfig.json paths** — reads `compilerOptions.paths` automatically, no config duplication
+- **Source maps** — production `.map` files with optional hidden mode for error tracking
+- **Manual chunks** — control chunk boundaries (e.g. vendor splitting) via config
+- **`import.meta.hot`** — per-module HMR with `accept()`, `dispose()`, and preserved state
 - **Plugin system** — resolve, load, transform, and render_chunk hooks
 - **External modules** — exclude packages from the bundle (e.g. Phoenix JS deps)
 
@@ -39,10 +43,14 @@ All config lives in your standard `config/*.exs` files:
 config :volt,
   entry: "assets/js/app.ts",
   target: :es2020,
+  sourcemap: :hidden,
   external: ~w(phoenix phoenix_html phoenix_live_view),
   aliases: %{
     "@" => "assets/src",
     "@components" => "assets/src/components"
+  },
+  chunks: %{
+    "vendor" => ["vue", "vue-router"]
   },
   plugins: [],
   tailwind: [
@@ -123,6 +131,30 @@ Shared modules between chunks are extracted into common chunks to avoid duplicat
 
 Disable with `code_splitting: false` in config or `--no-code-splitting` flag.
 
+### Manual Chunks
+
+Control chunk boundaries explicitly:
+
+```elixir
+config :volt,
+  chunks: %{
+    "vendor" => ["vue", "vue-router", "pinia"],
+    "ui" => ["assets/src/components"]
+  }
+```
+
+Bare specifiers match package names in `node_modules`. Path patterns match by directory prefix. Manual chunks work alongside automatic dynamic-import splitting.
+
+## Source Maps
+
+Production builds write `.map` files by default:
+
+- `sourcemap: true` — write `.map` files and append `//# sourceMappingURL` comment (default)
+- `sourcemap: :hidden` — write `.map` files without the URL comment (for Sentry, Datadog, etc.)
+- `sourcemap: false` — no source maps
+
+CLI: `--sourcemap hidden` or `--no-sourcemap`.
+
 ## External Modules
 
 Exclude packages that the host page already provides:
@@ -196,6 +228,24 @@ import { Button } from "@/components/Button";
 // resolves to assets/src/components/Button
 ```
 
+### tsconfig.json Paths
+
+Volt automatically reads `compilerOptions.paths` from `tsconfig.json` in the project root:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "phoenix": ["../deps/phoenix"]
+    }
+  }
+}
+```
+
+These are merged into aliases — explicit `aliases` in Volt config take precedence. No need to duplicate path mappings.
+
 ## Plugins
 
 Extend the build pipeline with the `Volt.Plugin` behaviour:
@@ -264,6 +314,30 @@ The file watcher monitors your asset and template directories:
 | `.vue` (style-only change)                   | CSS hot-swap, no page reload                       |
 
 The browser client auto-reconnects on disconnect and shows compilation errors as an overlay.
+
+### `import.meta.hot`
+
+Each module served in dev mode includes an `import.meta.hot` object for granular HMR:
+
+```typescript
+// clock.ts
+let timer: ReturnType<typeof setInterval>;
+
+export function startClock(el: HTMLElement) {
+  const update = () => { el.textContent = new Date().toLocaleTimeString(); };
+  update();
+  timer = setInterval(update, 1000);
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => clearInterval(timer));
+  import.meta.hot.accept();
+}
+```
+
+When a file changes, Volt walks the dependency graph upward to find the nearest module with `import.meta.hot.accept()`. Only that module is re-imported — no full page reload. If no boundary is found, falls back to `location.reload()`.
+
+API: `accept()`, `accept(deps, cb)`, `dispose(cb)`, `data`, `invalidate()`.
 
 ## Mix Tasks
 
