@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2
+
+### Bug Fixes
+
+- Fix infinite label dedup loop when multiple modules import the same
+  dependency (e.g. `@vue/shared` imported by both `@vue/runtime-core`
+  and `@vue/reactivity`) — the second import no longer triggers label
+  disambiguation, preventing mangled paths like `dist/dist/@vue/shared_2`
+
 ## 0.6.1
 
 ### Bug Fixes
