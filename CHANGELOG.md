@@ -61,6 +61,10 @@ config :volt,
 Bare specifiers match package names in `node_modules`. Path patterns match by
 directory prefix. Manual chunks work alongside automatic dynamic-import splitting.
 
+### Bug Fixes
+
+- Fix alias-imported Vue SFCs silently dropping bare npm imports from the bundle
+
 ### Internal
 
 - Reorganize internal modules into `Volt.JS.*`, `Volt.CSS.*`, `Volt.Dev.*` namespaces
