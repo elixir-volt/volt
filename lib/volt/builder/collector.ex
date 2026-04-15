@@ -20,7 +20,8 @@ defmodule Volt.Builder.Collector do
       seen: MapSet.new(),
       dep_map: %{},
       workers: %{},
-      specifier_labels: %{}
+      specifier_labels: %{},
+      used_labels: MapSet.new()
     }
 
     case do_collect(entry_path, label, state) do
@@ -36,10 +37,18 @@ defmodule Volt.Builder.Collector do
     if MapSet.member?(state.seen, abs_path) do
       {:ok, state}
     else
-      case File.read(abs_path) do
+      case read_module(abs_path, state.ctx.plugins) do
         {:ok, source} -> process_source(abs_path, label, source, state)
         {:error, reason} -> {:error, {:file_read_error, abs_path, reason}}
       end
+    end
+  end
+
+  defp read_module(path, plugins) do
+    case Volt.PluginRunner.load(plugins, path) do
+      {:ok, code, _content_type} -> {:ok, code}
+      {:ok, code} -> {:ok, code}
+      nil -> File.read(path)
     end
   end
 
@@ -82,7 +91,7 @@ defmodule Volt.Builder.Collector do
         collect_imports(rest, importer, state)
 
       {:ok, resolved_path, original_specifier} ->
-        label = module_label(original_specifier, resolved_path)
+        {label, state} = unique_label(original_specifier, resolved_path, state)
 
         state = %{
           state
@@ -226,11 +235,20 @@ defmodule Volt.Builder.Collector do
     {:ok, resolved_path, specifier}
   end
 
-  defp module_label(specifier, resolved_path) do
-    if String.contains?(resolved_path, "/node_modules/") do
-      specifier
+  defp unique_label(specifier, resolved_path, state) do
+    base_label =
+      if String.contains?(resolved_path, "/node_modules/") do
+        specifier
+      else
+        Path.basename(resolved_path)
+      end
+
+    if MapSet.member?(state.used_labels, base_label) do
+      parent = resolved_path |> Path.dirname() |> Path.basename()
+      label = parent <> "/" <> base_label
+      {label, %{state | used_labels: MapSet.put(state.used_labels, label)}}
     else
-      Path.basename(resolved_path)
+      {base_label, %{state | used_labels: MapSet.put(state.used_labels, base_label)}}
     end
   end
 

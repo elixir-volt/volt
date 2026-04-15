@@ -37,11 +37,11 @@ defmodule Volt.Pipeline do
   def compile(path, source, opts \\ []) do
     plugins = Keyword.get(opts, :plugins, [])
 
-    {source, opts} =
+    {source, content_type} =
       case Volt.PluginRunner.load(plugins, path) do
-        {:ok, code, _content_type} -> {code, opts}
-        {:ok, code} -> {code, opts}
-        nil -> {source, opts}
+        {:ok, code, ct} -> {code, ct}
+        {:ok, code} -> {code, nil}
+        nil -> {source, nil}
       end
 
     source = Volt.JS.GlobImport.transform(source, Path.dirname(path))
@@ -49,12 +49,26 @@ defmodule Volt.Pipeline do
 
     result =
       cond do
-        ext == @vue_ext -> compile_vue(path, source, opts)
-        ext in Volt.JS.Extensions.js() -> compile_js(path, source, opts)
-        Volt.CSS.Modules.css_module?(path) -> compile_css_module(path, source, opts)
-        ext in @css_exts -> compile_css(path, source, opts)
-        ext == @json_ext -> compile_json(source)
-        true -> {:error, {:unsupported, ext}}
+        content_type in ["application/javascript", "text/javascript"] ->
+          compile_js(path, source, opts)
+
+        ext == @vue_ext ->
+          compile_vue(path, source, opts)
+
+        ext in Volt.JS.Extensions.js() ->
+          compile_js(path, source, opts)
+
+        Volt.CSS.Modules.css_module?(path) ->
+          compile_css_module(path, source, opts)
+
+        ext in @css_exts ->
+          compile_css(path, source, opts)
+
+        ext == @json_ext ->
+          compile_json(source)
+
+        true ->
+          {:error, {:unsupported, ext}}
       end
 
     with {:ok, compiled} <- result do

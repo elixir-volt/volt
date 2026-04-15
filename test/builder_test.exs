@@ -343,5 +343,94 @@ defmodule Volt.BuilderTest do
       js = File.read!(result.js.path)
       assert js =~ "fake-widget"
     end
+
+    test "plugin content_type overrides file extension dispatch" do
+      defmodule JsLoaderPlugin do
+        @behaviour Volt.Plugin
+        def name, do: "js-loader"
+        def resolve(_, _), do: nil
+
+        def load(path) do
+          if String.ends_with?(path, ".custom") and File.regular?(path) do
+            {:ok, File.read!(path), "application/javascript"}
+          end
+        end
+      end
+
+      File.write!(Path.join(@fixture_dir, "src/data.custom"), """
+      export const value = 42;
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/plugin_app.ts"), """
+      import { value } from './data.custom'
+      console.log(value)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/plugin_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          plugins: [JsLoaderPlugin]
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "42"
+    end
+
+    test "virtual modules resolved and loaded via plugins" do
+      defmodule VirtualModPlugin do
+        @behaviour Volt.Plugin
+        def name, do: "virtual-mod"
+        def resolve("my-virtual", _), do: {:ok, "virtual:my-virtual"}
+        def resolve(_, _), do: nil
+        def load("virtual:my-virtual"), do: {:ok, "export default 99;", "application/javascript"}
+        def load(_), do: nil
+      end
+
+      File.write!(Path.join(@fixture_dir, "src/virtual_app.ts"), """
+      import val from 'my-virtual'
+      console.log(val)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/virtual_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          plugins: [VirtualModPlugin]
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "99"
+    end
+
+    test "same-name files in different directories get unique labels" do
+      File.mkdir_p!(Path.join(@fixture_dir, "src/a"))
+      File.mkdir_p!(Path.join(@fixture_dir, "src/b"))
+
+      File.write!(Path.join(@fixture_dir, "src/a/index.js"), "export const a = 1;")
+      File.write!(Path.join(@fixture_dir, "src/b/index.js"), "export const b = 2;")
+
+      File.write!(Path.join(@fixture_dir, "src/dup_app.ts"), """
+      import { a } from './a/index.js'
+      import { b } from './b/index.js'
+      console.log(a, b)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/dup_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "1"
+      assert js =~ "2"
+    end
   end
 end
