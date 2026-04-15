@@ -138,23 +138,23 @@ defmodule Volt.Builder.Collector do
       {:ok, ast} ->
         {_ast, acc} =
           OXC.postwalk(ast, %{imports: [], workers: []}, fn
-            %{type: "ImportDeclaration", source: %{value: spec}} = node, acc ->
+            %{type: :import_declaration, source: %{value: spec}} = node, acc ->
               {node, update_in(acc.imports, &[{:static, spec} | &1])}
 
-            %{type: "ExportNamedDeclaration", source: %{value: spec}} = node, acc
+            %{type: :export_named_declaration, source: %{value: spec}} = node, acc
             when is_binary(spec) ->
               {node, update_in(acc.imports, &[{:static, spec} | &1])}
 
-            %{type: "ExportAllDeclaration", source: %{value: spec}} = node, acc ->
+            %{type: :export_all_declaration, source: %{value: spec}} = node, acc ->
               {node, update_in(acc.imports, &[{:static, spec} | &1])}
 
-            %{type: "ImportExpression", source: %{type: "Literal", value: spec}} = node, acc
+            %{type: :import_expression, source: %{type: :literal, value: spec}} = node, acc
             when is_binary(spec) ->
               {node, update_in(acc.imports, &[{:dynamic, spec} | &1])}
 
             %{
-              type: "NewExpression",
-              callee: %{type: "Identifier", name: worker_type},
+              type: :new_expression,
+              callee: %{type: :identifier, name: worker_type},
               arguments: [first_arg | _]
             } = node,
             acc

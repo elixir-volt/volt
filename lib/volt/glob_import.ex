@@ -47,10 +47,10 @@ defmodule Volt.GlobImport do
     {_ast, calls} =
       OXC.postwalk(ast, [], fn
         %{
-          type: "CallExpression",
+          type: :call_expression,
           callee: %{
-            type: "MemberExpression",
-            object: %{type: "MetaProperty"},
+            type: :member_expression,
+            object: %{type: :meta_property},
             property: %{name: "glob"}
           },
           arguments: args
@@ -71,10 +71,10 @@ defmodule Volt.GlobImport do
     Enum.sort_by(calls, & &1.start)
   end
 
-  defp parse_glob_args([%{type: "Literal", value: pattern} | rest]) when is_binary(pattern) do
+  defp parse_glob_args([%{type: :literal, value: pattern} | rest]) when is_binary(pattern) do
     eager? =
       case rest do
-        [%{type: "ObjectExpression", properties: props} | _] ->
+        [%{type: :object_expression, properties: props} | _] ->
           Enum.any?(props, fn
             %{key: %{name: "eager"}, value: %{value: true}} -> true
             _ -> false

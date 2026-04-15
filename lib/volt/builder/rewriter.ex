@@ -69,7 +69,7 @@ defmodule Volt.Builder.Rewriter do
   defp collect_dynamic_import_patches(ast, module_to_chunk, chunk_url_map) do
     {_ast, patches} =
       OXC.postwalk(ast, [], fn
-        %{type: "ImportExpression", source: %{type: "Literal", value: spec, start: s, end: e}} =
+        %{type: :import_expression, source: %{type: :literal, value: spec, start: s, end: e}} =
             node,
         patches
         when is_binary(spec) ->
@@ -89,8 +89,8 @@ defmodule Volt.Builder.Rewriter do
     {_ast, patches} =
       OXC.postwalk(ast, [], fn
         %{
-          type: "NewExpression",
-          callee: %{type: "Identifier", name: worker_type},
+          type: :new_expression,
+          callee: %{type: :identifier, name: worker_type},
           arguments: [first_arg | _]
         } = node,
         patches
@@ -148,7 +148,7 @@ defmodule Volt.Builder.Rewriter do
       {:ok, ast} ->
         {_ast, result} =
           OXC.postwalk(ast, :error, fn
-            %{type: "ArrowFunctionExpression", body: %{type: "FunctionBody", start: start}} =
+            %{type: :arrow_function_expression, body: %{type: :function_body, start: start}} =
                 node,
             :error ->
               {node, {:ok, start + 1}}

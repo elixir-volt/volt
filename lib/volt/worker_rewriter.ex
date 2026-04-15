@@ -17,11 +17,11 @@ defmodule Volt.WorkerRewriter do
   @doc false
   @spec extract_specifier(map()) :: {:ok, String.t(), non_neg_integer(), non_neg_integer()} | nil
   def extract_specifier(%{
-        type: "NewExpression",
-        callee: %{type: "Identifier", name: "URL"},
+        type: :new_expression,
+        callee: %{type: :identifier, name: "URL"},
         arguments: [
           source_node,
-          %{type: "MemberExpression", property: %{type: "Identifier", name: "url"}} | _
+          %{type: :member_expression, property: %{type: :identifier, name: "url"}} | _
         ]
       }) do
     extract_string_value(source_node)
@@ -33,7 +33,7 @@ defmodule Volt.WorkerRewriter do
        when is_binary(spec) and is_integer(s) and is_integer(e),
        do: {:ok, spec, s, e}
 
-  defp extract_string_value(%{type: "StringLiteral", value: spec, start: s, end: e})
+  defp extract_string_value(%{type: :string_literal, value: spec, start: s, end: e})
        when is_binary(spec) and is_integer(s) and is_integer(e),
        do: {:ok, spec, s, e}
 
@@ -43,8 +43,8 @@ defmodule Volt.WorkerRewriter do
     {_ast, patches} =
       OXC.postwalk(ast, [], fn
         %{
-          type: "NewExpression",
-          callee: %{type: "Identifier", name: worker_type},
+          type: :new_expression,
+          callee: %{type: :identifier, name: worker_type},
           arguments: [first_arg | _]
         } = node,
         patches

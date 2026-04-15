@@ -32,10 +32,10 @@ defmodule Volt.MixProject do
 
   defp deps do
     [
-      {:oxc, "~> 0.6.2"},
+      {:oxc, "~> 0.7.0"},
       {:vize, "~> 0.8.0"},
       {:oxide_ex, "~> 0.2.0"},
-      {:quickbeam, "~> 0.9.0"},
+      {:quickbeam, "~> 0.10.0"},
       {:dotenvy, "~> 1.1"},
       {:floki, "~> 0.38"},
       {:plug, "~> 1.16"},

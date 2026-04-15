@@ -245,7 +245,7 @@ defmodule Volt.Builder do
   end
 
   defp rewrite_bare_imports(code, _label, label_map) do
-    case Volt.ImportRewriter.rewrite(code, "module.js", fn specifier ->
+    case OXC.rewrite_specifiers(code, "module.js", fn specifier ->
            case Map.fetch(label_map, specifier) do
              {:ok, new_label} -> {:rewrite, "./" <> new_label}
              :error -> :keep

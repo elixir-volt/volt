@@ -74,17 +74,17 @@ defmodule Volt.ImportRewriter do
   defp collect_import_patches(ast, rewrite_fn) do
     {_ast, patches} =
       OXC.postwalk(ast, [], fn
-        %{type: "ImportDeclaration", source: source_node} = node, patches ->
+        %{type: :import_declaration, source: source_node} = node, patches ->
           {node, maybe_patch(source_node, rewrite_fn, patches)}
 
-        %{type: "ExportNamedDeclaration", source: source_node} = node, patches
+        %{type: :export_named_declaration, source: source_node} = node, patches
         when is_map(source_node) ->
           {node, maybe_patch(source_node, rewrite_fn, patches)}
 
-        %{type: "ExportAllDeclaration", source: source_node} = node, patches ->
+        %{type: :export_all_declaration, source: source_node} = node, patches ->
           {node, maybe_patch(source_node, rewrite_fn, patches)}
 
-        %{type: "ImportExpression", source: %{type: "Literal", value: spec} = source_node} = node,
+        %{type: :import_expression, source: %{type: :literal, value: spec} = source_node} = node,
         patches
         when is_binary(spec) ->
           {node, maybe_patch(source_node, rewrite_fn, patches)}

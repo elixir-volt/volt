@@ -55,7 +55,7 @@ defmodule Volt.Builder.Externals do
         {_ast, patches} =
           OXC.postwalk(ast, [], fn
             %{
-              type: "ImportDeclaration",
+              type: :import_declaration,
               source: %{value: spec},
               start: start_pos,
               end: end_pos,
@@ -88,7 +88,7 @@ defmodule Volt.Builder.Externals do
       {:ok, ast} ->
         {_ast, imports} =
           OXC.postwalk(ast, [], fn
-            %{type: "ImportDeclaration", source: %{value: spec}, specifiers: specifiers} = node,
+            %{type: :import_declaration, source: %{value: spec}, specifiers: specifiers} = node,
             acc ->
               if MapSet.member?(external_set, spec) do
                 names = Enum.map(specifiers, &classify_specifier/1)
@@ -109,18 +109,18 @@ defmodule Volt.Builder.Externals do
   end
 
   defp classify_specifier(%{
-         type: "ImportSpecifier",
+         type: :import_specifier,
          imported: %{name: name},
          local: %{name: local}
        }) do
     if name == local, do: {:named, name}, else: {:named, name, local}
   end
 
-  defp classify_specifier(%{type: "ImportDefaultSpecifier", local: %{name: name}}) do
+  defp classify_specifier(%{type: :import_default_specifier, local: %{name: name}}) do
     {:default, name}
   end
 
-  defp classify_specifier(%{type: "ImportNamespaceSpecifier", local: %{name: name}}) do
+  defp classify_specifier(%{type: :import_namespace_specifier, local: %{name: name}}) do
     {:namespace, name}
   end
 

@@ -116,20 +116,20 @@ defmodule Volt.Tailwind.Loader do
     {_ast, {patches, paths}} =
       OXC.postwalk(ast, {[], []}, fn
         %{type: type, source: %{value: specifier, start: s, end: e}}, acc
-        when type in ["ImportDeclaration", "ExportAllDeclaration", "ExportNamedDeclaration"] ->
+        when type in [:import_declaration, :export_all_declaration, :export_named_declaration] ->
           {nil, accumulate_patch(specifier, s, e, abs_path, acc)}
 
         %{
-          type: "ImportExpression",
-          source: %{type: "Literal", value: specifier, start: s, end: e}
+          type: :import_expression,
+          source: %{type: :literal, value: specifier, start: s, end: e}
         } = node,
         acc
         when is_binary(specifier) ->
           {node, accumulate_patch(specifier, s, e, abs_path, acc)}
 
         %{
-          type: "CallExpression",
-          callee: %{type: "Identifier", name: "require"},
+          type: :call_expression,
+          callee: %{type: :identifier, name: "require"},
           arguments: [%{value: specifier, start: s, end: e}]
         },
         acc
