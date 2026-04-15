@@ -12,13 +12,27 @@ defmodule Volt.ChunkGraph do
     * `:entry` — the main bundle, loaded synchronously
     * `:async` — loaded on demand via dynamic import
     * `:common` — shared code extracted to avoid duplication
+    * `:manual` — user-defined chunk via `chunks` config
+
+  ## Manual chunks
+
+  Users can control chunk boundaries via config:
+
+      config :volt,
+        chunks: %{
+          "vendor" => ["vue", "vue-router", "pinia"],
+          "ui" => ["assets/src/components"]
+        }
+
+  Patterns match module paths: bare specifiers match package names in
+  `node_modules`, while path patterns match against the full module path.
   """
 
   defstruct chunks: %{}, module_to_chunk: %{}
 
   @type chunk :: %{
           id: String.t(),
-          type: :entry | :async | :common,
+          type: :entry | :async | :common | :manual,
           modules: [String.t()],
           imports: [String.t()]
         }
@@ -29,10 +43,13 @@ defmodule Volt.ChunkGraph do
   `modules` is a list of `{abs_path, label, source}` tuples in dependency order.
   `dep_map` maps `abs_path => %{static: [abs_path], dynamic: [abs_path]}`.
   `entry_path` is the absolute path of the entry file.
+
+  ## Options
+
+    * `:manual_chunks` — map of chunk name to list of patterns,
+      e.g. `%{"vendor" => ["vue", "vue-router"]}`
   """
-  @spec build(String.t(), [{String.t(), String.t(), String.t()}], %{String.t() => map()}) ::
-          %__MODULE__{}
-  def build(entry_path, modules, dep_map) do
+  def build(entry_path, modules, dep_map, opts \\ []) do
     module_set = MapSet.new(modules, fn {path, _, _} -> path end)
 
     static_reachable = reachable_static(entry_path, dep_map, module_set)
@@ -125,12 +142,88 @@ defmodule Volt.ChunkGraph do
         {Map.put(ch, id, chunk), m2c}
       end)
 
+    manual_chunks = Keyword.get(opts, :manual_chunks, %{})
+    {chunks, module_to_chunk} = apply_manual_chunks(chunks, module_to_chunk, manual_chunks, order)
+
     module_to_chunk =
       Enum.reduce(Map.values(chunks), module_to_chunk, fn chunk, acc ->
         Enum.reduce(chunk.modules, acc, fn mod, a -> Map.put_new(a, mod, chunk.id) end)
       end)
 
     %__MODULE__{chunks: chunks, module_to_chunk: module_to_chunk}
+  end
+
+  defp apply_manual_chunks(chunks, module_to_chunk, manual_chunks, _order)
+       when map_size(manual_chunks) == 0 do
+    {chunks, module_to_chunk}
+  end
+
+  defp apply_manual_chunks(chunks, module_to_chunk, manual_chunks, order) do
+    all_modules =
+      chunks
+      |> Map.values()
+      |> Enum.flat_map(& &1.modules)
+
+    assignments =
+      Enum.reduce(all_modules, %{}, fn mod_path, acc ->
+        case find_manual_chunk(mod_path, manual_chunks) do
+          nil -> acc
+          chunk_name -> Map.update(acc, chunk_name, [mod_path], &[mod_path | &1])
+        end
+      end)
+
+    Enum.reduce(assignments, {chunks, module_to_chunk}, fn {chunk_name, mod_paths}, {ch, m2c} ->
+      mod_set = MapSet.new(mod_paths)
+
+      ch =
+        Map.new(ch, fn {id, chunk} ->
+          {id, %{chunk | modules: Enum.reject(chunk.modules, &MapSet.member?(mod_set, &1))}}
+        end)
+
+      ch = Map.reject(ch, fn {id, chunk} -> chunk.modules == [] and id != "entry" end)
+
+      entry_imports = (ch["entry"].imports ++ [chunk_name]) |> Enum.uniq()
+      ch = put_in(ch["entry"].imports, entry_imports)
+
+      manual = %{
+        id: chunk_name,
+        type: :manual,
+        modules: order.(MapSet.new(mod_paths)),
+        imports: []
+      }
+
+      m2c =
+        Enum.reduce(mod_paths, m2c, fn mod, a ->
+          Map.put(a, mod, chunk_name)
+        end)
+
+      {Map.put(ch, chunk_name, manual), m2c}
+    end)
+  end
+
+  defp find_manual_chunk(mod_path, manual_chunks) do
+    Enum.find_value(manual_chunks, fn {chunk_name, patterns} ->
+      if Enum.any?(patterns, &matches_pattern?(mod_path, &1)) do
+        chunk_name
+      end
+    end)
+  end
+
+  defp matches_pattern?(mod_path, pattern) do
+    if path_pattern?(pattern) do
+      expanded = Path.expand(pattern)
+      String.starts_with?(mod_path, expanded <> "/") or mod_path == expanded
+    else
+      String.contains?(mod_path, "/node_modules/#{pattern}/") or
+        String.ends_with?(mod_path, "/node_modules/#{pattern}")
+    end
+  end
+
+  defp path_pattern?(pattern) do
+    String.starts_with?(pattern, "/") or
+      String.starts_with?(pattern, "./") or
+      String.starts_with?(pattern, "../") or
+      String.contains?(pattern, "/")
   end
 
   defp reachable_static(start, dep_map, module_set) do

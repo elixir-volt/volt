@@ -275,5 +275,32 @@ defmodule Volt.BuilderTest do
       js = File.read!(result.js.path)
       assert js =~ "const { ref } = MyVue;"
     end
+
+    test "manual chunks split modules into separate files" do
+      lib_dir = Path.join(@fixture_dir, "src/lib")
+      File.mkdir_p!(lib_dir)
+
+      File.write!(Path.join(lib_dir, "helpers.ts"), """
+      export function helper() { return 'help' }
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/chunked.ts"), """
+      import { helper } from './lib/helpers'
+      console.log(helper())
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/chunked.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          chunks: %{"lib" => [Path.join(@fixture_dir, "src/lib")]}
+        )
+
+      assert result.chunks != nil
+      chunk_files = Enum.map(result.chunks, &Path.basename(&1.path))
+      assert Enum.any?(chunk_files, &(&1 =~ "lib"))
+    end
   end
 end

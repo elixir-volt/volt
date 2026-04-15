@@ -101,6 +101,7 @@ defmodule Mix.Tasks.Volt.Build do
       hash: Keyword.get(parsed, :hash, config.hash),
       mode: Keyword.get(parsed, :mode) || to_string(config.mode),
       code_splitting: Keyword.get(parsed, :code_splitting, config.code_splitting),
+      chunks: config.chunks,
       name: parsed[:name]
     ]
 

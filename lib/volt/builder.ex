@@ -35,6 +35,9 @@ defmodule Volt.Builder do
     * `:plugins` — list of `Volt.Plugin` modules
     * `:mode` — build mode for env variables (default: `"production"`)
     * `:code_splitting` — split dynamic imports into separate chunks (default: `true`)
+    * `:chunks` — manual chunk definitions, map of chunk name to list of patterns:
+
+          chunks: %{"vendor" => ["vue", "vue-router"], "ui" => ["assets/src/components"]}
     * `:external` — specifiers to exclude from the bundle and access as globals.
       Accepts a list (global name auto-derived) or a map of `specifier => global_name`:
 
@@ -54,6 +57,7 @@ defmodule Volt.Builder do
     aliases = Keyword.get(opts, :aliases, %{})
     plugins = Keyword.get(opts, :plugins, [])
     code_splitting = Keyword.get(opts, :code_splitting, true)
+    chunks = Keyword.get(opts, :chunks, %{})
     external_raw = Keyword.get(opts, :external, [])
     {external_set, external_globals} = normalize_external(external_raw)
 
@@ -92,7 +96,8 @@ defmodule Volt.Builder do
       hash: hash,
       bundle_opts: bundle_opts,
       code_splitting: code_splitting,
-      sourcemap_hidden: sourcemap_opt == :hidden
+      sourcemap_hidden: sourcemap_opt == :hidden,
+      chunks: chunks
     }
 
     results =
@@ -136,10 +141,14 @@ defmodule Volt.Builder do
         hash: hash,
         bundle_opts: bundle_opts,
         ctx: output_ctx,
-        sourcemap_hidden: build_ctx.sourcemap_hidden
+        sourcemap_hidden: build_ctx.sourcemap_hidden,
+        chunks: build_ctx.chunks
       }
 
-      if code_splitting and has_dynamic_imports?(dep_map) do
+      use_chunks = code_splitting and
+        (has_dynamic_imports?(dep_map) or build_ctx.chunks != %{})
+
+      if use_chunks do
         Output.build_chunks(entry, name, compiled, {modules, dep_map}, out)
       else
         Output.build_single(entry, name, compiled, out)

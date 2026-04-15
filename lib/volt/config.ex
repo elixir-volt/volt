@@ -37,6 +37,19 @@ defmodule Volt.Config do
     * `:hidden` — write `.map` files but omit the URL comment (for error tracking services)
     * `false` — no source maps
 
+  ## Manual chunks
+
+  The `:chunks` option controls manual chunk splitting:
+
+      config :volt,
+        chunks: %{
+          "vendor" => ["vue", "vue-router", "pinia"],
+          "ui" => ["assets/src/components"]
+        }
+
+  Bare specifiers match package names in node_modules. Path patterns match
+  against the full module path.
+
   ## tsconfig.json paths
 
   Volt automatically reads `compilerOptions.paths` from `tsconfig.json` in
@@ -55,6 +68,7 @@ defmodule Volt.Config do
     mode: :production,
     external: [],
     aliases: %{},
+    chunks: %{},
     plugins: [],
     resolve_dirs: [],
     root: "assets",

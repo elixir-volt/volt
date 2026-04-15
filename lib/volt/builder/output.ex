@@ -45,10 +45,10 @@ defmodule Volt.Builder.Output do
   @doc "Bundle modules into separate chunks based on the chunk graph."
   def build_chunks(entry, name, {js_files, css_parts}, {modules, dep_map}, build_ctx) do
     %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: ctx,
-      sourcemap_hidden: sourcemap_hidden} = build_ctx
+      sourcemap_hidden: sourcemap_hidden, chunks: manual_chunks} = build_ctx
     File.mkdir_p!(outdir)
 
-    graph = Volt.ChunkGraph.build(entry, modules, dep_map)
+    graph = Volt.ChunkGraph.build(entry, modules, dep_map, manual_chunks: manual_chunks)
     js_map = Map.new(js_files)
 
     chunk_bundles = build_chunk_bundles(graph.chunks, js_map, bundle_opts, ctx)
