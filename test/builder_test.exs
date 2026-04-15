@@ -432,5 +432,61 @@ defmodule Volt.BuilderTest do
       assert js =~ "1"
       assert js =~ "2"
     end
+
+    test "shared dependencies imported by multiple modules are not duplicated" do
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/shared-lib"))
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/lib-a"))
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/lib-b"))
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/shared-lib/package.json"),
+        ~s({"name":"shared-lib","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/shared-lib/index.js"),
+        "export const shared = 'shared-value';\n"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/lib-a/package.json"),
+        ~s({"name":"lib-a","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/lib-a/index.js"),
+        "import { shared } from 'shared-lib';\nexport const a = 'a-' + shared;\n"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/lib-b/package.json"),
+        ~s({"name":"lib-b","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/lib-b/index.js"),
+        "import { shared } from 'shared-lib';\nexport const b = 'b-' + shared;\n"
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/shared_app.ts"), """
+      import { a } from 'lib-a'
+      import { b } from 'lib-b'
+      console.log(a, b)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/shared_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          node_modules: Path.join(@fixture_dir, "node_modules")
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "shared-value"
+      assert js =~ "a-"
+      assert js =~ "b-"
+    end
   end
 end

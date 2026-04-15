@@ -102,11 +102,17 @@ defmodule Volt.Builder.Collector do
         collect_imports(rest, importer, state)
 
       {:ok, resolved_path, original_specifier} ->
-        {label, state} = unique_label(original_specifier, resolved_path, state)
+        {label, state} =
+          if MapSet.member?(state.seen, resolved_path) do
+            existing_label = state.specifier_labels[original_specifier]
+            {existing_label || Path.basename(resolved_path), state}
+          else
+            unique_label(original_specifier, resolved_path, state)
+          end
 
         state = %{
           state
-          | specifier_labels: Map.put(state.specifier_labels, original_specifier, label),
+          | specifier_labels: Map.put_new(state.specifier_labels, original_specifier, label),
             dep_map:
               resolve_dep_map_specifier(
                 state.dep_map,
