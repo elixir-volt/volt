@@ -1,15 +1,15 @@
-defmodule Volt.ResolverTest do
+defmodule Volt.JS.ResolverTest do
   use ExUnit.Case, async: true
 
   describe "resolve/2" do
     test "resolves exact alias" do
       aliases = %{"@" => "/app/assets/src"}
-      assert {:ok, "/app/assets/src"} = Volt.Resolver.resolve("@", aliases)
+      assert {:ok, "/app/assets/src"} = Volt.JS.Resolver.resolve("@", aliases)
     end
 
     test "resolves alias with subpath" do
       aliases = %{"@" => "/app/assets/src"}
-      {:ok, result} = Volt.Resolver.resolve("@/utils/foo", aliases)
+      {:ok, result} = Volt.JS.Resolver.resolve("@/utils/foo", aliases)
       assert result =~ "assets/src/utils/foo"
     end
 
@@ -19,18 +19,18 @@ defmodule Volt.ResolverTest do
         "@components" => "/app/src/components"
       }
 
-      {:ok, result} = Volt.Resolver.resolve("@components/Button", aliases)
+      {:ok, result} = Volt.JS.Resolver.resolve("@components/Button", aliases)
       assert result =~ "components/Button"
       refute result =~ "src/components/Button" and result =~ "src/@components"
     end
 
     test "returns :pass for no match" do
       aliases = %{"@" => "/app/src"}
-      assert :pass = Volt.Resolver.resolve("vue", aliases)
+      assert :pass = Volt.JS.Resolver.resolve("vue", aliases)
     end
 
     test "returns :pass for empty aliases" do
-      assert :pass = Volt.Resolver.resolve("anything", %{})
+      assert :pass = Volt.JS.Resolver.resolve("anything", %{})
     end
   end
 end

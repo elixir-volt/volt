@@ -15,10 +15,10 @@ defmodule Volt.Builder.Resolver do
           resolved
 
         nil ->
-          case Volt.Resolver.resolve(specifier, ctx.aliases) do
+          case Volt.JS.Resolver.resolve(specifier, ctx.aliases) do
             {:ok, aliased} ->
               NPM.PackageResolver.try_resolve(Path.expand(aliased),
-                extensions: Volt.Extensions.resolvable()
+                extensions: Volt.JS.Extensions.resolvable()
               )
 
             :pass ->
@@ -38,7 +38,7 @@ defmodule Volt.Builder.Resolver do
       NPM.PackageResolver.relative?(specifier) ->
         base = Path.expand(specifier, Path.dirname(importer))
 
-        case NPM.PackageResolver.try_resolve(base, extensions: Volt.Extensions.resolvable()) do
+        case NPM.PackageResolver.try_resolve(base, extensions: Volt.JS.Extensions.resolvable()) do
           {:ok, _} = ok -> ok
           :error -> {:error, {:not_found, base}}
         end
@@ -63,7 +63,7 @@ defmodule Volt.Builder.Resolver do
       if File.dir?(package_dir) do
         case NPM.PackageResolver.resolve_entry(package_dir,
                subpath: subpath_for(specifier),
-               extensions: Volt.Extensions.resolvable()
+               extensions: Volt.JS.Extensions.resolvable()
              ) do
           {:ok, _} = ok -> ok
           :error -> nil

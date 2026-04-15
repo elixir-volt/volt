@@ -50,7 +50,7 @@ defmodule Volt.Pipeline do
     result =
       cond do
         ext == @vue_ext -> compile_vue(path, source, opts)
-        ext in Volt.Extensions.js() -> compile_js(path, source, opts)
+        ext in Volt.JS.Extensions.js() -> compile_js(path, source, opts)
         Volt.CSS.Modules.css_module?(path) -> compile_css_module(path, source, opts)
         ext in @css_exts -> compile_css(path, source, opts)
         ext == @json_ext -> compile_json(source)

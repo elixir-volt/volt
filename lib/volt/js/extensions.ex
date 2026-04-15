@@ -1,4 +1,4 @@
-defmodule Volt.Extensions do
+defmodule Volt.JS.Extensions do
   @moduledoc false
 
   @js ~w(.ts .tsx .js .jsx .mts .mjs)

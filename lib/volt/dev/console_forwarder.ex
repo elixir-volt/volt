@@ -1,4 +1,4 @@
-defmodule Volt.DevConsoleForwarder do
+defmodule Volt.Dev.ConsoleForwarder do
   @moduledoc false
 
   require Logger

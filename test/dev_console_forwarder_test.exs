@@ -1,9 +1,9 @@
-defmodule Volt.DevConsoleForwarderTest do
+defmodule Volt.Dev.ConsoleForwarderTest do
   use ExUnit.Case, async: true
   import ExUnit.CaptureLog
 
   test "injects forwarding preamble" do
-    code = Volt.DevConsoleForwarder.inject("console.log('ok')")
+    code = Volt.Dev.ConsoleForwarder.inject("console.log('ok')")
     assert code =~ "__voltConsoleForwarderInstalled"
     assert code =~ "console.log('ok')"
   end
@@ -11,7 +11,7 @@ defmodule Volt.DevConsoleForwarderTest do
   test "logs browser payloads" do
     log =
       capture_log(fn ->
-        Volt.DevConsoleForwarder.log(%{
+        Volt.Dev.ConsoleForwarder.log(%{
           "level" => "error",
           "source" => "/assets/app.js",
           "args" => ["boom", %{"code" => 500}]

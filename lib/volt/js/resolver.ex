@@ -1,4 +1,4 @@
-defmodule Volt.Resolver do
+defmodule Volt.JS.Resolver do
   @moduledoc """
   Import specifier resolution with alias support.
 

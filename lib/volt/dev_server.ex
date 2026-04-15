@@ -68,7 +68,7 @@ defmodule Volt.DevServer do
 
   def call(%Plug.Conn{method: "POST", request_path: "/@volt/console"} = conn, _config) do
     {:ok, body, conn} = Plug.Conn.read_body(conn)
-    Volt.DevConsoleForwarder.log(body)
+    Volt.Dev.ConsoleForwarder.log(body)
 
     conn
     |> Plug.Conn.send_resp(204, "")
@@ -130,7 +130,7 @@ defmodule Volt.DevServer do
     end
   end
 
-  defp compilable?(path), do: Path.extname(path) in Volt.Extensions.compilable()
+  defp compilable?(path), do: Path.extname(path) in Volt.JS.Extensions.compilable()
 
   defp serve_compiled(conn, file_path, relative, config) do
     mtime = Volt.Format.file_mtime(file_path)
@@ -227,7 +227,7 @@ defmodule Volt.DevServer do
         rewrite_relative(specifier, importer, config)
 
       true ->
-        case Volt.Resolver.resolve(specifier, config.aliases) do
+        case Volt.JS.Resolver.resolve(specifier, config.aliases) do
           {:ok, resolved} -> rewrite_resolved_path(resolved, config)
           :pass -> rewrite_bare(specifier)
         end
@@ -265,7 +265,7 @@ defmodule Volt.DevServer do
       path
     else
       case NPM.PackageResolver.try_resolve(path,
-             extensions: Volt.Extensions.resolvable()
+             extensions: Volt.JS.Extensions.resolvable()
            ) do
         {:ok, resolved} -> resolved
         :error -> path
@@ -291,7 +291,7 @@ defmodule Volt.DevServer do
   # ── Helpers ───────────────────────────────────────────────────────
 
   defp maybe_inject_dev_console_forwarder(code, "application/javascript") do
-    Volt.DevConsoleForwarder.inject(code)
+    Volt.Dev.ConsoleForwarder.inject(code)
   end
 
   defp maybe_inject_dev_console_forwarder(code, _content_type), do: code

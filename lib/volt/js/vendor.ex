@@ -134,7 +134,7 @@ defmodule Volt.JS.Vendor do
 
     NPM.PackageResolver.resolve_entry(package_dir,
       subpath: subpath || ".",
-      extensions: Volt.Extensions.resolvable()
+      extensions: Volt.JS.Extensions.resolvable()
     )
   end
 

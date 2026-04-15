@@ -1,7 +1,11 @@
 defmodule Volt.JS.Asset do
   @moduledoc false
 
-  @base_dir Path.expand("../../../priv/ts", __DIR__)
+  @priv_ts Application.app_dir(:volt, "priv/ts")
+
+  @doc "Path to the priv/ts directory containing bundled TypeScript assets."
+  @spec priv_dir :: String.t()
+  def priv_dir, do: @priv_ts
 
   @spec read!(String.t()) :: String.t()
   def read!(filename) do
@@ -31,7 +35,7 @@ defmodule Volt.JS.Asset do
   end
 
   @spec path_for(String.t()) :: String.t()
-  def path_for(filename), do: Path.join(@base_dir, filename)
+  def path_for(filename), do: Path.join(@priv_ts, filename)
 
   # OXC.transform returns a plain string with sourcemap: false,
   # or %{code: string, sourcemap: string} with sourcemap: true.

@@ -1,9 +1,7 @@
 defmodule Volt.JS.Helpers do
   @moduledoc false
 
-  @ts_dir Path.expand("priv/ts")
-
-  def ts_dir, do: @ts_dir
+  def ts_dir, do: Volt.JS.Asset.priv_dir()
 
   def run_npx(args) do
     case System.cmd("npx", ["--yes" | args], stderr_to_stdout: true, cd: System.tmp_dir!()) do
