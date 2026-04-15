@@ -1,7 +1,16 @@
 defmodule Volt.Builder.Writer do
   @moduledoc false
 
-  def write_js(outdir, filename, code, sourcemap) do
+  def write_js(outdir, filename, code, sourcemap, opts \\ []) do
+    hidden = Keyword.get(opts, :hidden, false)
+
+    code =
+      if sourcemap && !hidden do
+        code <> "\n//# sourceMappingURL=#{filename}.map\n"
+      else
+        code
+      end
+
     File.write!(Path.join(outdir, filename), code)
 
     if sourcemap do

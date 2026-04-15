@@ -47,7 +47,8 @@ defmodule Volt.Builder do
     outdir = Keyword.get(opts, :outdir, "priv/static/assets") |> Path.expand()
     target = opts |> Keyword.get(:target, "") |> to_string()
     minify = Keyword.get(opts, :minify, true)
-    sourcemap = Keyword.get(opts, :sourcemap, true)
+    sourcemap_opt = Keyword.get(opts, :sourcemap, true)
+    sourcemap = sourcemap_opt != false
     define = Keyword.get(opts, :define, %{})
     mode = Keyword.get(opts, :mode, "production")
     aliases = Keyword.get(opts, :aliases, %{})
@@ -90,7 +91,8 @@ defmodule Volt.Builder do
       target: target,
       hash: hash,
       bundle_opts: bundle_opts,
-      code_splitting: code_splitting
+      code_splitting: code_splitting,
+      sourcemap_hidden: sourcemap_opt == :hidden
     }
 
     results =
@@ -129,7 +131,13 @@ defmodule Volt.Builder do
         worker_results: build_worker_results(workers, ctx, build_ctx)
       }
 
-      out = %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: output_ctx}
+      out = %{
+        outdir: outdir,
+        hash: hash,
+        bundle_opts: bundle_opts,
+        ctx: output_ctx,
+        sourcemap_hidden: build_ctx.sourcemap_hidden
+      }
 
       if code_splitting and has_dynamic_imports?(dep_map) do
         Output.build_chunks(entry, name, compiled, {modules, dep_map}, out)

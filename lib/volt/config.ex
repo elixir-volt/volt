@@ -28,6 +28,20 @@ defmodule Volt.Config do
         watch_dirs: ["lib/"]
 
   CLI flags and plug options override config values.
+
+  ## Source maps
+
+  The `:sourcemap` option controls production source map generation:
+
+    * `true` — write `.map` files and append `//# sourceMappingURL` (default)
+    * `:hidden` — write `.map` files but omit the URL comment (for error tracking services)
+    * `false` — no source maps
+
+  ## tsconfig.json paths
+
+  Volt automatically reads `compilerOptions.paths` from `tsconfig.json` in
+  the project root and merges them into aliases. Explicitly configured
+  aliases take precedence over tsconfig paths.
   """
 
   @defaults %{
@@ -60,14 +74,21 @@ defmodule Volt.Config do
 
   `overrides` (from CLI flags or function opts) take precedence
   over app env, which takes precedence over defaults.
+
+  Automatically reads `compilerOptions.paths` from `tsconfig.json` and
+  merges them into aliases. Explicit aliases override tsconfig paths.
   """
   @spec build(keyword()) :: map()
   def build(overrides \\ []) do
     app_env = Application.get_all_env(:volt) |> Keyword.take(@build_keys)
 
-    @defaults
-    |> Map.merge(Map.new(app_env))
-    |> Map.merge(Map.new(overrides))
+    config =
+      @defaults
+      |> Map.merge(Map.new(app_env))
+      |> Map.merge(Map.new(overrides))
+
+    tsconfig_paths = Volt.TSConfig.discover_paths()
+    %{config | aliases: Map.merge(tsconfig_paths, config.aliases)}
   end
 
   @doc """

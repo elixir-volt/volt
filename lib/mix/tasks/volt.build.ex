@@ -15,6 +15,7 @@ defmodule Mix.Tasks.Volt.Build do
     * `--target` — JS target (default: `es2020`)
     * `--no-minify` — skip minification
     * `--no-sourcemap` — skip source map generation
+    * `--sourcemap hidden` — write `.map` files but omit `sourceMappingURL` comment
     * `--resolve-dir` — additional directory for bare specifier resolution (repeatable)
     * `--external` — specifier to exclude from bundle (repeatable)
     * `--name` — output base name (default: derived from entry filename)
@@ -38,7 +39,7 @@ defmodule Mix.Tasks.Volt.Build do
           outdir: :string,
           target: :string,
           minify: :boolean,
-          sourcemap: :boolean,
+          sourcemap: :string,
           name: :string,
           hash: :boolean,
           mode: :string,
@@ -92,7 +93,7 @@ defmodule Mix.Tasks.Volt.Build do
       outdir: Path.join(outdir, "js"),
       target: Keyword.get(parsed, :target) || to_string(config.target),
       minify: minify,
-      sourcemap: Keyword.get(parsed, :sourcemap, config.sourcemap),
+      sourcemap: parse_sourcemap(Keyword.get(parsed, :sourcemap), config.sourcemap),
       resolve_dirs: resolve_dirs,
       external: externals,
       aliases: config.aliases,
@@ -195,6 +196,12 @@ defmodule Mix.Tasks.Volt.Build do
         exit({:shutdown, 1})
     end
   end
+
+  defp parse_sourcemap("hidden", _default), do: :hidden
+  defp parse_sourcemap("false", _default), do: false
+  defp parse_sourcemap("true", _default), do: true
+  defp parse_sourcemap(nil, default), do: default
+  defp parse_sourcemap(_, default), do: default
 
   defp format_file(path) do
     Volt.Format.format_with_gzip(File.read!(path))

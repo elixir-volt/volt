@@ -83,7 +83,7 @@ defmodule Volt.BuilderTest do
       refute js =~ "\n  "
     end
 
-    test "generates sourcemap" do
+    test "sourcemap appends sourceMappingURL comment" do
       {:ok, result} =
         Volt.Builder.build(
           entry: Path.join(@fixture_dir, "src/app.ts"),
@@ -96,6 +96,26 @@ defmodule Volt.BuilderTest do
       assert File.regular?(map_path)
       map = map_path |> File.read!() |> :json.decode()
       assert map["version"] == 3
+
+      js = File.read!(result.js.path)
+      js_filename = Path.basename(result.js.path)
+      assert js =~ "//# sourceMappingURL=#{js_filename}.map"
+    end
+
+    test "hidden sourcemap writes .map file without URL comment" do
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: :hidden
+        )
+
+      map_path = result.js.path <> ".map"
+      assert File.regular?(map_path)
+
+      js = File.read!(result.js.path)
+      refute js =~ "sourceMappingURL"
     end
 
     test "collects CSS from Vue SFCs" do

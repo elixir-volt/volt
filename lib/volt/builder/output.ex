@@ -5,7 +5,8 @@ defmodule Volt.Builder.Output do
 
   @doc "Bundle modules into a single JS file and write output."
   def build_single(entry, name, {js_files, css_parts}, build_ctx) do
-    %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: ctx} = build_ctx
+    %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: ctx,
+      sourcemap_hidden: sourcemap_hidden} = build_ctx
     File.mkdir_p!(outdir)
 
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
@@ -23,7 +24,7 @@ defmodule Volt.Builder.Output do
           Volt.PluginRunner.render_chunk(ctx.plugins, js_code, %{name: name, type: :entry})
 
         js_filename = Writer.hashed_name(name, js_code, ".js", hash)
-        Writer.write_js(outdir, js_filename, js_code, js_sourcemap)
+        Writer.write_js(outdir, js_filename, js_code, js_sourcemap, hidden: sourcemap_hidden)
 
         css_result = Writer.write_css(css_parts, outdir, name, hash, bundle_opts)
         manifest = Writer.build_manifest(name, js_filename, css_result)
@@ -43,19 +44,24 @@ defmodule Volt.Builder.Output do
 
   @doc "Bundle modules into separate chunks based on the chunk graph."
   def build_chunks(entry, name, {js_files, css_parts}, {modules, dep_map}, build_ctx) do
-    %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: ctx} = build_ctx
+    %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: ctx,
+      sourcemap_hidden: sourcemap_hidden} = build_ctx
     File.mkdir_p!(outdir)
 
     graph = Volt.ChunkGraph.build(entry, modules, dep_map)
     js_map = Map.new(js_files)
 
-    chunk_filenames = build_chunk_filenames(graph.chunks, name, hash, js_map, bundle_opts, ctx)
+    chunk_bundles = build_chunk_bundles(graph.chunks, js_map, bundle_opts, ctx)
 
     chunk_url_map =
-      Map.new(chunk_filenames, fn {chunk_id, {filename, _}} -> {chunk_id, filename} end)
+      Map.new(chunk_bundles, fn {chunk_id, {_code, _sourcemap}} ->
+        chunk = graph.chunks[chunk_id]
+        chunk_name = if chunk.type == :entry, do: name, else: "#{name}-#{chunk_id}"
+        {chunk_id, Writer.hashed_name(chunk_name, elem(chunk_bundles[chunk_id], 0), ".js", hash)}
+      end)
 
     js_results =
-      Enum.map(chunk_filenames, fn {chunk_id, {_filename, code}} ->
+      Enum.map(chunk_bundles, fn {chunk_id, {code, sourcemap}} ->
         chunk = graph.chunks[chunk_id]
         chunk_js = select_chunk_files(chunk.modules, js_map)
         code = Rewriter.inject_external_preamble(code, chunk_js, ctx)
@@ -75,7 +81,7 @@ defmodule Volt.Builder.Output do
             hash
           )
 
-        Writer.write_js(outdir, filename, code, nil)
+        Writer.write_js(outdir, filename, code, sourcemap, hidden: sourcemap_hidden)
 
         %{
           path: Path.join(outdir, filename),
@@ -122,32 +128,26 @@ defmodule Volt.Builder.Output do
      }}
   end
 
-  defp build_chunk_filenames(chunks, name, hash, js_map, bundle_opts, ctx) do
+  defp build_chunk_bundles(chunks, js_map, bundle_opts, ctx) do
     Enum.reduce(chunks, %{}, fn {chunk_id, chunk}, acc ->
       chunk_js = select_chunk_files(chunk.modules, js_map)
 
       if chunk_js == [] do
         acc
       else
-        bundle_chunk(chunk_id, chunk, chunk_js, name, hash, bundle_opts, ctx, acc)
+        chunk_js = Rewriter.rewrite_external_imports(chunk_js, ctx)
+        bundle_opts = Keyword.put(bundle_opts, :entry, chunk_entry_label(chunk_js))
+
+        case OXC.bundle(chunk_js, bundle_opts) do
+          {:ok, result} ->
+            {code, sourcemap} = BundleResult.extract(result)
+            Map.put(acc, chunk_id, {code, sourcemap})
+
+          {:error, _} ->
+            acc
+        end
       end
     end)
-  end
-
-  defp bundle_chunk(chunk_id, chunk, chunk_js, name, hash, bundle_opts, ctx, acc) do
-    chunk_js = Rewriter.rewrite_external_imports(chunk_js, ctx)
-    bundle_opts = Keyword.put(bundle_opts, :entry, chunk_entry_label(chunk_js))
-
-    case OXC.bundle(chunk_js, bundle_opts) do
-      {:ok, result} ->
-        code = BundleResult.code(result)
-        chunk_name = if chunk.type == :entry, do: name, else: "#{name}-#{chunk_id}"
-        filename = Writer.hashed_name(chunk_name, code, ".js", hash)
-        Map.put(acc, chunk_id, {filename, code})
-
-      {:error, _} ->
-        acc
-    end
   end
 
   defp chunk_entry_label([{label, _code} | _]), do: label
