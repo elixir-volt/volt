@@ -243,12 +243,22 @@ defmodule Volt.Builder.Collector do
         Path.basename(resolved_path)
       end
 
-    if MapSet.member?(state.used_labels, base_label) do
+    label = deduplicate_label(base_label, resolved_path, state.used_labels)
+    {label, %{state | used_labels: MapSet.put(state.used_labels, label)}}
+  end
+
+  defp deduplicate_label(label, resolved_path, used) do
+    if MapSet.member?(used, label) do
       parent = resolved_path |> Path.dirname() |> Path.basename()
-      label = parent <> "/" <> base_label
-      {label, %{state | used_labels: MapSet.put(state.used_labels, label)}}
+      candidate = parent <> "/" <> label
+
+      if MapSet.member?(used, candidate) do
+        deduplicate_label(candidate <> "_2", resolved_path, used)
+      else
+        candidate
+      end
     else
-      {base_label, %{state | used_labels: MapSet.put(state.used_labels, base_label)}}
+      label
     end
   end
 

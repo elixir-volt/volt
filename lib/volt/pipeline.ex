@@ -49,7 +49,7 @@ defmodule Volt.Pipeline do
 
     result =
       cond do
-        content_type in ["application/javascript", "text/javascript"] ->
+        content_type in ~w(application/javascript text/javascript) ->
           compile_js(path, source, opts)
 
         ext == @vue_ext ->
