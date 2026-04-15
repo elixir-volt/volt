@@ -17,9 +17,12 @@ defmodule Volt.Builder.Resolver do
         nil ->
           case Volt.JS.Resolver.resolve(specifier, ctx.aliases) do
             {:ok, aliased} ->
-              NPM.PackageResolver.try_resolve(Path.expand(aliased),
-                extensions: Volt.JS.Extensions.resolvable()
-              )
+              case NPM.PackageResolver.try_resolve(Path.expand(aliased),
+                     extensions: Volt.JS.Extensions.resolvable()
+                   ) do
+                {:ok, _} = ok -> ok
+                :error -> {:error, {:not_found, aliased}}
+              end
 
             :pass ->
               resolve_by_type(specifier, importer, ctx)
