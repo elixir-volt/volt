@@ -244,7 +244,6 @@ defmodule Volt.Builder do
 
     specifier_rewrite_map =
       specifier_labels
-      |> Enum.reject(fn {_spec, label} -> label == nil end)
       |> Map.new(fn {spec, label} ->
         {spec, Map.get(label_sanitize_map, label, label)}
       end)
