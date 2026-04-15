@@ -1,6 +1,27 @@
 defmodule Volt.BuilderTest do
   use ExUnit.Case, async: false
 
+  defmodule JsLoaderPlugin do
+    @behaviour Volt.Plugin
+    def name, do: "js-loader"
+    def resolve(_, _), do: nil
+
+    def load(path) do
+      if String.ends_with?(path, ".custom") and File.regular?(path) do
+        {:ok, File.read!(path), "application/javascript"}
+      end
+    end
+  end
+
+  defmodule VirtualModPlugin do
+    @behaviour Volt.Plugin
+    def name, do: "virtual-mod"
+    def resolve("my-virtual", _), do: {:ok, "virtual:my-virtual"}
+    def resolve(_, _), do: nil
+    def load("virtual:my-virtual"), do: {:ok, "export default 99;", "application/javascript"}
+    def load(_), do: nil
+  end
+
   @fixture_dir Path.expand("fixtures/builder", __DIR__)
   @outdir Path.expand("fixtures/builder/dist", __DIR__)
 
@@ -345,18 +366,6 @@ defmodule Volt.BuilderTest do
     end
 
     test "plugin content_type overrides file extension dispatch" do
-      defmodule JsLoaderPlugin do
-        @behaviour Volt.Plugin
-        def name, do: "js-loader"
-        def resolve(_, _), do: nil
-
-        def load(path) do
-          if String.ends_with?(path, ".custom") and File.regular?(path) do
-            {:ok, File.read!(path), "application/javascript"}
-          end
-        end
-      end
-
       File.write!(Path.join(@fixture_dir, "src/data.custom"), """
       export const value = 42;
       """)
@@ -380,15 +389,6 @@ defmodule Volt.BuilderTest do
     end
 
     test "virtual modules resolved and loaded via plugins" do
-      defmodule VirtualModPlugin do
-        @behaviour Volt.Plugin
-        def name, do: "virtual-mod"
-        def resolve("my-virtual", _), do: {:ok, "virtual:my-virtual"}
-        def resolve(_, _), do: nil
-        def load("virtual:my-virtual"), do: {:ok, "export default 99;", "application/javascript"}
-        def load(_), do: nil
-      end
-
       File.write!(Path.join(@fixture_dir, "src/virtual_app.ts"), """
       import val from 'my-virtual'
       console.log(val)

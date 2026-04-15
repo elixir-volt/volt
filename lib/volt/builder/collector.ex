@@ -38,28 +38,39 @@ defmodule Volt.Builder.Collector do
       {:ok, state}
     else
       case read_module(abs_path, state.ctx.plugins) do
-        {:ok, source} -> process_source(abs_path, label, source, state)
-        {:error, reason} -> {:error, {:file_read_error, abs_path, reason}}
+        {:ok, source, content_type} ->
+          process_source(abs_path, label, source, content_type, state)
+
+        {:error, reason} ->
+          {:error, {:file_read_error, abs_path, reason}}
       end
     end
   end
 
   defp read_module(path, plugins) do
     case Volt.PluginRunner.load(plugins, path) do
-      {:ok, code, _content_type} -> {:ok, code}
-      {:ok, code} -> {:ok, code}
-      nil -> File.read(path)
+      {:ok, code, content_type} ->
+        {:ok, code, content_type}
+
+      {:ok, code} ->
+        {:ok, code, nil}
+
+      nil ->
+        case File.read(path) do
+          {:ok, source} -> {:ok, source, nil}
+          error -> error
+        end
     end
   end
 
-  defp process_source(abs_path, label, source, state) do
+  defp process_source(abs_path, label, source, content_type, state) do
     state = %{
       state
       | seen: MapSet.put(state.seen, abs_path),
         files: [{abs_path, label, source} | state.files]
     }
 
-    case extract_typed_imports(source, abs_path) do
+    case extract_typed_imports(source, abs_path, content_type) do
       {:ok, %{imports: typed_imports, workers: worker_specs}} ->
         state = %{
           state
@@ -137,17 +148,22 @@ defmodule Volt.Builder.Collector do
     end
   end
 
-  defp extract_typed_imports(source, path) do
+  defp extract_typed_imports(source, path, content_type) do
     ext = Path.extname(path)
     filename = Path.basename(path)
 
-    if ext == ".vue" do
-      case Volt.JS.VueImports.extract(source) do
-        {:ok, specs} -> {:ok, %{imports: Enum.map(specs, &{:static, &1}), workers: []}}
-        error -> error
-      end
-    else
-      extract_js_typed_imports(source, filename)
+    cond do
+      content_type in ~w(application/javascript text/javascript) ->
+        extract_js_typed_imports(source, filename)
+
+      ext == ".vue" ->
+        case Volt.JS.VueImports.extract(source) do
+          {:ok, specs} -> {:ok, %{imports: Enum.map(specs, &{:static, &1}), workers: []}}
+          error -> error
+        end
+
+      true ->
+        extract_js_typed_imports(source, filename)
     end
   end
 
