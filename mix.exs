@@ -47,7 +47,9 @@ defmodule Volt.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
       {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.35", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.35", only: :dev, runtime: false},
+      {:bandit, "~> 1.0", only: :test},
+      {:playwright_ex, "~> 0.5", only: :test}
     ]
   end
 
