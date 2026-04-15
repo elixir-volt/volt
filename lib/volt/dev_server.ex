@@ -2,9 +2,15 @@ defmodule Volt.DevServer do
   @moduledoc """
   Plug that serves compiled frontend assets in development.
 
-  Intercepts requests under the configured path prefix, compiles
-  source files on demand, caches by mtime, and serves with
-  correct MIME types and sourcemaps.
+  Serves individual ESM modules — each `.ts`, `.vue`, `.jsx` file gets
+  its own URL under the configured prefix. Import specifiers are rewritten
+  so the browser can resolve the full module graph:
+
+    * Relative imports (`./utils`) → `/assets/utils.ts`
+    * Bare imports (`vue`) → `/@vendor/vue.js` (pre-bundled)
+    * Alias imports (`@/utils`) → `/assets/utils.ts`
+
+  Each module includes an `import.meta.hot` runtime for HMR support.
 
   ## Options
 
@@ -30,15 +36,19 @@ defmodule Volt.DevServer do
     server_config = Volt.Config.server(opts)
 
     root = Keyword.get(opts, :root) || to_string(config.root)
+    expanded_root = Path.expand(root)
+
+    node_modules = NPM.PackageResolver.find_node_modules(expanded_root)
 
     %{
-      root: Path.expand(root),
+      root: expanded_root,
       prefix: server_config.prefix,
       target: to_string(config.target),
       import_source: to_string(config.import_source),
       vapor: config.vapor,
       plugins: config.plugins,
-      aliases: config.aliases
+      aliases: config.aliases,
+      node_modules: node_modules
     }
   end
 
@@ -135,7 +145,7 @@ defmodule Volt.DevServer do
     end
   end
 
-  defp compile_and_serve(conn, file_path, _relative, mtime, content_type, config) do
+  defp compile_and_serve(conn, file_path, relative, mtime, content_type, config) do
     source = File.read!(file_path)
 
     pipeline_opts = [
@@ -149,7 +159,9 @@ defmodule Volt.DevServer do
 
     case Volt.Pipeline.compile(file_path, source, pipeline_opts) do
       {:ok, result} ->
-        code = maybe_inject_dev_console_forwarder(result.code, content_type)
+        mod_url = Path.join(config.prefix, relative)
+        code = maybe_inject_hmr_preamble(result.code, mod_url, content_type)
+        code = maybe_inject_dev_console_forwarder(code, content_type)
 
         entry = %{
           code: code,
@@ -196,8 +208,6 @@ defmodule Volt.DevServer do
     |> Plug.Conn.halt()
   end
 
-  # All compilable sources serve as JS (JSON is wrapped in `export default`).
-  # Static assets (.svg, .png, etc.) are handled by serve_asset, not this path.
   defp content_type_for(path) do
     case Path.extname(path) do
       ".css" -> "text/css"
@@ -206,28 +216,85 @@ defmodule Volt.DevServer do
     end
   end
 
+  # ── Import rewriting ──────────────────────────────────────────────
+
+  defp rewrite_dev_specifier(specifier, importer, config) do
+    cond do
+      NPM.PackageResolver.node_builtin?(specifier) ->
+        :keep
+
+      NPM.PackageResolver.relative?(specifier) ->
+        rewrite_relative(specifier, importer, config)
+
+      true ->
+        case Volt.Resolver.resolve(specifier, config.aliases) do
+          {:ok, resolved} -> rewrite_resolved_path(resolved, config)
+          :pass -> rewrite_bare(specifier)
+        end
+    end
+  end
+
+  defp rewrite_relative(specifier, importer, config) do
+    resolved = Path.expand(Path.join(Path.dirname(importer), specifier))
+
+    if String.starts_with?(resolved, config.root) do
+      resolved = resolve_with_extension(resolved)
+      relative = Path.relative_to(resolved, config.root)
+      {:rewrite, Path.join(config.prefix, relative)}
+    else
+      :keep
+    end
+  end
+
+  defp rewrite_resolved_path(resolved, config) do
+    if String.starts_with?(resolved, config.root) do
+      resolved = resolve_with_extension(resolved)
+      relative = Path.relative_to(resolved, config.root)
+      {:rewrite, Path.join(config.prefix, relative)}
+    else
+      :keep
+    end
+  end
+
+  defp rewrite_bare(specifier) do
+    {:rewrite, Volt.Vendor.vendor_url(specifier)}
+  end
+
+  defp resolve_with_extension(path) do
+    if Path.extname(path) != "" and File.regular?(path) do
+      path
+    else
+      case NPM.PackageResolver.try_resolve(path,
+             extensions: Volt.Extensions.resolvable()
+           ) do
+        {:ok, resolved} -> resolved
+        :error -> path
+      end
+    end
+  end
+
+  # ── HMR preamble ──────────────────────────────────────────────────
+
+  defp maybe_inject_hmr_preamble(code, mod_url, "application/javascript") do
+    hmr_preamble(mod_url) <> code
+  end
+
+  defp maybe_inject_hmr_preamble(code, _relative, _content_type), do: code
+
+  defp hmr_preamble(mod_url) do
+    """
+    import { createHotContext as __volt_createHotContext } from "/@volt/client.js";
+    import.meta.hot = __volt_createHotContext(#{inspect(mod_url)});
+    """
+  end
+
+  # ── Helpers ───────────────────────────────────────────────────────
+
   defp maybe_inject_dev_console_forwarder(code, "application/javascript") do
     Volt.DevConsoleForwarder.inject(code)
   end
 
   defp maybe_inject_dev_console_forwarder(code, _content_type), do: code
-
-  defp rewrite_dev_specifier(specifier, importer, config) do
-    cond do
-      NPM.PackageResolver.relative?(specifier) ->
-        resolved = Path.expand(Path.join(Path.dirname(importer), specifier))
-
-        if String.starts_with?(resolved, config.root) do
-          relative = Path.relative_to(resolved, config.root)
-          {:rewrite, Path.join(config.prefix, relative)}
-        else
-          :keep
-        end
-
-      true ->
-        :keep
-    end
-  end
 
   defp error_overlay(errors) do
     msg =

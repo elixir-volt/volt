@@ -47,6 +47,23 @@ defmodule Volt.DepGraph do
     )
   end
 
+  @doc """
+  Find all files that import a specifier matching the given predicate.
+
+  The predicate receives each import specifier and should return `true`
+  if it matches the file being searched for.
+  """
+  @spec dependents_matching((String.t() -> boolean())) :: [String.t()]
+  def dependents_matching(predicate) do
+    :ets.foldl(
+      fn {path, imports}, acc ->
+        if Enum.any?(imports, predicate), do: [path | acc], else: acc
+      end,
+      [],
+      @table
+    )
+  end
+
   @doc "Remove a file from the graph."
   @spec remove(String.t()) :: :ok
   def remove(path) do

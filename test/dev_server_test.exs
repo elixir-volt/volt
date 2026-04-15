@@ -21,8 +21,14 @@ defmodule Volt.DevServerTest do
     :ok
   end
 
-  defp call_dev_server(path) do
-    opts = Volt.DevServer.init(root: Path.join(@fixture_dir, "src"), prefix: "/assets")
+  defp call_dev_server(path, opts \\ []) do
+    init_opts =
+      Keyword.merge(
+        [root: Path.join(@fixture_dir, "src"), prefix: "/assets"],
+        opts
+      )
+
+    opts = Volt.DevServer.init(init_opts)
     conn(:get, path) |> Volt.DevServer.call(opts)
   end
 
@@ -97,6 +103,47 @@ defmodule Volt.DevServerTest do
       conn = call_dev_server("/assets/bad.ts")
       assert conn.status == 500
       assert conn.resp_body =~ "[Volt] Compilation error"
+    end
+  end
+
+  describe "import rewriting" do
+    test "rewrites relative imports to absolute paths" do
+      File.write!(Path.join(@fixture_dir, "src/utils.ts"), "export const y = 1")
+
+      File.write!(Path.join(@fixture_dir, "src/entry.ts"), """
+      import { y } from './utils'
+      console.log(y)
+      """)
+
+      conn = call_dev_server("/assets/entry.ts")
+      assert conn.status == 200
+      assert conn.resp_body =~ "/assets/utils.ts"
+      refute conn.resp_body =~ "'./utils'"
+    end
+
+    test "rewrites bare imports to vendor URLs" do
+      File.write!(Path.join(@fixture_dir, "src/vue_app.ts"), """
+      import { ref } from 'vue'
+      ref(0)
+      """)
+
+      conn = call_dev_server("/assets/vue_app.ts")
+      assert conn.status == 200
+      assert conn.resp_body =~ "/@vendor/vue.js"
+      refute conn.resp_body =~ "'vue'"
+    end
+  end
+
+  describe "HMR preamble" do
+    test "injects import.meta.hot into JS modules" do
+      conn = call_dev_server("/assets/app.ts")
+      assert conn.resp_body =~ "import.meta.hot"
+      assert conn.resp_body =~ "createHotContext"
+    end
+
+    test "does not inject HMR preamble into CSS" do
+      conn = call_dev_server("/assets/style.css")
+      refute conn.resp_body =~ "import.meta.hot"
     end
   end
 end

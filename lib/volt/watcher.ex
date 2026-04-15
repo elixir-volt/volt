@@ -6,6 +6,11 @@ defmodule Volt.Watcher do
   files through the Pipeline, triggers Tailwind CSS rebuilds when template
   files change, and broadcasts updates to connected HMR clients.
 
+  When a JS/TS/Vue file changes, the watcher attempts to find an HMR boundary
+  (a module with `import.meta.hot.accept()`) by walking up the dependency
+  graph. If found, only that module is re-imported by the client. Otherwise,
+  a full page reload is triggered.
+
   ## Options
 
     * `:root` — asset source directory (required, e.g. `"assets"`)
@@ -189,8 +194,9 @@ defmodule Volt.Watcher do
 
             Volt.Cache.put(path, mtime, entry)
             update_dep_graph(path, result.code)
+
             changes = detect_changes(old_entry, result)
-            broadcast(:update, %{path: relative, changes: changes})
+            broadcast_change(path, relative, changes, state.root)
 
           {:error, reason} ->
             broadcast(:error, %{path: relative, reason: reason})
@@ -200,6 +206,40 @@ defmodule Volt.Watcher do
         Volt.Cache.evict(path)
         Volt.DepGraph.remove(path)
         broadcast(:remove, %{path: relative})
+    end
+  end
+
+  defp broadcast_change(path, relative, changes, root) do
+    cond do
+      changes == [:style] ->
+        broadcast(:update, %{path: relative, changes: [:style]})
+
+      changes == [] ->
+        :ok
+
+      true ->
+        read_source = fn p ->
+          case File.read(p) do
+            {:ok, src} -> src
+            _ -> nil
+          end
+        end
+
+        case Volt.HMR.Boundary.find_boundary(path, read_source) do
+          {:ok, boundary_path} ->
+            timestamp = System.system_time(:millisecond)
+            boundary_relative = Path.relative_to(boundary_path, root)
+
+            broadcast(:update, %{
+              path: relative,
+              changes: [:hmr],
+              boundary: boundary_relative,
+              timestamp: timestamp
+            })
+
+          :full_reload ->
+            broadcast(:update, %{path: relative, changes: changes})
+        end
     end
   end
 
