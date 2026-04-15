@@ -19,10 +19,14 @@ so the JS runtime only evaluates self-contained CJS bundles.
 
 ### Dependencies
 
-- Upgrade `oxc` to `~> 0.6.2` (Rolldown-backed bundling with `:entry` and `:format` options)
-- Upgrade `quickbeam` to `~> 0.9.0`
+- Upgrade `oxc` to `~> 0.7.0` (Rolldown-backed bundling, `rewrite_specifiers/3`, snake_case AST types)
+- Upgrade `quickbeam` to `~> 0.10.0`
+- Upgrade `npm` to `~> 0.5.3` (shared `NPM.PackageResolver`)
 
 ### Bug Fixes
+
+- Fix duplicate identifier collision when bundling npm packages — bare
+  specifier labels are now rewritten to relative paths for Rolldown
 
 - Fix `Preload.tags/2` returning empty output (was filtering map values as strings)
 - Fix ETS table race condition — `Cache` and `DepGraph` tables now created
@@ -35,6 +39,7 @@ so the JS runtime only evaluates self-contained CJS bundles.
 
 ### Refactoring
 
+- Delete `Volt.PackageResolver` — delegate to `NPM.PackageResolver`
 - Split `Builder.Output` (370+ lines) into `Output`, `Writer`, `BundleResult`, `Rewriter`
 - Extract `Tailwind.Loader` and `Tailwind.Resolver` from the Tailwind GenServer
 - Consolidate package.json exports resolution into `PackageResolver` with
@@ -151,6 +156,9 @@ app.js  128.4 KB (gzip: 38.2 KB)
 ```
 
 ### Bug Fixes
+
+- Fix duplicate identifier collision when bundling npm packages — bare
+  specifier labels are now rewritten to relative paths for Rolldown
 
 - **HMR**: Watcher cache lookup used mtime 0, so granular Vue SFC
   change detection (style-only updates) never worked. Fixed.

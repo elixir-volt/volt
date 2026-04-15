@@ -99,7 +99,7 @@ defmodule Volt.Builder.Rewriter do
             {:ok, spec, s, e} ->
               case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
                 nil -> {node, patches}
-                url -> {node, [%{start: s, end: e, change: "'./\#{url}'"} | patches]}
+                url -> {node, [%{start: s, end: e, change: "'./#{url}'"} | patches]}
               end
 
             nil ->
