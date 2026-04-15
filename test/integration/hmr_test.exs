@@ -86,13 +86,13 @@ defmodule Volt.Integration.HMRTest do
         startup_log: false
       )
 
+    on_exit(fn -> Process.exit(server, :normal) end)
+
     {:ok, context} = Browser.new_context(browser.guid, timeout: 5000)
     {:ok, %{main_frame: frame}} = BrowserContext.new_page(context.guid, timeout: 5000)
 
     on_exit(fn ->
       BrowserContext.close(context.guid, timeout: 5000)
-      Process.exit(server, :normal)
-      Process.sleep(100)
       File.rm_rf!(@fixture_dir)
     end)
 
@@ -155,23 +155,20 @@ defmodule Volt.Integration.HMRTest do
   end
 
   defp eval_poll(frame, expression, attempts \\ 20) do
-    {:ok, result} =
-      Frame.evaluate(frame.guid,
-        expression: expression,
-        is_function: false,
-        arg: nil,
-        timeout: 5000
-      )
+    case Frame.evaluate(frame.guid,
+           expression: expression,
+           is_function: false,
+           arg: nil,
+           timeout: 5000
+         ) do
+      {:ok, result} when result != nil ->
+        {:ok, result}
 
-    if result != nil do
-      {:ok, result}
-    else
-      if attempts > 0 do
-        Process.sleep(100)
-        eval_poll(frame, expression, attempts - 1)
-      else
+      {:ok, nil} when attempts > 0 ->
+        Process.sleep(100) && eval_poll(frame, expression, attempts - 1)
+
+      _ ->
         {:error, :timeout}
-      end
     end
   end
 

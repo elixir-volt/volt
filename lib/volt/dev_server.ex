@@ -296,28 +296,6 @@ defmodule Volt.DevServer do
 
   defp maybe_inject_dev_console_forwarder(code, _content_type), do: code
 
-  defp compile_ts_asset(filename) do
-    key = {__MODULE__, :ts_asset, filename}
-
-    case :persistent_term.get(key, nil) do
-      nil ->
-        source = Volt.JSAsset.read!(filename)
-
-        code =
-          case OXC.transform(source, filename, sourcemap: false) do
-            {:ok, %{code: compiled}} -> compiled
-            {:ok, compiled} when is_binary(compiled) -> compiled
-            _ -> source
-          end
-
-        :persistent_term.put(key, code)
-        code
-
-      code ->
-        code
-    end
-  end
-
   defp error_overlay(errors) do
     msg =
       errors
@@ -328,7 +306,7 @@ defmodule Volt.DevServer do
         e -> inspect(e)
       end)
 
-    overlay = compile_ts_asset("error-overlay.ts")
+    overlay = Volt.JSAsset.compiled!("error-overlay.ts")
     overlay <> "\nrenderErrorOverlay(#{inspect(msg)})\n"
   end
 end

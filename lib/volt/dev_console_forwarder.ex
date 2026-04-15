@@ -10,7 +10,7 @@ defmodule Volt.DevConsoleForwarder do
 
   @spec inject(String.t()) :: String.t()
   def inject(code) when is_binary(code) do
-    preamble() <> "\n" <> code
+    Volt.JSAsset.compiled!("dev-console-forwarder.ts") <> "\n" <> code
   end
 
   @spec log(binary() | map()) :: :ok
@@ -49,24 +49,4 @@ defmodule Volt.DevConsoleForwarder do
   defp normalize_level("debug"), do: :debug
   defp normalize_level(:debug), do: :debug
   defp normalize_level(_), do: :info
-
-  defp preamble do
-    case :persistent_term.get({__MODULE__, :compiled}, nil) do
-      nil ->
-        source = Volt.JSAsset.read!("dev-console-forwarder.ts")
-
-        code =
-          case OXC.transform(source, "dev-console-forwarder.ts", sourcemap: false) do
-            {:ok, %{code: compiled}} -> compiled
-            {:ok, compiled} when is_binary(compiled) -> compiled
-            _ -> source
-          end
-
-        :persistent_term.put({__MODULE__, :compiled}, code)
-        code
-
-      code ->
-        code
-    end
-  end
 end
