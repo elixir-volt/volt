@@ -13,8 +13,7 @@ defmodule Volt.HMR.Boundary do
   """
   @spec self_accepting?(String.t()) :: boolean()
   def self_accepting?(source) do
-    String.contains?(source, "import.meta.hot") and
-      String.contains?(source, ".accept")
+    String.contains?(source, "import.meta.hot.accept(")
   end
 
   @doc """
@@ -41,27 +40,34 @@ defmodule Volt.HMR.Boundary do
   end
 
   defp walk_up(path, read_source, visited) do
-    parents = find_importers(path)
+    case find_importers(path) do
+      [] -> :full_reload
+      parents -> find_boundary_in_parents(parents, read_source, visited)
+    end
+  end
 
-    if parents == [] do
-      :full_reload
-    else
-      Enum.find_value(parents, :full_reload, fn parent ->
-        if MapSet.member?(visited, parent) do
-          nil
-        else
-          source = read_source.(parent)
+  defp find_boundary_in_parents(parents, read_source, visited) do
+    Enum.find_value(parents, :full_reload, fn parent ->
+      if MapSet.member?(visited, parent) do
+        nil
+      else
+        visit_parent(parent, read_source, MapSet.put(visited, parent))
+      end
+    end)
+  end
 
-          if source && self_accepting?(source) do
-            {:ok, parent}
-          else
-            case walk_up(parent, read_source, MapSet.put(visited, parent)) do
-              {:ok, _} = found -> found
-              :full_reload -> nil
-            end
-          end
+  defp visit_parent(parent, read_source, visited) do
+    source = read_source.(parent)
+
+    cond do
+      source != nil and self_accepting?(source) ->
+        {:ok, parent}
+
+      true ->
+        case walk_up(parent, read_source, visited) do
+          {:ok, _} = found -> found
+          :full_reload -> nil
         end
-      end)
     end
   end
 
@@ -70,7 +76,7 @@ defmodule Volt.HMR.Boundary do
     rootname = Path.rootname(basename)
 
     Volt.DepGraph.dependents_matching(fn specifier ->
-      spec_base = specifier |> String.split("/") |> List.last() |> to_string()
+      spec_base = specifier |> String.split("/") |> List.last()
 
       spec_base == basename or
         spec_base == rootname or

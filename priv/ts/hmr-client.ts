@@ -124,18 +124,18 @@ function connect() {
 async function handleUpdate(payload: {
   path: string;
   changes: string[];
+  boundary?: string;
   timestamp?: number;
 }) {
-  const { path, changes, timestamp } = payload;
+  const { path, changes, boundary, timestamp } = payload;
 
   if (changes.length === 1 && changes[0] === "style") {
     updateStyles(path);
     return;
   }
 
-  if (changes.includes("hmr")) {
-    const boundary = payload as unknown as { boundary: string; timestamp: number };
-    await applyHMRUpdate(boundary.boundary, boundary.timestamp ?? Date.now());
+  if (changes.includes("hmr") && boundary) {
+    await applyHMRUpdate(boundary, timestamp ?? Date.now());
     return;
   }
 
@@ -151,7 +151,7 @@ async function applyHMRUpdate(boundary: string, timestamp: number) {
 
   if (!mod) {
     for (const [url, m] of hotModules) {
-      if (url.endsWith("/" + boundary) || url.endsWith(boundary)) {
+      if (url.endsWith("/" + boundary) || url === boundary) {
         mod = m;
         modUrl = url;
         break;
@@ -164,6 +164,8 @@ async function applyHMRUpdate(boundary: string, timestamp: number) {
     return;
   }
 
+  const savedCallbacks = [...mod.callbacks];
+
   const newData: Record<string, unknown> = {};
   for (const cb of mod.disposeCallbacks) {
     cb(newData);
@@ -172,7 +174,14 @@ async function applyHMRUpdate(boundary: string, timestamp: number) {
 
   try {
     const url = `${modUrl}${modUrl.includes("?") ? "&" : "?"}t=${timestamp}`;
-    await import(/* @vite-ignore */ url);
+    const newModule = await import(/* @vite-ignore */ url);
+
+    for (const cb of savedCallbacks) {
+      if (cb.fn) {
+        cb.fn([newModule]);
+      }
+    }
+
     console.log(`[Volt] HMR update: ${modUrl}`);
   } catch (err) {
     console.error(`[Volt] HMR update failed for ${modUrl}`, err);

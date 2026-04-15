@@ -173,9 +173,7 @@ defmodule Volt.ChunkGraphTest do
       }
 
       graph =
-        ChunkGraph.build("/app/main.ts", modules, dep_map,
-          manual_chunks: %{"vendor" => ["vue"]}
-        )
+        ChunkGraph.build("/app/main.ts", modules, dep_map, manual_chunks: %{"vendor" => ["vue"]})
 
       assert graph.chunks["vendor"].type == :manual
       assert graph.chunks["entry"].type == :entry

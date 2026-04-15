@@ -6,10 +6,10 @@ defmodule Volt.HMR.BoundaryTest do
   describe "self_accepting?/1" do
     test "detects import.meta.hot.accept()" do
       assert Boundary.self_accepting?("""
-        if (import.meta.hot) {
-          import.meta.hot.accept()
-        }
-      """)
+               if (import.meta.hot) {
+                 import.meta.hot.accept()
+               }
+             """)
     end
 
     test "rejects code without accept" do

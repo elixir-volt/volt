@@ -61,6 +61,6 @@ defmodule Volt.TSConfig do
   defp decode(content) do
     {:ok, :json.decode(content)}
   rescue
-    _ -> :error
+    ErlangError -> :error
   end
 end

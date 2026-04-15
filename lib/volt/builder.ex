@@ -145,8 +145,9 @@ defmodule Volt.Builder do
         chunks: build_ctx.chunks
       }
 
-      use_chunks = code_splitting and
-        (has_dynamic_imports?(dep_map) or build_ctx.chunks != %{})
+      use_chunks =
+        code_splitting and
+          (has_dynamic_imports?(dep_map) or build_ctx.chunks != %{})
 
       if use_chunks do
         Output.build_chunks(entry, name, compiled, {modules, dep_map}, out)

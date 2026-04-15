@@ -5,8 +5,14 @@ defmodule Volt.Builder.Output do
 
   @doc "Bundle modules into a single JS file and write output."
   def build_single(entry, name, {js_files, css_parts}, build_ctx) do
-    %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: ctx,
-      sourcemap_hidden: sourcemap_hidden} = build_ctx
+    %{
+      outdir: outdir,
+      hash: hash,
+      bundle_opts: bundle_opts,
+      ctx: ctx,
+      sourcemap_hidden: sourcemap_hidden
+    } = build_ctx
+
     File.mkdir_p!(outdir)
 
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
@@ -44,8 +50,15 @@ defmodule Volt.Builder.Output do
 
   @doc "Bundle modules into separate chunks based on the chunk graph."
   def build_chunks(entry, name, {js_files, css_parts}, {modules, dep_map}, build_ctx) do
-    %{outdir: outdir, hash: hash, bundle_opts: bundle_opts, ctx: ctx,
-      sourcemap_hidden: sourcemap_hidden, chunks: manual_chunks} = build_ctx
+    %{
+      outdir: outdir,
+      hash: hash,
+      bundle_opts: bundle_opts,
+      ctx: ctx,
+      sourcemap_hidden: sourcemap_hidden,
+      chunks: manual_chunks
+    } = build_ctx
+
     File.mkdir_p!(outdir)
 
     graph = Volt.ChunkGraph.build(entry, modules, dep_map, manual_chunks: manual_chunks)
