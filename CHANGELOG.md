@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.6.0
+
+### Per-Module ESM Dev Server with HMR
+
+The dev server now serves individual ESM modules instead of opaque compiled
+files. Each `.ts`, `.vue`, `.jsx` file gets its own URL, and import specifiers
+are rewritten so the browser resolves the full module graph natively:
+
+- Relative imports (`./utils`) → `/assets/utils.ts`
+- Bare imports (`vue`) → `/@vendor/vue.js` (pre-bundled)
+- Alias imports (`@/utils`) → resolved via tsconfig paths or config aliases
+
+Each JS module is injected with an `import.meta.hot` preamble for granular HMR:
+
+```typescript
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => clearInterval(timer));
+  import.meta.hot.accept();
+}
+```
+
+On file change, the watcher walks the dependency graph upward to find the
+nearest `import.meta.hot.accept()` boundary. Only that module is re-imported
+via `import("/@assets/Button.tsx?t=123")` — no full page reload. Accept
+callbacks receive the new module exports. Falls back to `location.reload()`
+when no boundary is found.
+
+TypeScript assets (HMR client, console forwarder, error overlay) are now
+compiled to JS via OXC before serving to the browser.
+
+### Production Source Maps
+
+Source maps are now fully usable in production builds:
+
+- `sourcemap: true` — write `.map` files and append `//# sourceMappingURL` (default)
+- `sourcemap: :hidden` — write `.map` files without the URL comment (for Sentry, Datadog)
+- `sourcemap: false` — no source maps
+- Chunked builds now generate source maps (previously discarded)
+- CLI: `--sourcemap hidden`
+
+### tsconfig.json Paths
+
+Volt automatically reads `compilerOptions.paths` from `tsconfig.json` in the
+project root and merges them into aliases. Explicit aliases take precedence.
+Supports `baseUrl` for path resolution.
+
+### Manual Chunk Splitting
+
+Control chunk boundaries via config:
+
+```elixir
+config :volt,
+  chunks: %{
+    "vendor" => ["vue", "vue-router", "pinia"],
+    "ui" => ["assets/src/components"]
+  }
+```
+
+Bare specifiers match package names in `node_modules`. Path patterns match by
+directory prefix. Manual chunks work alongside automatic dynamic-import splitting.
+
+### Internal
+
+- Reorganize internal modules into `Volt.JS.*`, `Volt.CSS.*`, `Volt.Dev.*` namespaces
+- Add Playwright browser integration tests (`mix test --include integration`)
+
 ## 0.5.0
 
 ### Generic Tailwind Loader
