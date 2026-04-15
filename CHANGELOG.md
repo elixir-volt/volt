@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.1
+
+### Bug Fixes
+
+- Fix plugin `content_type` being ignored — when a plugin returned
+  `{:ok, code, "application/javascript"}` for a `.vue` file, Pipeline
+  still ran Vue SFC compilation on the already-compiled JS
+- Fix virtual modules (`resolve` → `"virtual:..."`) failing with
+  `:enoent` — Collector now calls plugin `load` before `File.read`
+- Fix duplicate label crash when multiple files share the same basename
+  (e.g. `a/index.js` and `b/index.js`) — labels are disambiguated with
+  parent directory prefix and recursive `_2` suffix fallback
+- Thread plugin `content_type` through Collector so import extraction
+  dispatches consistently with Pipeline
+
 ## 0.6.0
 
 ### Per-Module ESM Dev Server with HMR
