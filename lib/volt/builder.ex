@@ -124,9 +124,10 @@ defmodule Volt.Builder do
       code_splitting: code_splitting
     } = build_ctx
 
-    with {:ok, modules, dep_map, workers, specifier_labels} <- Collector.collect(entry, ctx),
+    with {:ok, modules, dep_map, workers, specifier_labels, path_labels} <-
+           Collector.collect(entry, ctx),
          {:ok, compiled} <- compile_all(modules, target, ctx.plugins) do
-      compiled = rewrite_nonlocal_labels(compiled, specifier_labels)
+      compiled = rewrite_nonlocal_labels(compiled, specifier_labels, path_labels)
 
       output_ctx = %{
         plugins: ctx.plugins,
@@ -232,7 +233,7 @@ defmodule Volt.Builder do
     end
   end
 
-  defp rewrite_nonlocal_labels({js_files, css_parts}, specifier_labels) do
+  defp rewrite_nonlocal_labels({js_files, css_parts}, specifier_labels, path_labels) do
     nonlocal_labels =
       js_files
       |> Enum.map(fn {label, _} -> label end)
@@ -242,26 +243,27 @@ defmodule Volt.Builder do
     label_sanitize_map =
       Map.new(nonlocal_labels, fn label -> {label, sanitize_label(label)} end)
 
-    specifier_rewrite_map =
-      specifier_labels
-      |> Map.new(fn {spec, label} ->
-        {spec, Map.get(label_sanitize_map, label, label)}
+    label_to_path = Map.new(path_labels, fn {path, label} -> {label, path} end)
+
+    js_files =
+      Enum.map(js_files, fn {label, code} ->
+        new_label = Map.get(label_sanitize_map, label, label)
+
+        file_path = label_to_path[label]
+        file_specifier_map = Map.get(specifier_labels, file_path, %{})
+
+        rewrite_map =
+          file_specifier_map
+          |> Map.new(fn {spec, lbl} ->
+            {spec, Map.get(label_sanitize_map, lbl, lbl)}
+          end)
+          |> Map.merge(label_sanitize_map)
+
+        new_code = rewrite_imports_to_labels(code, rewrite_map)
+        {new_label, new_code}
       end)
 
-    rewrite_map = Map.merge(label_sanitize_map, specifier_rewrite_map)
-
-    if rewrite_map == %{} do
-      {js_files, css_parts}
-    else
-      js_files =
-        Enum.map(js_files, fn {label, code} ->
-          new_label = Map.get(label_sanitize_map, label, label)
-          new_code = rewrite_imports_to_labels(code, rewrite_map)
-          {new_label, new_code}
-        end)
-
-      {js_files, css_parts}
-    end
+    {js_files, css_parts}
   end
 
   defp nonlocal_label?(label) do

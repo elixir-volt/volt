@@ -27,12 +27,17 @@ defmodule Volt.Builder.Rewriter do
   end
 
   def rewrite_dynamic_imports(code, module_to_chunk, chunk_url_map) do
-    case OXC.parse(code, "chunk.js") do
-      {:ok, ast} ->
-        patches = collect_dynamic_import_patches(ast, module_to_chunk, chunk_url_map)
-        worker_patches = collect_worker_patches(ast, module_to_chunk, chunk_url_map)
-        all_patches = patches ++ worker_patches
-        if all_patches == [], do: code, else: OXC.patch_string(code, all_patches)
+    case OXC.collect_dynamic_refs(code, "chunk.js") do
+      {:ok, refs} ->
+        patches =
+          Enum.flat_map(refs, fn %{specifier: spec, start: s, end: e} ->
+            case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
+              nil -> []
+              url -> [%{start: s, end: e, change: "'./#{url}'"}]
+            end
+          end)
+
+        if patches == [], do: code, else: OXC.patch_string(code, patches)
 
       {:error, _} ->
         code
@@ -66,53 +71,6 @@ defmodule Volt.Builder.Rewriter do
     end
   end
 
-  defp collect_dynamic_import_patches(ast, module_to_chunk, chunk_url_map) do
-    {_ast, patches} =
-      OXC.postwalk(ast, [], fn
-        %{type: :import_expression, source: %{type: :literal, value: spec, start: s, end: e}} =
-            node,
-        patches
-        when is_binary(spec) ->
-          case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
-            nil -> {node, patches}
-            url -> {node, [%{start: s, end: e, change: "'./#{url}'"} | patches]}
-          end
-
-        node, patches ->
-          {node, patches}
-      end)
-
-    patches
-  end
-
-  defp collect_worker_patches(ast, module_to_chunk, chunk_url_map) do
-    {_ast, patches} =
-      OXC.postwalk(ast, [], fn
-        %{
-          type: :new_expression,
-          callee: %{type: :identifier, name: worker_type},
-          arguments: [first_arg | _]
-        } = node,
-        patches
-        when worker_type in ["Worker", "SharedWorker"] ->
-          case Volt.JS.WorkerRewriter.extract_specifier(first_arg) do
-            {:ok, spec, s, e} ->
-              case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
-                nil -> {node, patches}
-                url -> {node, [%{start: s, end: e, change: "'./#{url}'"} | patches]}
-              end
-
-            nil ->
-              {node, patches}
-          end
-
-        node, patches ->
-          {node, patches}
-      end)
-
-    patches
-  end
-
   defp find_chunk_url(spec, module_to_chunk, chunk_url_map) do
     spec_normalized =
       spec
@@ -144,23 +102,9 @@ defmodule Volt.Builder.Rewriter do
   end
 
   defp find_iife_body_start(code) do
-    case OXC.parse(code, "iife.js") do
-      {:ok, ast} ->
-        {_ast, result} =
-          OXC.postwalk(ast, :error, fn
-            %{type: :arrow_function_expression, body: %{type: :function_body, start: start}} =
-                node,
-            :error ->
-              {node, {:ok, start + 1}}
-
-            node, acc ->
-              {node, acc}
-          end)
-
-        result
-
-      {:error, _} ->
-        :error
+    case OXC.find_iife_body_offset(code, "iife.js") do
+      {:ok, offset} -> {:ok, offset}
+      {:error, _} -> :error
     end
   end
 end

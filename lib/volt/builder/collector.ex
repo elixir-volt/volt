@@ -21,12 +21,14 @@ defmodule Volt.Builder.Collector do
       dep_map: %{},
       workers: %{},
       specifier_labels: %{},
-      used_labels: MapSet.new()
+      used_labels: MapSet.new([label]),
+      path_labels: %{entry_path => label}
     }
 
     case do_collect(entry_path, label, state) do
       {:ok, state} ->
-        {:ok, Enum.reverse(state.files), state.dep_map, state.workers, state.specifier_labels}
+        {:ok, Enum.reverse(state.files), state.dep_map, state.workers, state.specifier_labels,
+         state.path_labels}
 
       {:error, _} = error ->
         error
@@ -104,15 +106,21 @@ defmodule Volt.Builder.Collector do
       {:ok, resolved_path, original_specifier} ->
         {label, state} =
           if MapSet.member?(state.seen, resolved_path) do
-            existing_label = state.specifier_labels[original_specifier]
-            {existing_label || Path.basename(resolved_path), state}
+            {state.path_labels[resolved_path], state}
           else
             unique_label(original_specifier, resolved_path, state)
           end
 
+        importer_labels = Map.get(state.specifier_labels, importer, %{})
+
         state = %{
           state
-          | specifier_labels: Map.put_new(state.specifier_labels, original_specifier, label),
+          | specifier_labels:
+              Map.put(
+                state.specifier_labels,
+                importer,
+                Map.put_new(importer_labels, original_specifier, label)
+              ),
             dep_map:
               resolve_dep_map_specifier(
                 state.dep_map,
@@ -257,16 +265,27 @@ defmodule Volt.Builder.Collector do
     {:ok, resolved_path, specifier}
   end
 
-  defp unique_label(specifier, resolved_path, state) do
-    base_label =
-      if String.contains?(resolved_path, "/node_modules/") do
-        specifier
-      else
-        Path.basename(resolved_path)
-      end
-
+  defp unique_label(_specifier, resolved_path, state) do
+    base_label = module_label(resolved_path)
     label = deduplicate_label(base_label, resolved_path, state.used_labels)
-    {label, %{state | used_labels: MapSet.put(state.used_labels, label)}}
+
+    state = %{
+      state
+      | used_labels: MapSet.put(state.used_labels, label),
+        path_labels: Map.put(state.path_labels, resolved_path, label)
+    }
+
+    {label, state}
+  end
+
+  defp module_label(resolved_path) do
+    parts = String.split(resolved_path, "/node_modules/")
+
+    if length(parts) > 1 do
+      List.last(parts)
+    else
+      Path.basename(resolved_path)
+    end
   end
 
   defp deduplicate_label(label, resolved_path, used) do
