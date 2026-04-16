@@ -201,24 +201,63 @@ defmodule Volt.Builder do
   # ── Module compilation ──────────────────────────────────────────────
 
   defp compile_all(modules, target, plugins, loaders) do
-    result =
-      Enum.reduce_while(modules, {[], []}, fn {path, label, source}, {js_acc, css_acc} ->
-        case compile_module(path, label, source, target, plugins, loaders) do
-          {:ok, js, css} ->
-            {:cont, {[{label, js} | js_acc], if(css, do: [css | css_acc], else: css_acc)}}
-
-          {:error, _} = error ->
-            {:halt, error}
+    {batch, special} =
+      Enum.reduce(modules, {[], []}, fn {path, label, source} = mod, {batch, special} ->
+        if batchable?(path, source, plugins) do
+          filename = Volt.JS.Extensions.apply_loader(Path.basename(path), loaders)
+          {[{source, filename, label} | batch], special}
+        else
+          {batch, [mod | special]}
         end
       end)
 
-    case result do
-      {js_files, css_parts} when is_list(js_files) ->
-        {:ok, {Enum.reverse(js_files), Enum.reverse(css_parts)}}
+    batch = Enum.reverse(batch)
+    special = Enum.reverse(special)
 
-      {:error, _} = error ->
-        error
+    transform_opts = if target != "", do: [target: target], else: []
+    batch_inputs = Enum.map(batch, fn {source, filename, _label} -> {source, filename} end)
+
+    batch_results = OXC.transform_many(batch_inputs, transform_opts)
+
+    batch_compiled =
+      Enum.zip(batch, batch_results)
+      |> Enum.reduce_while([], fn
+        {{_, _, label}, {:ok, code}}, acc when is_binary(code) ->
+          {:cont, [{label, code, nil} | acc]}
+
+        {{_, _, label}, {:ok, %{code: code, sourcemap: sm}}}, acc ->
+          {:cont, [{label, code, sm} | acc]}
+
+        {_, {:error, _} = error}, _acc ->
+          {:halt, error}
+      end)
+
+    with compiled when is_list(compiled) <- batch_compiled do
+      special_compiled =
+        Enum.reduce_while(special, [], fn {path, label, source}, acc ->
+          case compile_module(path, label, source, target, plugins, loaders) do
+            {:ok, js, css} -> {:cont, [{label, js, css} | acc]}
+            {:error, _} = error -> {:halt, error}
+          end
+        end)
+
+      with compiled2 when is_list(compiled2) <- special_compiled do
+        all = Enum.reverse(compiled) ++ Enum.reverse(compiled2)
+
+        {js_files, css_parts} =
+          Enum.reduce(all, {[], []}, fn {label, js, css}, {js_acc, css_acc} ->
+            {[{label, js} | js_acc], if(css, do: [css | css_acc], else: css_acc)}
+          end)
+
+        {:ok, {Enum.reverse(js_files), Enum.reverse(css_parts)}}
+      end
     end
+  end
+
+  defp batchable?(path, _source, plugins) do
+    not Volt.Assets.asset?(path) and
+      Path.extname(path) in Volt.JS.Extensions.js() and
+      plugins == []
   end
 
   defp compile_module(path, _label, source, target, plugins, loaders) do
