@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.3
+
+### Bug Fixes
+
+- Fix bundling packages with internal relative imports (reka-ui, @internationalized/date, etc.) — labels now preserve directory structure relative to node_modules, and import rewriting uses per-file specifier maps instead of a global map that conflated identical relative specifiers from different importers
+- Fix `CaseClauseError` when an alias resolves to a missing file — `NPM.PackageResolver.try_resolve` returning bare `:error` is now wrapped into `{:error, {:not_found, path}}`
+- Bump `oxc` to 0.7.1 (fixes `parse/2` hitting serde_json recursion limit on large ASTs)
+
 ## 0.6.2
 
 ### Bug Fixes
