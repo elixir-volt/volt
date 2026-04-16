@@ -7,31 +7,37 @@ defmodule Volt.Builder.Resolver do
   Returns `{:ok, path}`, `:skip` (for externals/node builtins), or `{:error, reason}`.
   """
   def resolve(specifier, importer, ctx) do
-    if external?(specifier, ctx.external) do
-      :skip
-    else
-      case Volt.PluginRunner.resolve(ctx.plugins, specifier, importer) do
-        {:ok, _} = resolved ->
-          resolved
-
-        nil ->
-          case Volt.JS.Resolver.resolve(specifier, ctx.aliases) do
-            {:ok, aliased} ->
-              case NPM.PackageResolver.try_resolve(Path.expand(aliased),
-                     extensions: Volt.JS.Extensions.resolvable()
-                   ) do
-                {:ok, _} = ok -> ok
-                :error -> {:error, {:not_found, aliased}}
-              end
-
-            :pass ->
-              resolve_by_type(specifier, importer, ctx)
-          end
-      end
+    cond do
+      external?(specifier, ctx.external) -> :skip
+      css_specifier?(specifier) -> :skip
+      true -> do_resolve(specifier, importer, ctx)
     end
   end
 
   def absolute?(specifier), do: String.starts_with?(specifier, "/")
+
+  defp do_resolve(specifier, importer, ctx) do
+    case Volt.PluginRunner.resolve(ctx.plugins, specifier, importer) do
+      {:ok, _} = resolved -> resolved
+      nil -> resolve_specifier(specifier, importer, ctx)
+    end
+  end
+
+  defp resolve_specifier(specifier, importer, ctx) do
+    case Volt.JS.Resolver.resolve(specifier, ctx.aliases) do
+      {:ok, aliased} -> resolve_aliased(aliased)
+      :pass -> resolve_by_type(specifier, importer, ctx)
+    end
+  end
+
+  defp resolve_aliased(aliased) do
+    case NPM.PackageResolver.try_resolve(Path.expand(aliased),
+           extensions: Volt.JS.Extensions.resolvable()
+         ) do
+      {:ok, _} = ok -> ok
+      :error -> {:error, {:not_found, aliased}}
+    end
+  end
 
   defp resolve_by_type(specifier, importer, ctx) do
     cond do
@@ -39,22 +45,32 @@ defmodule Volt.Builder.Resolver do
         :skip
 
       NPM.PackageResolver.relative?(specifier) ->
-        base = Path.expand(specifier, Path.dirname(importer))
-
-        case NPM.PackageResolver.try_resolve(base, extensions: Volt.JS.Extensions.resolvable()) do
-          {:ok, _} = ok ->
-            ok
-
-          :error ->
-            if File.exists?(base <> ".d.ts") or File.exists?(base <> ".d.cts") or
-                 File.exists?(base <> ".d.mts"),
-               do: :skip,
-               else: {:error, {:not_found, base}}
-        end
+        resolve_relative(specifier, importer)
 
       true ->
         resolve_bare(specifier, ctx.node_modules, ctx.resolve_dirs)
     end
+  end
+
+  defp resolve_relative(specifier, importer) do
+    base = Path.expand(specifier, Path.dirname(importer))
+
+    case NPM.PackageResolver.try_resolve(base, extensions: Volt.JS.Extensions.resolvable()) do
+      {:ok, _} = ok ->
+        ok
+
+      :error ->
+        if type_declaration?(base), do: :skip, else: {:error, {:not_found, base}}
+    end
+  end
+
+  defp type_declaration?(base) do
+    File.exists?(base <> ".d.ts") or File.exists?(base <> ".d.cts") or
+      File.exists?(base <> ".d.mts")
+  end
+
+  defp css_specifier?(specifier) do
+    Path.extname(specifier) in Volt.JS.Extensions.css()
   end
 
   defp external?(specifier, external) do
@@ -81,17 +97,26 @@ defmodule Volt.Builder.Resolver do
 
     case NPM.PackageResolver.resolve_entry(package_dir, subpath: subpath, extensions: extensions) do
       {:ok, resolved} ->
-        if subpath != "." and resolved == resolve_main(package_dir) do
-          case NPM.PackageResolver.try_resolve(Path.join(dir, specifier), extensions: extensions) do
-            {:ok, _} = ok -> ok
-            :error -> {:ok, resolved}
-          end
-        else
-          {:ok, resolved}
-        end
+        maybe_try_direct_path(resolved, subpath, dir, specifier, package_dir, extensions)
 
       :error ->
         nil
+    end
+  end
+
+  defp maybe_try_direct_path(resolved, ".", _dir, _specifier, _package_dir, _extensions),
+    do: {:ok, resolved}
+
+  defp maybe_try_direct_path(resolved, _subpath, dir, specifier, package_dir, extensions) do
+    main = resolve_main(package_dir)
+
+    if resolved == main do
+      case NPM.PackageResolver.try_resolve(Path.join(dir, specifier), extensions: extensions) do
+        {:ok, _} = ok -> ok
+        :error -> {:ok, resolved}
+      end
+    else
+      {:ok, resolved}
     end
   end
 

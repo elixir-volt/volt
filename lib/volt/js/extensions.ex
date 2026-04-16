@@ -14,4 +14,15 @@ defmodule Volt.JS.Extensions do
   def resolvable_index, do: ~w(/index.ts /index.tsx /index.js /index.jsx)
   def watchable_js, do: @vue ++ @js ++ @css
   def template, do: @template
+  def css, do: @css ++ ~w(.scss .sass .less .styl)
+
+  def apply_loader(filename, loaders) do
+    ext = Path.extname(filename)
+
+    case Map.get(loaders, ext) do
+      "jsx" -> Path.rootname(filename) <> ".jsx"
+      "tsx" -> Path.rootname(filename) <> ".tsx"
+      _ -> filename
+    end
+  end
 end

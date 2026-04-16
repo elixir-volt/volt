@@ -132,7 +132,8 @@ defmodule Volt.Pipeline do
       |> maybe_put(:target, Keyword.get(opts, :target))
       |> maybe_put(:import_source, Keyword.get(opts, :import_source))
 
-    filename = loader_filename(path, opts)
+    filename =
+      Volt.JS.Extensions.apply_loader(Path.basename(path), Keyword.get(opts, :loaders, %{}))
 
     case OXC.transform(source, filename, transform_opts) do
       {:ok, result} when is_map(result) ->
@@ -185,16 +186,6 @@ defmodule Volt.Pipeline do
       css: Keyword.get(opts, :css),
       hashes: Keyword.get(opts, :hashes)
     }
-  end
-
-  defp loader_filename(path, opts) do
-    basename = Path.basename(path)
-
-    case Keyword.get(opts, :loader) do
-      :jsx -> Path.rootname(basename) <> ".jsx"
-      :tsx -> Path.rootname(basename) <> ".tsx"
-      _ -> basename
-    end
   end
 
   defp maybe_put(opts, _key, nil), do: opts

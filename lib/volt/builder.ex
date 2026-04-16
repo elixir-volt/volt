@@ -228,19 +228,7 @@ defmodule Volt.Builder do
         {:error, _} = error -> error
       end
     else
-      compile_opts =
-        [target: target, plugins: plugins]
-        |> then(fn opts ->
-          ext = Path.extname(path)
-
-          case Map.get(loaders, ext) do
-            "jsx" -> Keyword.put(opts, :loader, :jsx)
-            "tsx" -> Keyword.put(opts, :loader, :tsx)
-            _ -> opts
-          end
-        end)
-
-      case Volt.Pipeline.compile(path, source, compile_opts) do
+      case Volt.Pipeline.compile(path, source, target: target, plugins: plugins, loaders: loaders) do
         {:ok, %{code: code, css: css}} -> {:ok, code, css}
         {:error, _} = error -> error
       end
@@ -253,6 +241,15 @@ defmodule Volt.Builder do
     js_files =
       Enum.map(js_files, fn {label, code} ->
         file_path = label_to_path[label]
+
+        if is_nil(file_path) do
+          require Logger
+
+          Logger.warning(
+            "[Volt] No path mapping for label #{inspect(label)}, imports will not be rewritten"
+          )
+        end
+
         file_specifier_map = Map.get(specifier_labels, file_path, %{})
 
         rewrite_map =
@@ -273,14 +270,21 @@ defmodule Volt.Builder do
   end
 
   defp rewrite_imports_to_labels(code, label_map) do
-    case OXC.rewrite_specifiers(code, "module.js", fn specifier ->
-           case Map.fetch(label_map, specifier) do
-             {:ok, new_label} -> {:rewrite, "./" <> new_label}
-             :error -> :keep
-           end
-         end) do
+    case OXC.rewrite_specifiers(code, "module.js", &rewrite_specifier(&1, label_map)) do
       {:ok, rewritten} -> rewritten
       {:error, _} -> code
+    end
+  end
+
+  @css_exts Volt.JS.Extensions.css()
+  defp rewrite_specifier(specifier, label_map) do
+    if Path.extname(specifier) in @css_exts do
+      {:rewrite, "data:text/css,"}
+    else
+      case Map.fetch(label_map, specifier) do
+        {:ok, new_label} -> {:rewrite, "./" <> new_label}
+        :error -> :keep
+      end
     end
   end
 
