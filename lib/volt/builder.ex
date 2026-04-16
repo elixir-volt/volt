@@ -68,6 +68,7 @@ defmodule Volt.Builder do
         NPM.PackageResolver.find_node_modules(Path.dirname(first_entry))
 
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
+    loaders = Keyword.get(opts, :loaders, %{})
     hash = Keyword.get(opts, :hash, true)
     name = Keyword.get(opts, :name)
 
@@ -80,7 +81,8 @@ defmodule Volt.Builder do
       aliases: aliases,
       plugins: plugins,
       external: external_set,
-      external_globals: external_globals
+      external_globals: external_globals,
+      loaders: loaders
     }
 
     bundle_opts = [
@@ -126,7 +128,7 @@ defmodule Volt.Builder do
 
     with {:ok, modules, dep_map, workers, specifier_labels, path_labels} <-
            Collector.collect(entry, ctx),
-         {:ok, compiled} <- compile_all(modules, target, ctx.plugins) do
+         {:ok, compiled} <- compile_all(modules, target, ctx.plugins, ctx.loaders) do
       compiled = rewrite_nonlocal_labels(compiled, specifier_labels, path_labels)
 
       output_ctx = %{
@@ -198,10 +200,10 @@ defmodule Volt.Builder do
 
   # ── Module compilation ──────────────────────────────────────────────
 
-  defp compile_all(modules, target, plugins) do
+  defp compile_all(modules, target, plugins, loaders) do
     result =
       Enum.reduce_while(modules, {[], []}, fn {path, label, source}, {js_acc, css_acc} ->
-        case compile_module(path, label, source, target, plugins) do
+        case compile_module(path, label, source, target, plugins, loaders) do
           {:ok, js, css} ->
             {:cont, {[{label, js} | js_acc], if(css, do: [css | css_acc], else: css_acc)}}
 
@@ -219,14 +221,26 @@ defmodule Volt.Builder do
     end
   end
 
-  defp compile_module(path, _label, source, target, plugins) do
+  defp compile_module(path, _label, source, target, plugins, loaders) do
     if Volt.Assets.asset?(path) do
       case Volt.Assets.to_js_module(path) do
         {:ok, js} -> {:ok, js, nil}
         {:error, _} = error -> error
       end
     else
-      case Volt.Pipeline.compile(path, source, target: target, plugins: plugins) do
+      compile_opts =
+        [target: target, plugins: plugins]
+        |> then(fn opts ->
+          ext = Path.extname(path)
+
+          case Map.get(loaders, ext) do
+            "jsx" -> Keyword.put(opts, :loader, :jsx)
+            "tsx" -> Keyword.put(opts, :loader, :tsx)
+            _ -> opts
+          end
+        end)
+
+      case Volt.Pipeline.compile(path, source, compile_opts) do
         {:ok, %{code: code, css: css}} -> {:ok, code, css}
         {:error, _} = error -> error
       end
@@ -234,48 +248,28 @@ defmodule Volt.Builder do
   end
 
   defp rewrite_nonlocal_labels({js_files, css_parts}, specifier_labels, path_labels) do
-    nonlocal_labels =
-      js_files
-      |> Enum.map(fn {label, _} -> label end)
-      |> Enum.filter(&nonlocal_label?/1)
-      |> MapSet.new()
-
-    label_sanitize_map =
-      Map.new(nonlocal_labels, fn label -> {label, sanitize_label(label)} end)
-
     label_to_path = Map.new(path_labels, fn {path, label} -> {label, path} end)
 
     js_files =
       Enum.map(js_files, fn {label, code} ->
-        new_label = Map.get(label_sanitize_map, label, label)
-
         file_path = label_to_path[label]
         file_specifier_map = Map.get(specifier_labels, file_path, %{})
 
         rewrite_map =
-          file_specifier_map
-          |> Map.new(fn {spec, lbl} ->
-            {spec, Map.get(label_sanitize_map, lbl, lbl)}
+          Map.new(file_specifier_map, fn {spec, lbl} ->
+            {spec, relative_label(label, lbl)}
           end)
-          |> Map.merge(label_sanitize_map)
 
         new_code = rewrite_imports_to_labels(code, rewrite_map)
-        {new_label, new_code}
+        {label, new_code}
       end)
 
     {js_files, css_parts}
   end
 
-  defp nonlocal_label?(label) do
-    not String.contains?(label, ".") or
-      (String.contains?(label, "/") and not String.starts_with?(label, "./"))
-  end
-
-  defp sanitize_label(label) do
-    label
-    |> String.replace("@", "_at_")
-    |> String.replace("/", "__")
-    |> then(fn l -> if String.contains?(l, "."), do: l, else: l <> ".js" end)
+  defp relative_label(from_label, to_label) do
+    from_dir = Path.dirname(from_label)
+    Path.relative_to(to_label, from_dir)
   end
 
   defp rewrite_imports_to_labels(code, label_map) do

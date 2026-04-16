@@ -16,6 +16,7 @@ defmodule Volt.Builder.Collector do
 
     state = %{
       ctx: ctx,
+      root: Path.dirname(entry_path),
       files: [],
       seen: MapSet.new(),
       dep_map: %{},
@@ -72,7 +73,7 @@ defmodule Volt.Builder.Collector do
         files: [{abs_path, label, source} | state.files]
     }
 
-    case extract_typed_imports(source, abs_path, content_type) do
+    case extract_typed_imports(source, abs_path, content_type, state.ctx.loaders) do
       {:ok, %{imports: typed_imports, workers: worker_specs}} ->
         state = %{
           state
@@ -162,9 +163,9 @@ defmodule Volt.Builder.Collector do
     end
   end
 
-  defp extract_typed_imports(source, path, content_type) do
+  defp extract_typed_imports(source, path, content_type, loaders) do
     ext = Path.extname(path)
-    filename = Path.basename(path)
+    filename = apply_loader(Path.basename(path), ext, loaders)
 
     cond do
       content_type in ~w(application/javascript text/javascript) ->
@@ -178,6 +179,14 @@ defmodule Volt.Builder.Collector do
 
       true ->
         extract_js_typed_imports(source, filename)
+    end
+  end
+
+  defp apply_loader(filename, ext, loaders) do
+    case Map.get(loaders, ext) do
+      "jsx" -> Path.rootname(filename) <> ".jsx"
+      "tsx" -> Path.rootname(filename) <> ".tsx"
+      _ -> filename
     end
   end
 
@@ -199,6 +208,15 @@ defmodule Volt.Builder.Collector do
             %{type: :import_expression, source: %{type: :literal, value: spec}} = node, acc
             when is_binary(spec) ->
               {node, update_in(acc.imports, &[{:dynamic, spec} | &1])}
+
+            %{
+              type: :call_expression,
+              callee: %{type: :identifier, name: "require"},
+              arguments: [%{type: :literal, value: spec} | _]
+            } = node,
+            acc
+            when is_binary(spec) ->
+              {node, update_in(acc.imports, &[{:static, spec} | &1])}
 
             %{
               type: :new_expression,
@@ -266,7 +284,7 @@ defmodule Volt.Builder.Collector do
   end
 
   defp unique_label(_specifier, resolved_path, state) do
-    base_label = module_label(resolved_path)
+    base_label = module_label(resolved_path, state.root)
     label = deduplicate_label(base_label, resolved_path, state.used_labels)
 
     state = %{
@@ -278,13 +296,20 @@ defmodule Volt.Builder.Collector do
     {label, state}
   end
 
-  defp module_label(resolved_path) do
+  defp module_label(resolved_path, root) do
     parts = String.split(resolved_path, "/node_modules/")
 
     if length(parts) > 1 do
       List.last(parts)
     else
-      Path.basename(resolved_path)
+      relative = Path.relative_to(resolved_path, root)
+
+      if Path.type(relative) == :absolute do
+        "_external/" <>
+          Path.basename(Path.dirname(resolved_path)) <> "/" <> Path.basename(resolved_path)
+      else
+        relative
+      end
     end
   end
 

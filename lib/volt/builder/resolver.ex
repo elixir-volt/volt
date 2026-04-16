@@ -42,8 +42,14 @@ defmodule Volt.Builder.Resolver do
         base = Path.expand(specifier, Path.dirname(importer))
 
         case NPM.PackageResolver.try_resolve(base, extensions: Volt.JS.Extensions.resolvable()) do
-          {:ok, _} = ok -> ok
-          :error -> {:error, {:not_found, base}}
+          {:ok, _} = ok ->
+            ok
+
+          :error ->
+            if File.exists?(base <> ".d.ts") or File.exists?(base <> ".d.cts") or
+                 File.exists?(base <> ".d.mts"),
+               do: :skip,
+               else: {:error, {:not_found, base}}
         end
 
       true ->
@@ -64,15 +70,39 @@ defmodule Volt.Builder.Resolver do
       package_dir = Path.join(dir, package_name)
 
       if File.dir?(package_dir) do
-        case NPM.PackageResolver.resolve_entry(package_dir,
-               subpath: subpath_for(specifier),
-               extensions: Volt.JS.Extensions.resolvable()
-             ) do
-          {:ok, _} = ok -> ok
-          :error -> nil
-        end
+        resolve_in_package(specifier, dir, package_dir)
       end
     end)
+  end
+
+  defp resolve_in_package(specifier, dir, package_dir) do
+    subpath = subpath_for(specifier)
+    extensions = Volt.JS.Extensions.resolvable()
+
+    case NPM.PackageResolver.resolve_entry(package_dir, subpath: subpath, extensions: extensions) do
+      {:ok, resolved} ->
+        if subpath != "." and resolved == resolve_main(package_dir) do
+          case NPM.PackageResolver.try_resolve(Path.join(dir, specifier), extensions: extensions) do
+            {:ok, _} = ok -> ok
+            :error -> {:ok, resolved}
+          end
+        else
+          {:ok, resolved}
+        end
+
+      :error ->
+        nil
+    end
+  end
+
+  defp resolve_main(package_dir) do
+    case NPM.PackageResolver.resolve_entry(package_dir,
+           subpath: ".",
+           extensions: Volt.JS.Extensions.resolvable()
+         ) do
+      {:ok, path} -> path
+      :error -> nil
+    end
   end
 
   defp subpath_for(specifier) do

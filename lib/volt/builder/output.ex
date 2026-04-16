@@ -167,10 +167,13 @@ defmodule Volt.Builder.Output do
 
   defp select_chunk_files(module_paths, js_map) do
     module_paths
-    |> Enum.map(fn mod_path ->
-      label = Path.basename(mod_path)
-      {label, Map.get(js_map, label, "")}
+    |> Enum.flat_map(fn mod_path ->
+      case Enum.find(js_map, fn {label, _} ->
+             String.ends_with?(mod_path, "/" <> label) or mod_path == label
+           end) do
+        {label, code} -> [{label, code}]
+        nil -> []
+      end
     end)
-    |> Enum.reject(fn {_, code} -> code == "" end)
   end
 end
