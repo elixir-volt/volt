@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.4
+
+### Added
+
+- `loaders` option for overriding file type parsing (e.g. `loaders: %{".js" => "jsx"}` for React projects that use JSX in `.js` files)
+- CJS `require()` calls are now collected as imports during dependency walking
+
+### Fixed
+
+- Fix bare specifier subpath resolution when package has no `exports` field (e.g. `iframe-resizer/js/iframeResizer`) — falls back to direct file path instead of returning the package main entry
+- Skip `.d.ts` type declaration imports instead of raising not-found errors
+- Skip CSS imports (`import './app.css'`, `@fontsource/inter`, etc.) during JS bundling — CSS files are no longer collected, resolved, or passed to OXC.bundle
+- Fix files from `resolve_dirs` getting absolute path labels that break import rewriting
+
+### Performance
+
+- Use `OXC.collect_imports` (Rust NIF) for 98% of modules instead of `parse` + `postwalk` JSON round-trip — 2.5x faster collection
+- Use `OXC.transform_many` (rayon thread pool) for parallel module compilation — 3x faster on large projects
+- Livebook (2045 modules): 9s → 1.8s; Plausible Analytics dashboard: 5s → 1.2s
+
 ## 0.6.3
 
 ### Bug Fixes
