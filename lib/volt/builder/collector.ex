@@ -187,6 +187,29 @@ defmodule Volt.Builder.Collector do
   end
 
   defp extract_js_typed_imports(source, filename) do
+    needs_postwalk =
+      String.contains?(source, "require(") or String.contains?(source, "new Worker") or
+        String.contains?(source, "new SharedWorker")
+
+    if needs_postwalk do
+      extract_js_typed_imports_slow(source, filename)
+    else
+      case OXC.collect_imports(source, filename) do
+        {:ok, imports} ->
+          typed =
+            Enum.map(imports, fn %{specifier: spec, type: type} ->
+              {type, spec}
+            end)
+
+          {:ok, %{imports: typed, workers: []}}
+
+        {:error, _} = error ->
+          error
+      end
+    end
+  end
+
+  defp extract_js_typed_imports_slow(source, filename) do
     case OXC.parse(source, filename) do
       {:ok, ast} ->
         {_ast, acc} =
