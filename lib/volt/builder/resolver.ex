@@ -42,7 +42,14 @@ defmodule Volt.Builder.Resolver do
   defp resolve_by_type(specifier, importer, ctx) do
     cond do
       NPM.PackageResolver.node_builtin?(specifier) ->
-        :skip
+        if ctx[:stub_builtins] do
+          normalized =
+            if String.starts_with?(specifier, "node:"), do: specifier, else: "node:" <> specifier
+
+          {:ok, "stub:#{normalized}"}
+        else
+          :skip
+        end
 
       NPM.PackageResolver.relative?(specifier) ->
         resolve_relative(specifier, importer)
@@ -52,6 +59,8 @@ defmodule Volt.Builder.Resolver do
     end
   end
 
+  @js_to_ts_map %{".js" => [".ts", ".tsx"], ".jsx" => [".tsx"], ".mjs" => [".mts"]}
+
   defp resolve_relative(specifier, importer) do
     base = Path.expand(specifier, Path.dirname(importer))
 
@@ -60,7 +69,25 @@ defmodule Volt.Builder.Resolver do
         ok
 
       :error ->
-        if type_declaration?(base), do: :skip, else: {:error, {:not_found, base}}
+        try_ts_extension(base) ||
+          if(type_declaration?(base), do: :skip, else: {:error, {:not_found, base}})
+    end
+  end
+
+  defp try_ts_extension(base) do
+    ext = Path.extname(base)
+
+    case Map.get(@js_to_ts_map, ext) do
+      nil ->
+        nil
+
+      ts_exts ->
+        root = Path.rootname(base)
+
+        Enum.find_value(ts_exts, fn ts_ext ->
+          path = root <> ts_ext
+          if File.regular?(path), do: {:ok, path}
+        end)
     end
   end
 

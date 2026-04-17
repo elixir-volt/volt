@@ -109,8 +109,10 @@ defmodule Volt.Pipeline do
 
     case Vize.compile_sfc(source, filename: Path.basename(path), vapor: vapor) do
       {:ok, result} ->
+        code = strip_vue_typescript(result.code, path, opts)
+
         {:ok,
-         compiled(result.code,
+         compiled(code,
            css: result.css,
            hashes: %{
              template: result.template_hash,
@@ -121,6 +123,17 @@ defmodule Volt.Pipeline do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp strip_vue_typescript(code, path, opts) do
+    ts_name = Path.rootname(Path.basename(path)) <> ".ts"
+    transform_opts = [sourcemap: false] |> maybe_put(:target, Keyword.get(opts, :target))
+
+    case OXC.transform(code, ts_name, transform_opts) do
+      {:ok, %{code: stripped}} -> stripped
+      {:ok, stripped} when is_binary(stripped) -> stripped
+      {:error, _} -> code
     end
   end
 

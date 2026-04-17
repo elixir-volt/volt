@@ -69,6 +69,7 @@ defmodule Volt.Builder do
 
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
     loaders = Keyword.get(opts, :loaders, %{})
+    stub_builtins = Keyword.get(opts, :stub_builtins, false)
     hash = Keyword.get(opts, :hash, true)
     name = Keyword.get(opts, :name)
 
@@ -82,7 +83,8 @@ defmodule Volt.Builder do
       plugins: plugins,
       external: external_set,
       external_globals: external_globals,
-      loaders: loaders
+      loaders: loaders,
+      stub_builtins: stub_builtins
     }
 
     bundle_opts = [
@@ -256,7 +258,7 @@ defmodule Volt.Builder do
 
   defp batchable?(path, _source, plugins) do
     not Volt.Assets.asset?(path) and
-      Path.extname(path) in Volt.JS.Extensions.js() and
+      (Path.extname(path) in Volt.JS.Extensions.js() or String.starts_with?(path, "stub:")) and
       plugins == []
   end
 
