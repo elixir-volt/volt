@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.5
+
+### Added
+
+- Strip TypeScript types from Vue SFCs with `<script lang="ts">` after Vize compilation
+- Resolve `import './types.js'` to `./types.ts` when the `.js` file doesn't exist (standard TS convention)
+- Resolve bare specifiers in directories without `package.json` (e.g. Phoenix colocated hooks via `resolve_dirs: [Mix.Project.build_path()]`)
+
+### Fixed
+
+- Fix Vue SFC compiler-injected `vue` imports being externalized in SSR bundles — bare specifiers introduced by Vize are now resolved via a global fallback map
+- Fix JSON module imports crashing OXC.bundle — `.json` labels are renamed to `.json.js` so Rolldown treats the `export default` wrapper as JavaScript
+- Skip JSON files in import extraction (they have no imports)
+
 ## 0.6.4
 
 ### Added
