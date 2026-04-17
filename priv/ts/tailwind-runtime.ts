@@ -12,7 +12,11 @@ type TailwindCompiler = {
       base: string
       from: string
       loadStylesheet: (id: string, base?: string) => Promise<{ base: string; content: string }>
-      loadModule: (id: string, base?: string, type?: string) => Promise<{ module: unknown; base: string }>
+      loadModule: (
+        id: string,
+        base?: string,
+        type?: string
+      ) => Promise<{ module: unknown; base: string }>
     }
   ) => Promise<{ build: (candidates: string[]) => string }>
   Features?: unknown
@@ -26,20 +30,26 @@ declare const TAILWIND_ROOT: string
 
 declare const TAILWIND_DEFAULT_BASE: string
 
-const fs = (globalThis as typeof globalThis & {
-  fs: { readFileSync: (path: string, encoding: string) => string }
-}).fs
-
-const path = (globalThis as typeof globalThis & {
-  path: {
-    join: (...parts: string[]) => string
-    dirname: (path: string) => string
+const fs = (
+  globalThis as typeof globalThis & {
+    fs: { readFileSync: (path: string, encoding: string) => string }
   }
-}).path
+).fs
 
-const nodeProcess = (globalThis as typeof globalThis & {
-  process?: { env?: Record<string, string> }
-}).process
+const path = (
+  globalThis as typeof globalThis & {
+    path: {
+      join: (...parts: string[]) => string
+      dirname: (path: string) => string
+    }
+  }
+).path
+
+const nodeProcess = (
+  globalThis as typeof globalThis & {
+    process?: { env?: Record<string, string> }
+  }
+).process
 
 if (nodeProcess?.env) {
   nodeProcess.env.NODE_ENV ??= 'production'
@@ -73,14 +83,14 @@ async function compileTailwindCss(
         return {
           base: rootBase,
           content:
-            '@import "tailwindcss/theme.css" layer(theme);\n@import "tailwindcss/preflight.css" layer(base);\n@import "tailwindcss/utilities.css" layer(utilities);',
+            '@import "tailwindcss/theme.css" layer(theme);\n@import "tailwindcss/preflight.css" layer(base);\n@import "tailwindcss/utilities.css" layer(utilities);'
         }
       }
 
       if (id === 'tailwindcss/theme.css') {
         return {
           base: rootBase,
-          content: tailwindExports.Features ? fs.readFileSync(themeCssPath, 'utf8') : '',
+          content: tailwindExports.Features ? fs.readFileSync(themeCssPath, 'utf8') : ''
         }
       }
 
@@ -103,7 +113,7 @@ async function compileTailwindCss(
       ) as BeamModuleSpec
 
       return { module: requireResolvedModule(spec, moduleCache), base: spec.base }
-    },
+    }
   })
 
   return compiler.build(candidates ?? [])
@@ -147,7 +157,12 @@ function loadCommonJSModule(
   const dirname = moduleBase ?? path.dirname(resolvedPath)
 
   const localRequire = (id: string) => {
-    const childSpec = Beam.callSync('tailwind.load_module', id, dirname, 'require') as BeamModuleSpec
+    const childSpec = Beam.callSync(
+      'tailwind.load_module',
+      id,
+      dirname,
+      'require'
+    ) as BeamModuleSpec
     return requireResolvedModule(childSpec, moduleCache)
   }
 
