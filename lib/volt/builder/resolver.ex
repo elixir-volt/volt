@@ -120,7 +120,10 @@ defmodule Volt.Builder.Resolver do
         maybe_try_direct_path(resolved, subpath, dir, specifier, package_dir, extensions)
 
       :error ->
-        nil
+        case NPM.PackageResolver.try_resolve(Path.join(dir, specifier), extensions: extensions) do
+          {:ok, _} = ok -> ok
+          :error -> nil
+        end
     end
   end
 
