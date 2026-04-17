@@ -50,22 +50,6 @@ defmodule Volt.Builder.Collector do
     end
   end
 
-  @node_stubs %{
-    "stub:node:fs" => "export default {}; export function readFileSync() { return '{}' }",
-    "stub:node:path" =>
-      "export function resolve(...args) { return args.join('/') }; export function basename(p) { return p.split('/').pop() }; export function join(...args) { return args.join('/') }; export function dirname(p) { return p.split('/').slice(0, -1).join('/') }; export default { resolve, basename, join, dirname }",
-    "stub:node:stream" => "export function Readable() {}; export default { Readable }",
-    "stub:node:util" =>
-      "export function deprecate(fn) { return fn }; export default { deprecate }",
-    "stub:node:events" => "export function EventEmitter() {}; export default { EventEmitter }",
-    "stub:node:buffer" =>
-      "export const Buffer = { from() { return [] }, alloc() { return [] } }; export default { Buffer }",
-    "stub:node:url" =>
-      "export function pathToFileURL(p) { return p }; export default { pathToFileURL }",
-    "stub:node:os" =>
-      "export function platform() { return 'browser' }; export default { platform }"
-  }
-
   defp read_module(path, plugins) do
     case Volt.PluginRunner.load(plugins, path) do
       {:ok, code, content_type} ->
@@ -75,15 +59,9 @@ defmodule Volt.Builder.Collector do
         {:ok, code, nil}
 
       nil ->
-        case Map.get(@node_stubs, path) do
-          nil ->
-            case File.read(path) do
-              {:ok, source} -> {:ok, source, nil}
-              error -> error
-            end
-
-          code ->
-            {:ok, code, "application/javascript"}
+        case File.read(path) do
+          {:ok, source} -> {:ok, source, nil}
+          error -> error
         end
     end
   end

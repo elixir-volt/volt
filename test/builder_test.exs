@@ -488,5 +488,189 @@ defmodule Volt.BuilderTest do
       assert js =~ "a-"
       assert js =~ "b-"
     end
+
+    test "loaders option enables JSX in .js files" do
+      File.write!(Path.join(@fixture_dir, "src/jsx_app.js"), """
+      const App = () => <div>Hello</div>
+      export default App
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/jsx_app.js"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          loaders: %{".js" => "jsx"}
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "Hello"
+    end
+
+    test "collects CJS require() as imports" do
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/cjs-dep"))
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/cjs-dep/package.json"),
+        ~s({"name":"cjs-dep","main":"index.js"})
+      )
+
+      File.write!(Path.join(@fixture_dir, "node_modules/cjs-dep/index.js"), """
+      var helper = require('./helper')
+      module.exports = helper
+      """)
+
+      File.write!(Path.join(@fixture_dir, "node_modules/cjs-dep/helper.js"), """
+      module.exports = { value: 'cjs-works' }
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/cjs_app.ts"), """
+      import dep from 'cjs-dep'
+      console.log(dep.value)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/cjs_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          node_modules: Path.join(@fixture_dir, "node_modules")
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "cjs-works"
+    end
+
+    test "resolves package subpath without exports field" do
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/subpath-pkg/lib"))
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/subpath-pkg/package.json"),
+        ~s({"name":"subpath-pkg","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/subpath-pkg/index.js"),
+        "module.exports = 'root'\n"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/subpath-pkg/lib/utils.js"),
+        "export const util = 'subpath-util'\n"
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/subpath_app.ts"), """
+      import { util } from 'subpath-pkg/lib/utils'
+      console.log(util)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/subpath_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          node_modules: Path.join(@fixture_dir, "node_modules")
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "subpath-util"
+    end
+
+    test "skips .d.ts type declaration imports" do
+      File.write!(Path.join(@fixture_dir, "src/types.d.ts"), """
+      export type Foo = string
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/dts_app.ts"), """
+      import { Foo } from './types'
+      const x: Foo = 'hello'
+      console.log(x)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/dts_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "hello"
+    end
+
+    test "skips CSS imports in JS files" do
+      File.write!(Path.join(@fixture_dir, "src/app.css"), "body { color: red }")
+
+      File.write!(Path.join(@fixture_dir, "src/css_app.ts"), """
+      import './app.css'
+      console.log('loaded')
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/css_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "loaded"
+      refute js =~ "color"
+    end
+
+    test "strips TypeScript from Vue SFCs with lang=ts" do
+      File.write!(Path.join(@fixture_dir, "src/TsComponent.vue"), """
+      <template><div>{{ msg }}</div></template>
+      <script setup lang="ts">
+      import { ref, type Ref } from 'vue'
+      const msg: Ref<string> = ref('typed')
+      </script>
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/vue_ts_app.ts"), """
+      import TsComponent from './TsComponent.vue'
+      console.log(TsComponent)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/vue_ts_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          external: ["vue"]
+        )
+
+      js = File.read!(result.js.path)
+      refute js =~ "Ref<string>"
+      assert js =~ "ref("
+    end
+
+    test "resolves .js imports to .ts files when .js does not exist" do
+      File.write!(Path.join(@fixture_dir, "src/utils.ts"), """
+      export const helper = 'ts-resolved'
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/js_to_ts_app.ts"), """
+      import { helper } from './utils.js'
+      console.log(helper)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/js_to_ts_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "ts-resolved"
+    end
   end
 end
