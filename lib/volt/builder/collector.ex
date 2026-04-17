@@ -181,6 +181,9 @@ defmodule Volt.Builder.Collector do
           error -> error
         end
 
+      ext == ".json" ->
+        {:ok, %{imports: [], workers: []}}
+
       true ->
         extract_js_typed_imports(source, filename)
     end
@@ -318,18 +321,21 @@ defmodule Volt.Builder.Collector do
   defp module_label(resolved_path, root) do
     parts = String.split(resolved_path, "/node_modules/")
 
-    if length(parts) > 1 do
-      List.last(parts)
-    else
-      relative = Path.relative_to(resolved_path, root)
-
-      if Path.type(relative) == :absolute do
-        "_external/" <>
-          Path.basename(Path.dirname(resolved_path)) <> "/" <> Path.basename(resolved_path)
+    label =
+      if length(parts) > 1 do
+        List.last(parts)
       else
-        relative
+        relative = Path.relative_to(resolved_path, root)
+
+        if Path.type(relative) == :absolute do
+          "_external/" <>
+            Path.basename(Path.dirname(resolved_path)) <> "/" <> Path.basename(resolved_path)
+        else
+          relative
+        end
       end
-    end
+
+    if Path.extname(label) == ".json", do: Path.rootname(label) <> ".json.js", else: label
   end
 
   defp deduplicate_label(label, resolved_path, used) do

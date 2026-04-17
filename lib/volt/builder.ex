@@ -293,6 +293,14 @@ defmodule Volt.Builder do
   defp rewrite_nonlocal_labels({js_files, css_parts}, specifier_labels, path_labels) do
     label_to_path = Map.new(path_labels, fn {path, label} -> {label, path} end)
 
+    global_specifier_map =
+      specifier_labels
+      |> Map.values()
+      |> Enum.reduce(%{}, &Map.merge(&2, &1))
+      |> Map.reject(fn {spec, _} ->
+        String.starts_with?(spec, "./") or String.starts_with?(spec, "../")
+      end)
+
     js_files =
       Enum.map(js_files, fn {label, code} ->
         file_path = label_to_path[label]
@@ -310,7 +318,7 @@ defmodule Volt.Builder do
             {spec, relative_label(label, lbl)}
           end)
 
-        new_code = rewrite_imports_to_labels(code, rewrite_map)
+        new_code = rewrite_imports_to_labels(code, rewrite_map, label, global_specifier_map)
         {label, new_code}
       end)
 
@@ -322,21 +330,32 @@ defmodule Volt.Builder do
     Path.relative_to(to_label, from_dir)
   end
 
-  defp rewrite_imports_to_labels(code, label_map) do
-    case OXC.rewrite_specifiers(code, "module.js", &rewrite_specifier(&1, label_map)) do
+  defp rewrite_imports_to_labels(code, label_map, from_label, global_map) do
+    case OXC.rewrite_specifiers(code, "module.js", fn specifier ->
+           rewrite_specifier(specifier, label_map, from_label, global_map)
+         end) do
       {:ok, rewritten} -> rewritten
       {:error, _} -> code
     end
   end
 
   @css_exts Volt.JS.Extensions.css()
-  defp rewrite_specifier(specifier, label_map) do
+  defp rewrite_specifier(specifier, label_map, from_label, global_map) do
     if Path.extname(specifier) in @css_exts do
       {:rewrite, "data:text/css,"}
     else
       case Map.fetch(label_map, specifier) do
-        {:ok, new_label} -> {:rewrite, "./" <> new_label}
-        :error -> :keep
+        {:ok, new_label} ->
+          {:rewrite, "./" <> new_label}
+
+        :error ->
+          case Map.fetch(global_map, specifier) do
+            {:ok, lbl} when not is_nil(from_label) ->
+              {:rewrite, "./" <> relative_label(from_label, lbl)}
+
+            _ ->
+              :keep
+          end
       end
     end
   end
