@@ -42,14 +42,7 @@ defmodule Volt.Builder.Resolver do
   defp resolve_by_type(specifier, importer, ctx) do
     cond do
       NPM.PackageResolver.node_builtin?(specifier) ->
-        if ctx[:stub_builtins] do
-          normalized =
-            if String.starts_with?(specifier, "node:"), do: specifier, else: "node:" <> specifier
-
-          {:ok, "stub:#{normalized}"}
-        else
-          :skip
-        end
+        :skip
 
       NPM.PackageResolver.relative?(specifier) ->
         resolve_relative(specifier, importer)
