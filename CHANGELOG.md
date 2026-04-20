@@ -1,6 +1,11 @@
 # Changelog
 
 
+
+## 0.7.1
+
+- Improve `mix volt.lint` output to match credo style — grouped by category, severity tags, edge markers, summary by category
+
 ## 0.7.0
 
 ### Added

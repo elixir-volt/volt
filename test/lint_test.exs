@@ -30,7 +30,7 @@ defmodule Volt.LintTest do
     Application.put_env(:volt, :lint, plugins: [:typescript])
 
     output = capture_io(fn -> Mix.Tasks.Volt.Lint.run([]) end)
-    assert output =~ "No lint issues found"
+    assert output =~ "No issues found"
   end
 
   test "detects eqeqeq violation" do
