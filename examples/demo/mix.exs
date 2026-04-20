@@ -49,9 +49,10 @@ defmodule Demo.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:volt, path: "../..", override: true},
-      {:oxc, "~> 0.5.2", override: true},
+      {:oxc, "~> 0.8.0", override: true},
       {:vize, "~> 0.8.0", override: true},
-      {:phoenix_vapor, "~> 0.2.1"}
+      {:phoenix_vapor, "~> 0.2.1"},
+      {:quickbeam, "~> 0.10.0", override: true}
     ]
   end
 
@@ -66,7 +67,7 @@ defmodule Demo.MixProject do
         "volt.build --no-hash --tailwind",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "volt.lint", "test"]
     ]
   end
 end
