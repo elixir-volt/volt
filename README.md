@@ -31,7 +31,7 @@ Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https:/
 
 ```elixir
 def deps do
-  [{:volt, "~> 0.4.2"}]
+  [{:volt, "~> 0.7"}]
 end
 ```
 
