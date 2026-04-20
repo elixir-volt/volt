@@ -1,5 +1,12 @@
 # Changelog
 
+
+## 0.6.6
+
+### Added
+
+- `mix volt.lint` — lint JS/TS/JSX/TSX/Vue assets with oxlint's 650+ built-in rules via NIF. No Node.js required. Configurable plugins, rules, and custom Elixir lint rules via `config :volt, :lint`.
+
 ## 0.6.5
 
 ### Added

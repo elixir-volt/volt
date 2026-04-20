@@ -115,20 +115,7 @@ defmodule Volt.Builder.Output do
       end)
       |> Map.put("#{name}.js", %{"file" => Path.basename(entry_js.path), "src" => "#{name}.js"})
 
-    manifest =
-      if css_result do
-        css_filename = Path.basename(css_result.path)
-
-        manifest
-        |> put_in(["#{name}.js", "css"], [css_filename])
-        |> Map.put("#{name}.css", %{
-          "file" => css_filename,
-          "src" => "#{name}.css",
-          "assets" => [css_filename]
-        })
-      else
-        manifest
-      end
+    manifest = Writer.add_css_to_manifest(manifest, name, css_result)
 
     Writer.write_manifest(outdir, manifest)
 

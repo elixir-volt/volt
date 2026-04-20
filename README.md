@@ -25,6 +25,7 @@ Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https:/
 - **`import.meta.hot`** — per-module HMR with `accept()`, `dispose()`, and preserved state
 - **Plugin system** — resolve, load, transform, and render_chunk hooks
 - **External modules** — exclude packages from the bundle (e.g. Phoenix JS deps)
+- **JS/TS linting** — 650+ oxlint rules via NIF, plus custom Elixir rules
 
 ## Installation
 
@@ -341,6 +342,31 @@ API: `accept()`, `accept(deps, cb)`, `dispose(cb)`, `data`, `invalidate()`.
 
 ## Mix Tasks
 
+### `mix volt.lint`
+
+Lint JavaScript and TypeScript assets using oxlint via NIF — no Node.js required.
+
+```
+mix volt.lint
+mix volt.lint --plugin react --plugin typescript
+```
+
+Configure rules in your `config/*.exs`:
+
+```elixir
+config :volt, :lint,
+  plugins: [:typescript],
+  rules: %{
+    "no-debugger" => :deny,
+    "eqeqeq" => :deny,
+    "typescript/no-explicit-any" => :warn
+  }
+```
+
+Available plugins: `react`, `typescript`, `unicorn`, `import`, `jsdoc`, `jest`, `vitest`, `jsx_a11y`, `nextjs`, `react_perf`, `promise`, `node`, `vue`, `oxc`.
+
+Custom lint rules can be written in Elixir using the `OXC.Lint.Rule` behaviour — see the [oxc docs](https://hexdocs.pm/oxc/OXC.Lint.Rule.html).
+
 ### `mix volt.build`
 
 Build production assets. Reads from `config :volt`, CLI flags override.
@@ -402,7 +428,7 @@ result.code    #=> export default {"key":"value"}
 
 ```
 volt
-├── oxc       — JS/TS parse, transform, bundle, minify (Rust NIF)
+├── oxc       — JS/TS parse, transform, bundle, minify, lint (Rust NIF)
 ├── vize      — Vue SFC compilation, CSS Modules, LightningCSS (Rust NIF)
 ├── oxide_ex  — Tailwind content scanning, candidate extraction (Rust NIF)
 ├── quickbeam — Tailwind compiler runtime (QuickJS on BEAM)

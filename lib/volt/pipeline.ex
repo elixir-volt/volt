@@ -171,14 +171,11 @@ defmodule Volt.Pipeline do
       end
 
     case result do
-      {:ok, %{code: code}} ->
-        {:ok, compiled(code)}
-
-      {:ok, %{errors: errors}} when errors != [] ->
+      {:ok, %{errors: [_ | _] = errors}} ->
         {:error, errors}
 
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, %{code: code}} ->
+        {:ok, compiled(code)}
     end
   end
 

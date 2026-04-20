@@ -178,7 +178,6 @@ defmodule Volt.Builder.Collector do
       ext == ".vue" ->
         case Volt.JS.VueImports.extract(source) do
           {:ok, specs} -> {:ok, %{imports: Enum.map(specs, &{:static, &1}), workers: []}}
-          error -> error
         end
 
       ext == ".json" ->

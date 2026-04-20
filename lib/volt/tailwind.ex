@@ -180,10 +180,8 @@ defmodule Volt.Tailwind do
   defp maybe_minify(css, false), do: css
 
   defp maybe_minify(css, true) do
-    case Vize.compile_css(css, minify: true) do
-      {:ok, %{code: minified}} -> minified
-      _ -> css
-    end
+    {:ok, %{code: minified}} = Vize.compile_css(css, minify: true)
+    minified
   end
 
   defp to_oxide_source(%{base: base, pattern: pattern} = source) do

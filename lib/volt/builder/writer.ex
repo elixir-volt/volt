@@ -23,11 +23,7 @@ defmodule Volt.Builder.Writer do
   def write_css(css_parts, outdir, name, hash, bundle_opts) do
     css_code = Enum.join(css_parts, "\n")
 
-    css_code =
-      case Vize.compile_css(css_code, minify: bundle_opts[:minify] || false) do
-        {:ok, %{code: minified}} -> minified
-        _ -> css_code
-      end
+    {:ok, %{code: css_code}} = Vize.compile_css(css_code, minify: bundle_opts[:minify] || false)
 
     css_filename = hashed_name(name, css_code, ".css", hash)
     css_path = Path.join(outdir, css_filename)
@@ -72,19 +68,21 @@ defmodule Volt.Builder.Writer do
       }
     }
 
-    if css_result do
-      css_filename = Path.basename(css_result.path)
+    add_css_to_manifest(manifest, name, css_result)
+  end
 
-      manifest
-      |> put_in(["#{name}.js", "css"], [css_filename])
-      |> Map.put("#{name}.css", %{
-        "file" => css_filename,
-        "src" => "#{name}.css",
-        "assets" => [css_filename]
-      })
-    else
-      manifest
-    end
+  def add_css_to_manifest(manifest, _name, nil), do: manifest
+
+  def add_css_to_manifest(manifest, name, css_result) do
+    css_filename = Path.basename(css_result.path)
+
+    manifest
+    |> put_in(["#{name}.js", "css"], [css_filename])
+    |> Map.put("#{name}.css", %{
+      "file" => css_filename,
+      "src" => "#{name}.css",
+      "assets" => [css_filename]
+    })
   end
 
   def hashed_name(name, content, ext, true) do

@@ -73,10 +73,7 @@ defmodule Volt.Builder.Rewriter do
             node,
         patches
         when is_binary(spec) ->
-          case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
-            nil -> {node, patches}
-            url -> {node, [%{start: s, end: e, change: "'./#{url}'"} | patches]}
-          end
+          maybe_patch_specifier(node, patches, spec, s, e, module_to_chunk, chunk_url_map)
 
         node, patches ->
           {node, patches}
@@ -97,10 +94,7 @@ defmodule Volt.Builder.Rewriter do
         when worker_type in ["Worker", "SharedWorker"] ->
           case Volt.JS.WorkerRewriter.extract_specifier(first_arg) do
             {:ok, spec, s, e} ->
-              case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
-                nil -> {node, patches}
-                url -> {node, [%{start: s, end: e, change: "'./#{url}'"} | patches]}
-              end
+              maybe_patch_specifier(node, patches, spec, s, e, module_to_chunk, chunk_url_map)
 
             nil ->
               {node, patches}
@@ -111,6 +105,13 @@ defmodule Volt.Builder.Rewriter do
       end)
 
     patches
+  end
+
+  defp maybe_patch_specifier(node, patches, spec, s, e, module_to_chunk, chunk_url_map) do
+    case find_chunk_url(spec, module_to_chunk, chunk_url_map) do
+      nil -> {node, patches}
+      url -> {node, [%{start: s, end: e, change: "'./#{url}'"} | patches]}
+    end
   end
 
   defp find_chunk_url(spec, module_to_chunk, chunk_url_map) do
