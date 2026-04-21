@@ -2,6 +2,13 @@
 
 
 
+## Unreleased
+
+### Added
+
+- `Volt.Formatter` — `mix format` plugin for JS/TS. Add `plugins: [Volt.Formatter]` to `.formatter.exs` and JS/TS files are formatted alongside Elixir with oxfmt.
+- `mix igniter.install volt` now adds `Volt.Formatter` to `.formatter.exs` automatically.
+
 ## 0.8.1
 
 ### Added
