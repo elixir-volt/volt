@@ -67,7 +67,7 @@ defmodule Demo.MixProject do
         "volt.build --no-hash --tailwind",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "volt.lint", "test"]
+      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "volt.js.format", "volt.lint", "test"]
     ]
   end
 end
