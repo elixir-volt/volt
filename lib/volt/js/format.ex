@@ -32,7 +32,7 @@ defmodule Volt.JS.Format do
     end
   end
 
-  defp load_json_config do
+  def load_json_config do
     case find_json_config() do
       nil -> []
       path -> parse_json_config(path)
@@ -40,9 +40,18 @@ defmodule Volt.JS.Format do
   end
 
   defp find_json_config do
-    Enum.find_value(@json_config_files, fn name ->
-      path = Path.join(File.cwd!(), name)
-      if File.exists?(path), do: path
+    root = File.cwd!()
+
+    search_dirs = [
+      root,
+      Path.join(root, "assets")
+    ]
+
+    Enum.find_value(search_dirs, fn dir ->
+      Enum.find_value(@json_config_files, fn name ->
+        path = Path.join(dir, name)
+        if File.exists?(path), do: path
+      end)
     end)
   end
 

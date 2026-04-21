@@ -115,21 +115,28 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp add_format_config(igniter) do
+      opts = Volt.JS.Format.load_json_config()
+
+      format_kw =
+        Keyword.merge(
+          [
+            print_width: 100,
+            semi: false,
+            single_quote: true,
+            trailing_comma: :none,
+            arrow_parens: :always
+          ],
+          opts
+        )
+
+      code = Enum.map_join(format_kw, ",\n  ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
+
       Igniter.Project.Config.configure(
         igniter,
         "config.exs",
         :volt,
         [:format],
-        {:code,
-         Sourceror.parse_string!("""
-         [
-           print_width: 100,
-           semi: false,
-           single_quote: true,
-           trailing_comma: :none,
-           arrow_parens: :always
-         ]
-         """)}
+        {:code, Sourceror.parse_string!("[\n  #{code}\n]")}
       )
     end
 
