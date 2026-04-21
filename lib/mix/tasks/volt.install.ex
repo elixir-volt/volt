@@ -16,8 +16,9 @@ if Code.ensure_loaded?(Igniter) do
     1. Remove `:esbuild` and `:tailwind` deps
     2. Add Volt build config to `config/config.exs`
     3. Add format and lint config to `config/config.exs`
-    4. Add `Volt.DevServer` plug to your endpoint
-    5. Add the Volt watcher to `config/dev.exs`
+    4. Add `Volt.Formatter` plugin to `.formatter.exs`
+    5. Add `Volt.DevServer` plug to your endpoint
+    6. Add the Volt watcher to `config/dev.exs`
 
     You may need to manually remove old `config :esbuild` and
     `config :tailwind` blocks from `config/config.exs`.
@@ -43,6 +44,7 @@ if Code.ensure_loaded?(Igniter) do
       |> add_volt_config()
       |> add_format_config()
       |> add_lint_config()
+      |> add_formatter_plugin()
       |> add_dev_config(app_name)
       |> add_dev_server_plug()
     end
@@ -157,6 +159,10 @@ if Code.ensure_loaded?(Igniter) do
          ]
          """)}
       )
+    end
+
+    defp add_formatter_plugin(igniter) do
+      Igniter.Project.Formatter.add_formatter_plugin(igniter, Volt.Formatter)
     end
 
     defp add_dev_config(igniter, app_name) do

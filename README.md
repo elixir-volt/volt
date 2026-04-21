@@ -350,6 +350,24 @@ API: `accept()`, `accept(deps, cb)`, `dispose(cb)`, `data`, `invalidate()`.
 Set up Volt in a Phoenix project. Adds config, dev server plug, watcher,
 removes esbuild/tailwind deps.
 
+### `mix format` integration
+
+`Volt.Formatter` is a `mix format` plugin — add it to `.formatter.exs` and JS/TS files are formatted alongside Elixir:
+
+```elixir
+# .formatter.exs
+[
+  plugins: [Volt.Formatter],
+  inputs: [
+    "{mix,.formatter}.exs",
+    "{config,lib,test}/**/*.{ex,exs}",
+    "assets/**/*.{js,ts,jsx,tsx}"
+  ]
+]
+```
+
+Reads options from `config :volt, :format` or `.oxfmtrc.json` (see below).
+
 ### `mix volt.js.format`
 
 Format JavaScript and TypeScript assets using oxfmt via NIF — no Node.js required.
