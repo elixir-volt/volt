@@ -197,41 +197,47 @@ if Code.ensure_loaded?(Igniter) do
         )
 
       if endpoint do
-        Igniter.Project.Module.find_and_update_module!(igniter, endpoint, fn zipper ->
-          with :error <-
-                 Igniter.Code.Common.move_to(zipper, fn z ->
-                   Igniter.Code.Function.function_call?(z, :plug) and
-                     Igniter.Code.Function.argument_equals?(z, 0, Volt.DevServer)
-                 end),
-               {:ok, zipper} <- Igniter.Code.Common.move_to(zipper, &code_reloading?/1) do
-            {:ok,
-             Igniter.Code.Common.add_code(
-               zipper,
-               """
-               plug Volt.DevServer, root: "assets"
-               """,
-               placement: :after
-             )}
-          else
-            {:ok, _} ->
-              {:ok, zipper}
-
-            :error ->
-              {:warning,
-               """
-               Could not find the code_reloading? section in `#{inspect(endpoint)}`.
-               Please add the plug manually inside `if code_reloading? do`:
-
-                 plug Volt.DevServer, root: "assets"
-               """}
-          end
-        end)
+        Igniter.Project.Module.find_and_update_module!(
+          igniter,
+          endpoint,
+          &insert_dev_server_plug(&1, endpoint)
+        )
       else
         Igniter.add_warning(igniter, """
         No endpoint found. Please add the Volt dev server plug manually:
 
           plug Volt.DevServer, root: "assets"
         """)
+      end
+    end
+
+    defp insert_dev_server_plug(zipper, endpoint) do
+      with :error <-
+             Igniter.Code.Common.move_to(zipper, fn z ->
+               Igniter.Code.Function.function_call?(z, :plug) and
+                 Igniter.Code.Function.argument_equals?(z, 0, Volt.DevServer)
+             end),
+           {:ok, zipper} <- Igniter.Code.Common.move_to(zipper, &code_reloading?/1) do
+        {:ok,
+         Igniter.Code.Common.add_code(
+           zipper,
+           """
+           plug Volt.DevServer, root: "assets"
+           """,
+           placement: :after
+         )}
+      else
+        {:ok, _} ->
+          {:ok, zipper}
+
+        :error ->
+          {:warning,
+           """
+           Could not find the code_reloading? section in `#{inspect(endpoint)}`.
+           Please add the plug manually inside `if code_reloading? do`:
+
+             plug Volt.DevServer, root: "assets"
+           """}
       end
     end
 
