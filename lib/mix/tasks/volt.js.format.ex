@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Volt.Js.Format do
 
   @impl true
   def run(_args) do
-    Mix.Task.run("app.start")
+    Mix.Task.run("app.config")
 
     opts = Volt.JS.Format.load_config()
     dir = Volt.JS.Helpers.assets_dir()

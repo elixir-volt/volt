@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Volt.Js.Check do
 
   @impl true
   def run(_args) do
-    Mix.Task.run("app.start")
+    Mix.Task.run("app.config")
 
     dir = Volt.JS.Helpers.assets_dir()
     files = Volt.JS.Helpers.discover_files(dir)
