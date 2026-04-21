@@ -25,6 +25,7 @@ Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https:/
 - **`import.meta.hot`** — per-module HMR with `accept()`, `dispose()`, and preserved state
 - **Plugin system** — resolve, load, transform, and render_chunk hooks
 - **External modules** — exclude packages from the bundle (e.g. Phoenix JS deps)
+- **JS/TS formatting** — Prettier-compatible oxfmt via NIF, ~30× faster than Prettier
 - **JS/TS linting** — 650+ oxlint rules via NIF, plus custom Elixir rules
 
 ## Installation
@@ -342,18 +343,33 @@ API: `accept()`, `accept(deps, cb)`, `dispose(cb)`, `data`, `invalidate()`.
 
 ## Mix Tasks
 
-### `mix volt.lint`
+### `mix volt.js.format`
 
-Lint JavaScript and TypeScript assets using oxlint via NIF — no Node.js required.
+Format JavaScript and TypeScript assets using oxfmt via NIF — no Node.js required.
 
 ```
-mix volt.lint
-mix volt.lint --plugin react --plugin typescript
+mix volt.js.format
 ```
 
-Configure rules in your `config/*.exs`:
+### `mix volt.js.check`
+
+Check formatting and lint in one command. Exits with non-zero status on issues.
+
+```
+mix volt.js.check
+```
+
+### Formatter & linter configuration
 
 ```elixir
+# config/config.exs
+config :volt, :format,
+  print_width: 100,
+  semi: false,
+  single_quote: true,
+  trailing_comma: :none,
+  arrow_parens: :always
+
 config :volt, :lint,
   plugins: [:typescript],
   rules: %{
@@ -361,6 +377,17 @@ config :volt, :lint,
     "eqeqeq" => :deny,
     "typescript/no-explicit-any" => :warn
   }
+```
+
+All [oxfmt options](https://hexdocs.pm/oxc/OXC.Format.html) are supported. Falls back to `.oxfmtrc.json` if no Elixir config is set.
+
+### `mix volt.lint`
+
+Lint JavaScript and TypeScript assets using oxlint via NIF — no Node.js required.
+
+```
+mix volt.lint
+mix volt.lint --plugin react --plugin typescript
 ```
 
 Available plugins: `react`, `typescript`, `unicorn`, `import`, `jsdoc`, `jest`, `vitest`, `jsx_a11y`, `nextjs`, `react_perf`, `promise`, `node`, `vue`, `oxc`.
