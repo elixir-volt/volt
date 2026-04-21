@@ -18,7 +18,7 @@ defmodule Volt.Formatter do
   ## Configuration
 
   Reads options from `config :volt, :format` or falls back to
-  `.oxfmtrc.json` / `.prettierrc.json`. See `Volt.JS.Format` for details.
+  `.oxfmtrc.json` / `.prettierrc.json`. See the "Formatter & linter configuration" section in the README for details.
   """
 
   @behaviour Mix.Tasks.Format
