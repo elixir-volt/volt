@@ -9,6 +9,12 @@
 - `Volt.Formatter` — `mix format` plugin for JS/TS. Add `plugins: [Volt.Formatter]` to `.formatter.exs` and JS/TS files are formatted alongside Elixir with oxfmt.
 - `mix igniter.install volt` now adds `Volt.Formatter` to `.formatter.exs` automatically.
 
+### Fixed
+
+- Dev server now pre-bundles vendor dependencies on startup and bundles on demand as fallback — bare imports like `react` no longer 404 at `/@vendor/`.
+- CJS packages (e.g. React 19) are bundled as ESM via `OXC.bundle` with `format: :esm`. Conditional `process.env.NODE_ENV` branches resolve correctly.
+- Cross-package CJS `require()` calls (e.g. `react-dom` requiring `react`) are rewritten to ESM imports pointing at other `/@vendor/` modules via AST.
+
 ## 0.8.1
 
 ### Added

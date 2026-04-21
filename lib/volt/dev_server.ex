@@ -28,6 +28,8 @@ defmodule Volt.DevServer do
         target: :es2020
   """
 
+  require Logger
+
   @behaviour Plug
 
   @impl true
@@ -39,6 +41,8 @@ defmodule Volt.DevServer do
     expanded_root = Path.expand(root)
 
     node_modules = NPM.PackageResolver.find_node_modules(expanded_root)
+
+    prebundle_vendor(expanded_root, node_modules)
 
     %{
       root: expanded_root,
@@ -75,10 +79,10 @@ defmodule Volt.DevServer do
     |> Plug.Conn.halt()
   end
 
-  def call(%Plug.Conn{request_path: "/@vendor/" <> specifier_js} = conn, _config) do
+  def call(%Plug.Conn{request_path: "/@vendor/" <> specifier_js} = conn, config) do
     specifier = specifier_js |> String.trim_trailing(".js") |> Volt.JS.Vendor.decode_specifier()
 
-    case Volt.JS.Vendor.read(specifier) do
+    case serve_vendor(specifier, config) do
       {:ok, code} ->
         conn
         |> Plug.Conn.put_resp_content_type("application/javascript")
@@ -286,6 +290,26 @@ defmodule Volt.DevServer do
     import { createHotContext as __volt_createHotContext } from "/@volt/client.js";
     import.meta.hot = __volt_createHotContext(#{inspect(mod_url)});
     """
+  end
+
+  # ── Vendor pre-bundling ───────────────────────────────────────────
+
+  defp prebundle_vendor(root, node_modules) do
+    case Volt.JS.Vendor.prebundle(root: root, node_modules: node_modules) do
+      {:ok, vendor_map} when map_size(vendor_map) > 0 ->
+        count = map_size(vendor_map)
+        Logger.debug("[Volt] Pre-bundled #{count} vendor package(s)")
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp serve_vendor(specifier, config) do
+    case Volt.JS.Vendor.read(specifier) do
+      {:ok, _} = ok -> ok
+      {:error, :not_found} -> Volt.JS.Vendor.bundle_on_demand(specifier, config.node_modules)
+    end
   end
 
   # ── Helpers ───────────────────────────────────────────────────────
