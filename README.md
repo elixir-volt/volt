@@ -30,6 +30,15 @@ Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https:/
 
 ## Installation
 
+```bash
+mix igniter.install volt
+```
+
+This will add the dep, configure Volt in `config.exs` and `dev.exs`,
+add the dev server plug to your endpoint, and remove esbuild/tailwind.
+
+Or add manually:
+
 ```elixir
 def deps do
   [{:volt, "~> 0.7"}]
