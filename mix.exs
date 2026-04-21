@@ -33,7 +33,7 @@ defmodule Volt.MixProject do
   defp deps do
     [
       {:reach, "~> 1.6"},
-      {:oxc, "~> 0.8.0"},
+      {:oxc, "~> 0.9.0"},
       {:vize, "~> 0.8.0"},
       {:oxide_ex, "~> 0.2.0"},
       {:quickbeam, "~> 0.10.1"},
