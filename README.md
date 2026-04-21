@@ -82,25 +82,14 @@ CLI flags override config values for one-off use.
 
 ## Quick Start
 
-### Dev Server
-
-Add the Plug to your Phoenix endpoint:
-
-```elixir
-# lib/my_app_web/endpoint.ex
-if code_reloading? do
-  plug Volt.DevServer, root: "assets"
-end
+```bash
+mix igniter.install volt
+mix phx.server
 ```
 
-Start the watcher in `config/dev.exs`:
+The installer configures everything: build settings, dev server plug, watcher, format and lint config.
 
-```elixir
-config :my_app, MyAppWeb.Endpoint,
-  watchers: [
-    volt: {Mix.Tasks.Volt.Dev, :run, [~w(--tailwind)]}
-  ]
-```
+For manual setup or details, see the sections below.
 
 ### Production Build
 
@@ -351,6 +340,12 @@ When a file changes, Volt walks the dependency graph upward to find the nearest 
 API: `accept()`, `accept(deps, cb)`, `dispose(cb)`, `data`, `invalidate()`.
 
 ## Mix Tasks
+
+
+### `mix igniter.install volt`
+
+Set up Volt in a Phoenix project. Adds config, dev server plug, watcher,
+removes esbuild/tailwind deps.
 
 ### `mix volt.js.format`
 
