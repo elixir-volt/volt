@@ -1,9 +1,9 @@
 defmodule Volt.JS.Format do
   @moduledoc false
 
-  @config_files ~w(.oxfmtrc.json .oxfmtrc .prettierrc.json .prettierrc)
+  @json_config_files ~w(.oxfmtrc.json .oxfmtrc .prettierrc.json .prettierrc)
 
-  @key_mapping %{
+  @json_key_mapping %{
     "printWidth" => :print_width,
     "tabWidth" => :tab_width,
     "useTabs" => :use_tabs,
@@ -26,25 +26,32 @@ defmodule Volt.JS.Format do
   @atom_values ~w(trailing_comma arrow_parens end_of_line quote_props object_wrap experimental_operator_position embedded_language_formatting)a
 
   def load_config do
-    case find_config_file() do
-      nil -> []
-      path -> parse_config(path)
+    case Application.get_env(:volt, :format) do
+      nil -> load_json_config()
+      opts when is_list(opts) -> opts
     end
   end
 
-  defp find_config_file do
-    Enum.find_value(@config_files, fn name ->
+  defp load_json_config do
+    case find_json_config() do
+      nil -> []
+      path -> parse_json_config(path)
+    end
+  end
+
+  defp find_json_config do
+    Enum.find_value(@json_config_files, fn name ->
       path = Path.join(File.cwd!(), name)
       if File.exists?(path), do: path
     end)
   end
 
-  defp parse_config(path) do
+  defp parse_json_config(path) do
     path
     |> File.read!()
     |> Jason.decode!()
     |> Enum.flat_map(fn {key, value} ->
-      case Map.get(@key_mapping, key) do
+      case Map.get(@json_key_mapping, key) do
         nil -> []
         opt_key -> [{opt_key, cast_value(opt_key, value)}]
       end

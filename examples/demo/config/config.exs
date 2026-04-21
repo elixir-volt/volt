@@ -55,3 +55,10 @@ config :volt, :lint,
     "eqeqeq" => :deny,
     "typescript/no-explicit-any" => :warn
   }
+
+config :volt, :format,
+  print_width: 100,
+  semi: false,
+  single_quote: true,
+  trailing_comma: :none,
+  arrow_parens: :always
