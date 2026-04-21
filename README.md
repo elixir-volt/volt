@@ -41,7 +41,7 @@ Or add manually:
 
 ```elixir
 def deps do
-  [{:volt, "~> 0.7"}]
+  [{:volt, "~> 0.8"}]
 end
 ```
 

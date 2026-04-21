@@ -2,6 +2,22 @@
 
 
 
+## 0.8.0
+
+### Added
+
+- `mix volt.js.format` — format JS/TS assets with oxfmt via NIF. No Node.js required.
+- `mix volt.js.check` — format check + lint in one command via NIF.
+- `mix volt.install` — Igniter-based project setup. Adds Volt config, dev server plug, watcher, removes esbuild/tailwind deps. Migrates existing Prettier/oxfmt JSON config.
+- `config :volt, :format` — Elixir-native format config (falls back to `.oxfmtrc.json`).
+
+### Changed
+
+- Replaced npx-based formatting/linting with NIF bindings (no Node.js needed).
+- Format and lint tasks use `app.config` instead of `app.start` (no full app boot required).
+- File discovery uses `config :volt, :root` consistently across format, check, and lint tasks.
+- Renamed `mix volt.js.fmt` → `mix volt.js.format`.
+
 ## 0.7.1
 
 - Improve `mix volt.lint` output to match credo style — grouped by category, severity tags, edge markers, summary by category
