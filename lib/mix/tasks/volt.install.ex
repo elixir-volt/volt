@@ -5,17 +5,22 @@ if Code.ensure_loaded?(Igniter) do
     @moduledoc """
     #{@shortdoc}
 
+    Replaces esbuild and tailwind with Volt — no Node.js required.
+
     ## Example
 
         mix igniter.install volt
 
     This installer will:
 
-    1. Add Volt build config to `config/config.exs`
-    2. Add format and lint config to `config/config.exs`
-    3. Add `Volt.DevServer` plug to your endpoint
-    4. Add the Volt watcher to `config/dev.exs`
-    5. Add Volt server config to `config/dev.exs`
+    1. Remove `:esbuild` and `:tailwind` deps
+    2. Add Volt build config to `config/config.exs`
+    3. Add format and lint config to `config/config.exs`
+    4. Add `Volt.DevServer` plug to your endpoint
+    5. Add the Volt watcher to `config/dev.exs`
+
+    You may need to manually remove old `config :esbuild` and
+    `config :tailwind` blocks from `config/config.exs`.
     """
 
     use Igniter.Mix.Task
@@ -33,44 +38,79 @@ if Code.ensure_loaded?(Igniter) do
       app_name = Igniter.Project.Application.app_name(igniter)
 
       igniter
-      |> add_volt_config(app_name)
+      |> remove_old_deps()
+      |> warn_about_old_config()
+      |> add_volt_config()
       |> add_format_config()
       |> add_lint_config()
       |> add_dev_config(app_name)
       |> add_dev_server_plug()
     end
 
-    defp add_volt_config(igniter, _app_name) do
-      Igniter.Project.Config.configure(
-        igniter,
-        "config.exs",
-        :volt,
-        [:entry],
-        "assets/js/app.ts"
-      )
+    # ── Remove old tooling ──
+
+    defp remove_old_deps(igniter) do
+      igniter
+      |> Igniter.Project.Deps.remove_dep(:esbuild)
+      |> Igniter.Project.Deps.remove_dep(:tailwind)
+    end
+
+    defp warn_about_old_config(igniter) do
+      has_esbuild =
+        Igniter.Project.Config.configures_root_key?(igniter, "config.exs", :esbuild)
+
+      has_tailwind =
+        Igniter.Project.Config.configures_root_key?(igniter, "config.exs", :tailwind)
+
+      cond do
+        has_esbuild and has_tailwind ->
+          Igniter.add_warning(igniter, """
+          Found `config :esbuild` and `config :tailwind` in config/config.exs.
+          Please remove them manually — Volt replaces both.
+          Also remove esbuild/tailwind watchers from config/dev.exs.
+          """)
+
+        has_esbuild ->
+          Igniter.add_warning(igniter, """
+          Found `config :esbuild` in config/config.exs.
+          Please remove it manually — Volt replaces esbuild.
+          Also remove the esbuild watcher from config/dev.exs.
+          """)
+
+        has_tailwind ->
+          Igniter.add_warning(igniter, """
+          Found `config :tailwind` in config/config.exs.
+          Please remove it manually — Volt replaces the Tailwind CLI.
+          Also remove the tailwind watcher from config/dev.exs.
+          """)
+
+        true ->
+          igniter
+      end
+    end
+
+    # ── Add Volt config ──
+
+    defp add_volt_config(igniter) do
+      igniter
+      |> Igniter.Project.Config.configure("config.exs", :volt, [:entry], "assets/js/app.ts")
+      |> Igniter.Project.Config.configure("config.exs", :volt, [:outdir], "priv/static/assets")
+      |> Igniter.Project.Config.configure("config.exs", :volt, [:target], :es2020)
+      |> Igniter.Project.Config.configure("config.exs", :volt, [:sourcemap], :hidden)
       |> Igniter.Project.Config.configure(
         "config.exs",
         :volt,
-        [:outdir],
-        "priv/static/assets"
-      )
-      |> Igniter.Project.Config.configure(
-        "config.exs",
-        :volt,
-        [:target],
-        :es2020
-      )
-      |> Igniter.Project.Config.configure(
-        "config.exs",
-        :volt,
-        [:sourcemap],
-        :hidden
-      )
-      |> Igniter.Project.Config.configure(
-        "config.exs",
-        :volt,
-        [:tailwind, :css],
-        "assets/css/app.css"
+        [:tailwind],
+        {:code,
+         Sourceror.parse_string!("""
+         [
+           css: "assets/css/app.css",
+           sources: [
+             %{base: "lib/", pattern: "**/*.{ex,heex}"},
+             %{base: "assets/", pattern: "**/*.{js,ts,jsx,tsx}"}
+           ]
+         ]
+         """)}
       )
     end
 
@@ -139,6 +179,8 @@ if Code.ensure_loaded?(Igniter) do
       )
     end
 
+    # ── DevServer plug ──
+
     defp add_dev_server_plug(igniter) do
       {igniter, endpoint} =
         Igniter.Libs.Phoenix.select_endpoint(
@@ -170,13 +212,10 @@ if Code.ensure_loaded?(Igniter) do
             :error ->
               {:warning,
                """
-               Could not find the code_reloading? section of your endpoint `#{inspect(endpoint)}`.
-               Please add the plug manually:
+               Could not find the code_reloading? section in `#{inspect(endpoint)}`.
+               Please add the plug manually inside `if code_reloading? do`:
 
-                 if code_reloading? do
-                   # ...
-                   plug Volt.DevServer, root: "assets"
-                 end
+                 plug Volt.DevServer, root: "assets"
                """}
           end
         end)
@@ -188,6 +227,8 @@ if Code.ensure_loaded?(Igniter) do
         """)
       end
     end
+
+    # ── Helpers ──
 
     defp code_reloading?(zipper) do
       Igniter.Code.Function.function_call?(zipper, :if, 2) &&
