@@ -35,8 +35,6 @@ defmodule Mix.Tasks.Volt.Lint do
   """
   use Mix.Task
 
-  @extensions ~w(.js .ts .jsx .tsx .vue)
-
   @category_colors [
     correctness: :yellow,
     typescript: :blue,
@@ -70,8 +68,6 @@ defmodule Mix.Tasks.Volt.Lint do
       )
 
     config = Application.get_env(:volt, :lint, [])
-    volt_config = Volt.Config.build()
-    root = volt_config.root
 
     plugins =
       case Keyword.get_values(parsed, :plugin) do
@@ -83,23 +79,15 @@ defmodule Mix.Tasks.Volt.Lint do
     custom_rules = Keyword.get(config, :custom_rules, [])
     fix = Keyword.get(parsed, :fix, false)
 
-    files = discover_files(root)
+    files = Volt.JS.Helpers.discover_files()
 
     if files == [] do
-      Mix.shell().info("No lintable files found in #{root}/")
+      Mix.shell().info("No lintable files found")
       :ok
     else
       results = lint_files(files, plugins, rules, custom_rules, fix)
       print_results(results, files)
     end
-  end
-
-  defp discover_files(root) do
-    Path.wildcard("#{root}/**/*")
-    |> Enum.filter(fn path ->
-      Path.extname(path) in @extensions and not String.contains?(path, "node_modules")
-    end)
-    |> Enum.sort()
   end
 
   defp lint_files(files, plugins, rules, custom_rules, fix) do

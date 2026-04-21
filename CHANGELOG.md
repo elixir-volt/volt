@@ -2,6 +2,16 @@
 
 
 
+## 0.8.1
+
+### Added
+
+- Configurable file discovery via `sources:` and `ignore:` in `config :volt`. Default sources: `["**/*.{js,ts,jsx,tsx,vue}"]`, default ignore: `["node_modules/**", "vendor/**"]`.
+
+### Changed
+
+- Unified file discovery across `volt.js.format`, `volt.js.check`, and `volt.lint` — all use the same `sources` and `ignore` config.
+
 ## 0.8.0
 
 ### Added

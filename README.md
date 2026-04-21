@@ -41,7 +41,7 @@ Or add manually:
 
 ```elixir
 def deps do
-  [{:volt, "~> 0.8"}]
+  [{:volt, "~> 0.8.1"}]
 end
 ```
 
@@ -53,6 +53,9 @@ All config lives in your standard `config/*.exs` files:
 # config/config.exs
 config :volt,
   entry: "assets/js/app.ts",
+  root: "assets",
+  sources: ["**/*.{js,ts,jsx,tsx,vue}"],
+  ignore: ["node_modules/**", "vendor/**"],
   target: :es2020,
   sourcemap: :hidden,
   external: ~w(phoenix phoenix_html phoenix_live_view),
@@ -384,6 +387,8 @@ config :volt, :lint,
 ```
 
 All [oxfmt options](https://hexdocs.pm/oxc/OXC.Format.html) are supported. Falls back to `.oxfmtrc.json` if no Elixir config is set.
+
+File discovery for all JS tasks uses `sources:` and `ignore:` from `config :volt` (see Configuration above).
 
 ### `mix volt.lint`
 

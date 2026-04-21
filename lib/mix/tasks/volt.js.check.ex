@@ -10,6 +10,7 @@ defmodule Mix.Tasks.Volt.Js.Check do
 
   Reads format options from `config :volt, :format` (falls back to `.oxfmtrc.json`).
   Lint settings come from `config :volt, :lint`.
+  File discovery uses `config :volt, sources:` and `ignore:`.
   No Node.js required.
   """
 
@@ -17,20 +18,22 @@ defmodule Mix.Tasks.Volt.Js.Check do
   def run(_args) do
     Mix.Task.run("app.config")
 
-    dir = Volt.JS.Helpers.assets_dir()
-    files = Volt.JS.Helpers.discover_files(dir)
+    format_files = Volt.JS.Helpers.discover_format_files()
+    lint_files = Volt.JS.Helpers.discover_files()
 
-    if files == [] do
-      Mix.shell().info("No files found in #{dir}/")
+    if format_files == [] and lint_files == [] do
+      Mix.shell().info("No files found")
     else
-      format_ok = check_formatting(files)
-      lint_ok = check_lint(files)
+      format_ok = check_formatting(format_files)
+      lint_ok = check_lint(lint_files)
 
       unless format_ok and lint_ok do
         exit({:shutdown, 1})
       end
     end
   end
+
+  defp check_formatting([]), do: true
 
   defp check_formatting(files) do
     opts = Volt.JS.Format.load_config()
@@ -52,25 +55,10 @@ defmodule Mix.Tasks.Volt.Js.Check do
     end
   end
 
+  defp check_lint([]), do: true
+
   defp check_lint(files) do
-    config = Application.get_env(:volt, :lint, [])
-    plugins = Keyword.get(config, :plugins, [:typescript])
-    rules = Keyword.get(config, :rules, %{})
-    custom_rules = Keyword.get(config, :custom_rules, [])
-
-    diags =
-      Enum.flat_map(files, fn file ->
-        source = File.read!(file)
-
-        case OXC.Lint.run(source, file,
-               plugins: plugins,
-               rules: rules,
-               custom_rules: custom_rules
-             ) do
-          {:ok, d} -> Enum.map(d, &Map.put(&1, :file, file))
-          {:error, _} -> []
-        end
-      end)
+    diags = run_lint(files)
 
     if diags == [] do
       Mix.shell().info(
@@ -79,16 +67,40 @@ defmodule Mix.Tasks.Volt.Js.Check do
 
       true
     else
-      errors = Enum.count(diags, &(&1.severity == :deny))
-      warnings = Enum.count(diags, &(&1.severity == :warn))
-
-      Enum.each(diags, fn diag ->
-        tag = if diag.severity == :deny, do: "error", else: "warn"
-        Mix.shell().error("  [#{tag}] #{diag.file}: #{diag.message} (#{diag.rule})")
-      end)
-
-      Mix.shell().error("#{errors} error(s), #{warnings} warning(s)")
-      errors == 0
+      print_lint_diags(diags)
     end
+  end
+
+  defp run_lint(files) do
+    config = Application.get_env(:volt, :lint, [])
+    plugins = Keyword.get(config, :plugins, [:typescript])
+    rules = Keyword.get(config, :rules, %{})
+    custom_rules = Keyword.get(config, :custom_rules, [])
+
+    Enum.flat_map(files, fn file ->
+      source = File.read!(file)
+
+      case OXC.Lint.run(source, file,
+             plugins: plugins,
+             rules: rules,
+             custom_rules: custom_rules
+           ) do
+        {:ok, d} -> Enum.map(d, &Map.put(&1, :file, file))
+        {:error, _} -> []
+      end
+    end)
+  end
+
+  defp print_lint_diags(diags) do
+    errors = Enum.count(diags, &(&1.severity == :deny))
+    warnings = Enum.count(diags, &(&1.severity == :warn))
+
+    Enum.each(diags, fn diag ->
+      tag = if diag.severity == :deny, do: "error", else: "warn"
+      Mix.shell().error("  [#{tag}] #{diag.file}: #{diag.message} (#{diag.rule})")
+    end)
+
+    Mix.shell().error("#{errors} error(s), #{warnings} warning(s)")
+    errors == 0
   end
 end

@@ -9,6 +9,7 @@ defmodule Mix.Tasks.Volt.Js.Format do
       mix volt.js.format
 
   Reads options from `config :volt, :format`. Falls back to `.oxfmtrc.json`.
+  File discovery uses `config :volt, sources:` and `ignore:`.
   No Node.js required.
   """
 
@@ -17,11 +18,10 @@ defmodule Mix.Tasks.Volt.Js.Format do
     Mix.Task.run("app.config")
 
     opts = Volt.JS.Format.load_config()
-    dir = Volt.JS.Helpers.assets_dir()
-    files = Volt.JS.Helpers.discover_files(dir)
+    files = Volt.JS.Helpers.discover_format_files()
 
     if files == [] do
-      Mix.shell().info("No formattable files found in #{dir}/")
+      Mix.shell().info("No formattable files found")
     else
       {changed, total} = format_files(files, opts)
 

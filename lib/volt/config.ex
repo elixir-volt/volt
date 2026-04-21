@@ -72,6 +72,8 @@ defmodule Volt.Config do
     plugins: [],
     resolve_dirs: [],
     root: "assets",
+    sources: ["**/*.{js,ts,jsx,tsx,vue}"],
+    ignore: ["node_modules/**", "vendor/**"],
     import_source: nil,
     vapor: false
   }
