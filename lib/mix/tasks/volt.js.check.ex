@@ -4,23 +4,21 @@ defmodule Mix.Tasks.Volt.Js.Check do
   @shortdoc "Lint and format-check Volt TypeScript assets"
 
   @moduledoc """
-  Run oxfmt format check and oxlint on Volt's TypeScript assets via NIF.
+  Check formatting and lint Volt's JavaScript and TypeScript assets via NIF.
 
       mix volt.js.check
 
-  Reads formatting options from `.oxfmtrc.json` if present.
+  Reads format options from `config :volt, :format` (falls back to `.oxfmtrc.json`).
   Lint settings come from `config :volt, :lint`.
   No Node.js required.
   """
-
-  @extensions ~w(.js .ts .jsx .tsx)
 
   @impl true
   def run(_args) do
     Mix.Task.run("app.start")
 
-    dir = Volt.JS.Helpers.ts_dir()
-    files = discover_files(dir)
+    dir = Volt.JS.Helpers.assets_dir()
+    files = Volt.JS.Helpers.discover_files(dir)
 
     if files == [] do
       Mix.shell().info("No files found in #{dir}/")
@@ -34,12 +32,6 @@ defmodule Mix.Tasks.Volt.Js.Check do
     end
   end
 
-  defp discover_files(dir) do
-    Path.wildcard("#{dir}/**/*")
-    |> Enum.filter(&(Path.extname(&1) in @extensions))
-    |> Enum.sort()
-  end
-
   defp check_formatting(files) do
     opts = Volt.JS.Format.load_config()
 
@@ -51,18 +43,11 @@ defmodule Mix.Tasks.Volt.Js.Check do
       end)
 
     if unformatted == [] do
-      Mix.shell().info(
-        IO.ANSI.format([:green, "✓ All #{length(files)} files formatted"])
-      )
-
+      Mix.shell().info(IO.ANSI.format([:green, "✓ All #{length(files)} files formatted"]))
       true
     else
       Mix.shell().error("#{length(unformatted)} file(s) need formatting:")
-
-      Enum.each(unformatted, fn file ->
-        Mix.shell().error("  #{file}")
-      end)
-
+      Enum.each(unformatted, &Mix.shell().error("  #{&1}"))
       false
     end
   end

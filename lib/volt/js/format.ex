@@ -59,7 +59,7 @@ defmodule Volt.JS.Format do
   end
 
   defp cast_value(key, value) when key in @atom_values and is_binary(value) do
-    value |> String.replace("-", "_") |> String.to_atom()
+    value |> String.replace("-", "_") |> String.to_existing_atom()
   end
 
   defp cast_value(_key, value), do: value

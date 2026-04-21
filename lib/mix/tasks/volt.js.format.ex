@@ -4,23 +4,21 @@ defmodule Mix.Tasks.Volt.Js.Format do
   @shortdoc "Format Volt TypeScript assets"
 
   @moduledoc """
-  Format Volt's TypeScript assets with oxfmt via NIF.
+  Format Volt's JavaScript and TypeScript assets with oxfmt via NIF.
 
       mix volt.js.format
 
-  Reads formatting options from `.oxfmtrc.json` if present.
+  Reads options from `config :volt, :format`. Falls back to `.oxfmtrc.json`.
   No Node.js required.
   """
-
-  @extensions ~w(.js .ts .jsx .tsx)
 
   @impl true
   def run(_args) do
     Mix.Task.run("app.start")
 
     opts = Volt.JS.Format.load_config()
-    dir = Volt.JS.Helpers.ts_dir()
-    files = discover_files(dir)
+    dir = Volt.JS.Helpers.assets_dir()
+    files = Volt.JS.Helpers.discover_files(dir)
 
     if files == [] do
       Mix.shell().info("No formattable files found in #{dir}/")
@@ -33,12 +31,6 @@ defmodule Mix.Tasks.Volt.Js.Format do
         Mix.shell().info("Formatted #{changed}/#{total} files")
       end
     end
-  end
-
-  defp discover_files(dir) do
-    Path.wildcard("#{dir}/**/*")
-    |> Enum.filter(&(Path.extname(&1) in @extensions))
-    |> Enum.sort()
   end
 
   defp format_files(files, opts) do
