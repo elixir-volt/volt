@@ -49,7 +49,8 @@ defmodule Demo.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:volt, path: "../..", override: true},
-      {:oxc, "~> 0.8.0", override: true},
+      {:oxc, "~> 0.9.0", override: true},
+      {:igniter, "~> 0.5"},
       {:vize, "~> 0.8.0", override: true},
       {:phoenix_vapor, "~> 0.2.1"},
       {:quickbeam, "~> 0.10.0", override: true}
