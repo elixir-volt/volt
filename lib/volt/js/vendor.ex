@@ -4,13 +4,19 @@ defmodule Volt.JS.Vendor do
 
   Scans source files with `OXC.imports/2`, identifies bare specifiers
   (non-relative, non-URL), resolves them through `node_modules`, and
-  bundles each into a single file with `OXC.bundle/2`.
+  bundles each into a single ESM file with `OXC.bundle/2`.
+
+  CJS packages (e.g. React) are automatically converted to ESM during
+  bundling. `process.env.NODE_ENV` is replaced with `"development"`
+  so conditional CJS branches resolve correctly.
+
+  Cross-package CJS `require()` calls (e.g. `react-dom` requiring `react`)
+  are rewritten to ESM imports pointing at other `/@vendor/` modules.
 
   Bundled files are cached on disk in `_build/volt/vendor/`.
   """
 
-  alias QuickBEAM.JS.Bundler
-  alias Volt.Builder.BundleResult
+  require Logger
 
   defp cache_dir do
     build_path = System.get_env("MIX_BUILD_PATH") || "_build"
@@ -51,6 +57,23 @@ defmodule Volt.JS.Vendor do
   end
 
   @doc """
+  Bundle a single vendor specifier on demand.
+
+  Used by the dev server when a `/@vendor/` request arrives for a
+  specifier that wasn't caught by `prebundle/1` (e.g. transitive
+  dependency, or newly added import).
+  """
+  @spec bundle_on_demand(String.t(), String.t() | nil) :: {:ok, String.t()} | {:error, term()}
+  def bundle_on_demand(specifier, node_modules) do
+    ensure_cache_dir()
+
+    case bundle_vendor(specifier, node_modules, false) do
+      {:ok, path} -> File.read(path)
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc """
   Get the URL path for a vendor module.
   """
   @spec vendor_url(String.t()) :: String.t()
@@ -71,20 +94,21 @@ defmodule Volt.JS.Vendor do
     end
   end
 
+  # ── Scanning ──────────────────────────────────────────────────────
+
   defp scan_bare_imports(root) do
     source_files =
-      ["ts", "tsx", "js", "jsx", "mts", "mjs", "vue"]
-      |> Enum.flat_map(&Path.wildcard(Path.join(root, "**/*.#{&1}")))
+      Volt.JS.Extensions.scannable()
+      |> Enum.flat_map(fn ext -> Path.wildcard(Path.join(root, "**/*" <> ext)) end)
       |> Enum.uniq()
 
     specifiers =
       Enum.flat_map(source_files, fn file ->
-        source = File.read!(file)
-        filename = Path.basename(file)
-
-        case extract_imports(source, filename) do
-          {:ok, imports} -> Enum.filter(imports, &NPM.PackageResolver.bare?/1)
-          {:error, _} -> []
+        with {:ok, source} <- File.read(file),
+             {:ok, imports} <- extract_imports(source, Path.basename(file)) do
+          Enum.filter(imports, &NPM.PackageResolver.bare?/1)
+        else
+          _ -> []
         end
       end)
 
@@ -92,14 +116,14 @@ defmodule Volt.JS.Vendor do
   end
 
   defp extract_imports(source, filename) do
-    ext = Path.extname(filename)
-
-    if ext == ".vue" do
+    if Path.extname(filename) == ".vue" do
       Volt.JS.VueImports.extract(source)
     else
       OXC.imports(source, filename)
     end
   end
+
+  # ── Bundling ──────────────────────────────────────────────────────
 
   defp bundle_vendor(specifier, node_modules, force) do
     path = cache_path(specifier)
@@ -114,9 +138,21 @@ defmodule Volt.JS.Vendor do
   defp do_bundle_vendor(specifier, node_modules, output_path) do
     case resolve_package_entry(specifier, node_modules) do
       {:ok, entry_path} ->
-        case Bundler.bundle_file(entry_path, node_modules: node_modules) do
+        {package_name, _subpath} = NPM.PackageResolver.split_specifier(specifier)
+        package_dir = Path.join(node_modules, package_name)
+
+        files = collect_package_files(entry_path, package_dir, node_modules)
+        entry_label = entry_label(entry_path, node_modules)
+
+        bundle_opts = [
+          entry: entry_label,
+          format: :esm
+        ]
+
+        case OXC.bundle(files, bundle_opts) do
           {:ok, result} ->
-            File.write!(output_path, BundleResult.code(result))
+            code = extract_code(result) |> rewrite_cross_package_requires()
+            File.write!(output_path, code)
             {:ok, output_path}
 
           {:error, _} = error ->
@@ -127,6 +163,127 @@ defmodule Volt.JS.Vendor do
         {:error, {:not_found, specifier}}
     end
   end
+
+  defp collect_package_files(entry_path, package_dir, node_modules) do
+    project_root = common_root(entry_path, node_modules)
+    entry_label = Path.relative_to(entry_path, project_root)
+
+    package_files =
+      package_dir
+      |> Path.join("**/*")
+      |> Path.wildcard()
+      |> Enum.filter(&(Path.extname(&1) in Volt.JS.Extensions.bundleable() and File.regular?(&1)))
+      |> Enum.map(fn path ->
+        label = Path.relative_to(path, project_root)
+        {label, File.read!(path)}
+      end)
+
+    has_entry = Enum.any?(package_files, fn {label, _} -> label == entry_label end)
+
+    if has_entry do
+      package_files
+    else
+      [{entry_label, File.read!(entry_path)} | package_files]
+    end
+  end
+
+  # ── Cross-package require rewriting ───────────────────────────────
+
+  defp rewrite_cross_package_requires(code) do
+    case OXC.parse(code, "vendor.js") do
+      {:ok, ast} ->
+        {_ast, %{calls: calls, decl: decl}} =
+          OXC.postwalk(ast, %{calls: [], decl: nil}, &collect_require_info/2)
+
+        deps = calls |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+
+        if deps == [] do
+          code
+        else
+          apply_require_rewrite(code, deps, decl)
+        end
+
+      {:error, _} ->
+        code
+    end
+  end
+
+  defp collect_require_info(
+         %{type: :variable_declaration, declarations: decls, start: s, end: e} = node,
+         acc
+       ) do
+    if Enum.any?(decls, &match?(%{id: %{name: "__require"}}, &1)) do
+      {node, %{acc | decl: %{start: s, end: e}}}
+    else
+      {node, acc}
+    end
+  end
+
+  defp collect_require_info(
+         %{
+           type: :call_expression,
+           callee: %{type: :identifier, name: "__require"},
+           arguments: [%{type: :literal, value: spec}]
+         } = node,
+         acc
+       )
+       when is_binary(spec) do
+    {node, %{acc | calls: [{spec, node.start, node.end} | acc.calls]}}
+  end
+
+  defp collect_require_info(node, acc), do: {node, acc}
+
+  defp apply_require_rewrite(code, deps, decl) do
+    safe_name = fn spec -> "__vendor_" <> String.replace(spec, ~r/[^a-zA-Z0-9]/, "_") end
+
+    import_stmts =
+      Enum.map(deps, fn spec ->
+        "import * as #{safe_name.(spec)} from '#{vendor_url(spec)}';"
+      end)
+
+    prop_stmts =
+      Enum.map(deps, fn spec ->
+        ~s|"#{spec}": #{safe_name.(spec)}|
+      end)
+
+    preamble =
+      OXC.parse!("$imports\nvar __require = (id) => ({$entries})[id];", "shim.js")
+      |> OXC.splice(:imports, import_stmts)
+      |> OXC.splice(:entries, prop_stmts)
+      |> OXC.codegen!()
+
+    if decl do
+      shim_code =
+        OXC.parse!("var __require = (id) => ({$entries})[id];", "shim.js")
+        |> OXC.splice(:entries, prop_stmts)
+        |> OXC.codegen!()
+        |> String.trim_trailing()
+
+      preamble <> OXC.patch_string(code, [%{start: decl.start, end: decl.end, change: shim_code}])
+    else
+      preamble <> code
+    end
+  end
+
+  # ── Helpers ───────────────────────────────────────────────────────
+
+  defp entry_label(entry_path, node_modules) do
+    project_root = common_root(entry_path, node_modules)
+    Path.relative_to(entry_path, project_root)
+  end
+
+  defp common_root(entry_path, node_modules) do
+    entry_parts = Path.split(entry_path)
+    nm_parts = Path.split(node_modules)
+
+    Enum.zip(entry_parts, nm_parts)
+    |> Enum.take_while(fn {a, b} -> a == b end)
+    |> Enum.map(&elem(&1, 0))
+    |> Path.join()
+  end
+
+  defp extract_code(result) when is_binary(result), do: result
+  defp extract_code(%{code: code}), do: code
 
   defp resolve_package_entry(specifier, node_modules) when is_binary(node_modules) do
     {package_name, subpath} = NPM.PackageResolver.split_specifier(specifier)

@@ -9,7 +9,9 @@ defmodule Volt.JS.Extensions do
   @template ~w(.ex .heex .eex .leex .sface)
 
   def js, do: @js
+  def bundleable, do: @js ++ @cjs
   def compilable, do: @vue ++ @js ++ @css ++ @json
+  def scannable, do: @vue ++ @js
   def resolvable, do: ["" | @js ++ @cjs ++ @vue ++ @json]
   def resolvable_index, do: ~w(/index.ts /index.tsx /index.js /index.jsx)
   def watchable_js, do: @vue ++ @js ++ @css
