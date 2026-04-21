@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Volt.Js.Fmt do
+defmodule Mix.Tasks.Volt.Js.Format do
   use Mix.Task
 
   @shortdoc "Format Volt TypeScript assets"
@@ -6,7 +6,7 @@ defmodule Mix.Tasks.Volt.Js.Fmt do
   @moduledoc """
   Format Volt's TypeScript assets with oxfmt via NIF.
 
-      mix volt.js.fmt
+      mix volt.js.format
 
   Reads formatting options from `.oxfmtrc.json` if present.
   No Node.js required.
