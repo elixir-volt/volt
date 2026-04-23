@@ -86,9 +86,14 @@ defmodule Volt.Watcher do
         %{base: dir, pattern: "**/*"}
       end)
 
-    css_input = if css_path, do: File.read!(css_path)
+    {css_input, css_base} =
+      if css_path do
+        {File.read!(css_path), Path.dirname(css_path)}
+      else
+        {nil, File.cwd!()}
+      end
 
-    case Volt.Tailwind.build(sources: sources, css: css_input) do
+    case Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
       {:ok, css} ->
         if outdir do
           File.mkdir_p!(outdir)
@@ -250,13 +255,13 @@ defmodule Volt.Watcher do
         %{file: path, extension: ext}
       end)
 
-    css_input =
+    {css_input, css_base} =
       case state.config[:tailwind_css] do
-        nil -> nil
-        path -> File.read!(path)
+        nil -> {nil, File.cwd!()}
+        path -> {File.read!(path), Path.dirname(path)}
       end
 
-    case Volt.Tailwind.rebuild(changed, css: css_input) do
+    case Volt.Tailwind.rebuild(changed, css: css_input, css_base: css_base) do
       {:ok, css} ->
         if outdir = state.tailwind_outdir do
           File.mkdir_p!(outdir)

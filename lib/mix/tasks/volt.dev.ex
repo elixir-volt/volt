@@ -92,13 +92,13 @@ defmodule Mix.Tasks.Volt.Dev do
           %{base: "assets/", pattern: "**/*.{vue,ts,tsx,js,jsx}"}
         ]
 
-    css_input =
+    {css_input, css_base} =
       case tailwind_css do
-        nil -> nil
-        path -> File.read!(path)
+        nil -> {nil, File.cwd!()}
+        path -> {File.read!(path), Path.dirname(path)}
       end
 
-    case Volt.Tailwind.build(sources: sources, css: css_input) do
+    case Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
       {:ok, css} ->
         outdir = Keyword.get(parsed, :tailwind_outdir, "priv/static/assets/css")
         File.mkdir_p!(outdir)

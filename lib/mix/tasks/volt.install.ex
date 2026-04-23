@@ -126,8 +126,10 @@ if Code.ensure_loaded?(Igniter) do
     # ── Add Volt config ──
 
     defp add_volt_config(igniter) do
+      entry = detect_entry()
+
       igniter
-      |> ProjectConfig.configure("config.exs", :volt, [:entry], "assets/js/app.ts")
+      |> ProjectConfig.configure("config.exs", :volt, [:entry], entry)
       |> ProjectConfig.configure("config.exs", :volt, [:outdir], "priv/static/assets")
       |> ProjectConfig.configure("config.exs", :volt, [:target], :es2020)
       |> ProjectConfig.configure("config.exs", :volt, [:sourcemap], :hidden)
@@ -281,6 +283,14 @@ if Code.ensure_loaded?(Igniter) do
           0,
           &Common.variable?(&1, :code_reloading?)
         )
+    end
+
+    defp detect_entry do
+      cond do
+        File.exists?("assets/js/app.ts") -> "assets/js/app.ts"
+        File.exists?("assets/js/app.js") -> "assets/js/app.js"
+        true -> "assets/js/app.ts"
+      end
     end
 
     defp endpoint_module(igniter) do

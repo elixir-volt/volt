@@ -162,16 +162,23 @@ defmodule Mix.Tasks.Volt.Build do
           Enum.map(list, &%{base: &1, pattern: "**/*"})
       end
 
-    css_input =
+    {css_input, css_base} =
       case Keyword.get(parsed, :tailwind_css) || tailwind_config[:css] do
-        nil -> nil
-        path -> File.read!(path)
+        nil -> {nil, File.cwd!()}
+        path -> {File.read!(path), Path.dirname(path)}
       end
 
     Mix.shell().info("Building Tailwind CSS...")
 
     {us, result} =
-      :timer.tc(fn -> Volt.Tailwind.build(sources: sources, css: css_input, minify: minify) end)
+      :timer.tc(fn ->
+        Volt.Tailwind.build(
+          sources: sources,
+          css: css_input,
+          css_base: css_base,
+          minify: minify
+        )
+      end)
 
     ms = div(us, 1000)
 

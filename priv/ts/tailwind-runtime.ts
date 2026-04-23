@@ -112,7 +112,8 @@ async function compileTailwindCss(
         type ?? 'plugin'
       ) as BeamModuleSpec
 
-      return { module: requireResolvedModule(spec, moduleCache), base: spec.base }
+      const mod = requireResolvedModule(spec, moduleCache)
+      return { module: unwrapModule(mod), base: spec.base }
     }
   })
 
@@ -121,6 +122,18 @@ async function compileTailwindCss(
 
 function normalizeBase(base: string | null | undefined, fallbackBase: string) {
   return base == null || base === '' ? fallbackBase : base
+}
+
+function unwrapModule(mod: unknown): unknown {
+  if (
+    mod &&
+    typeof mod === 'object' &&
+    '__esModule' in mod &&
+    'default' in mod
+  ) {
+    return (mod as Record<string, unknown>).default
+  }
+  return mod
 }
 
 function requireResolvedModule(
@@ -157,6 +170,11 @@ function loadCommonJSModule(
   const dirname = moduleBase ?? path.dirname(resolvedPath)
 
   const localRequire = (id: string) => {
+    const builtin = (globalThis as Record<string, unknown>)[id]
+    if (builtin !== undefined) {
+      return builtin
+    }
+
     const childSpec = Beam.callSync(
       'tailwind.load_module',
       id,

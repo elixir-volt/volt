@@ -1,6 +1,13 @@
 # Changelog
 
+## 0.8.4
 
+### Fixed
+
+- Tailwind CSS builds now resolve relative `@plugin` and `@import` paths correctly from the CSS file's directory (`css_base` option propagated from all callers).
+- QuickBEAM builtins (`fs`, `path`, `process`, etc.) are now available to CJS vendor plugins loaded by the Tailwind runtime.
+- Bundled CJS plugins with `__esModule` + `.default` (e.g. daisyui) are now unwrapped so Tailwind v4 receives the plugin function directly.
+- `mix igniter.install volt` now auto-detects `assets/js/app.js` vs `assets/js/app.ts` instead of hardcoding `.ts`.
 
 ## 0.8.3
 
