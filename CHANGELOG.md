@@ -2,6 +2,21 @@
 
 
 
+## 0.8.3
+
+### Fixed
+
+- `mix igniter.install volt` now fully removes legacy esbuild and tailwind configuration:
+  - Deletes `config :esbuild` and `config :tailwind` blocks from `config/config.exs` and `config/dev.exs`.
+  - Removes `esbuild:` and `tailwind:` watchers from the endpoint `watchers` list in `config/dev.exs`.
+  - Updates mix aliases so `assets.setup`, `assets.build`, and `assets.deploy` no longer reference removed tasks.
+
+### Changed
+
+- Refactored `Mix.Tasks.Volt.Install` for readability: added module aliases, extracted predicate helpers, flattened nested control flow.
+
+
+
 ## 0.8.2
 
 ### Added

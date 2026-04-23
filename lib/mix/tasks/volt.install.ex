@@ -14,17 +14,26 @@ if Code.ensure_loaded?(Igniter) do
     This installer will:
 
     1. Remove `:esbuild` and `:tailwind` deps
-    2. Add Volt build config to `config/config.exs`
-    3. Add format and lint config to `config/config.exs`
-    4. Add `Volt.Formatter` plugin to `.formatter.exs`
-    5. Add `Volt.DevServer` plug to your endpoint
-    6. Add the Volt watcher to `config/dev.exs`
-
-    You may need to manually remove old `config :esbuild` and
-    `config :tailwind` blocks from `config/config.exs`.
+    2. Remove `config :esbuild` and `config :tailwind` blocks
+    3. Update `assets.setup`, `assets.build`, and `assets.deploy` aliases
+    4. Add Volt build config to `config/config.exs`
+    5. Add format and lint config to `config/config.exs`
+    6. Add `Volt.Formatter` plugin to `.formatter.exs`
+    7. Add `Volt.DevServer` plug to your endpoint
+    8. Add the Volt watcher to `config/dev.exs`
     """
 
     use Igniter.Mix.Task
+
+    alias Igniter.Code.Common
+    alias Igniter.Code.Function
+    alias Igniter.Code.Keyword, as: CodeKeyword
+    alias Igniter.Code.List
+    alias Igniter.Code.Tuple
+    alias Igniter.Project.Config, as: ProjectConfig
+    alias Igniter.Project.Deps, as: ProjectDeps
+    alias Igniter.Project.Formatter, as: ProjectFormatter
+    alias Igniter.Project.TaskAliases
 
     @impl Igniter.Mix.Task
     def info(_argv, _composing_task) do
@@ -37,15 +46,18 @@ if Code.ensure_loaded?(Igniter) do
     @impl Igniter.Mix.Task
     def igniter(igniter) do
       app_name = Igniter.Project.Application.app_name(igniter)
+      endpoint = endpoint_module(igniter)
 
       igniter
       |> remove_old_deps()
-      |> warn_about_old_config()
+      |> remove_old_config()
+      |> remove_old_watchers(app_name, endpoint)
+      |> update_aliases()
       |> add_volt_config()
       |> add_format_config()
       |> add_lint_config()
       |> add_formatter_plugin()
-      |> add_dev_config(app_name)
+      |> add_dev_config(app_name, endpoint)
       |> add_dev_server_plug()
     end
 
@@ -53,53 +65,73 @@ if Code.ensure_loaded?(Igniter) do
 
     defp remove_old_deps(igniter) do
       igniter
-      |> Igniter.Project.Deps.remove_dep(:esbuild)
-      |> Igniter.Project.Deps.remove_dep(:tailwind)
+      |> ProjectDeps.remove_dep(:esbuild)
+      |> ProjectDeps.remove_dep(:tailwind)
     end
 
-    defp warn_about_old_config(igniter) do
-      has_esbuild =
-        Igniter.Project.Config.configures_root_key?(igniter, "config.exs", :esbuild)
+    defp remove_old_config(igniter) do
+      igniter
+      |> ProjectConfig.remove_application_configuration("config.exs", :esbuild)
+      |> ProjectConfig.remove_application_configuration("config.exs", :tailwind)
+      |> ProjectConfig.remove_application_configuration("dev.exs", :esbuild)
+      |> ProjectConfig.remove_application_configuration("dev.exs", :tailwind)
+    end
 
-      has_tailwind =
-        Igniter.Project.Config.configures_root_key?(igniter, "config.exs", :tailwind)
+    defp remove_old_watchers(igniter, app_name, endpoint) do
+      Igniter.update_elixir_file(
+        igniter,
+        "config/dev.exs",
+        fn zipper ->
+          with {:ok, config_zipper} <-
+                 Common.move_to(zipper, &endpoint_config?(&1, app_name, endpoint)),
+               {:ok, keyword_zipper} <- Function.move_to_nth_argument(config_zipper, 2),
+               {:ok, watchers_zipper} <- CodeKeyword.get_key(keyword_zipper, :watchers),
+               {:ok, updated} <- List.remove_from_list(watchers_zipper, &old_watcher?/1) do
+            {:ok, updated}
+          else
+            _ -> {:ok, zipper}
+          end
+        end,
+        required?: false
+      )
+    end
 
-      cond do
-        has_esbuild and has_tailwind ->
-          Igniter.add_warning(igniter, """
-          Found `config :esbuild` and `config :tailwind` in config/config.exs.
-          Please remove them manually — Volt replaces both.
-          Also remove esbuild/tailwind watchers from config/dev.exs.
-          """)
+    defp endpoint_config?(zipper, app_name, endpoint) do
+      Function.function_call?(zipper, :config, 3) and
+        Function.argument_equals?(zipper, 0, app_name) and
+        Function.argument_equals?(zipper, 1, endpoint)
+    end
 
-        has_esbuild ->
-          Igniter.add_warning(igniter, """
-          Found `config :esbuild` in config/config.exs.
-          Please remove it manually — Volt replaces esbuild.
-          Also remove the esbuild watcher from config/dev.exs.
-          """)
+    defp old_watcher?(item) do
+      Tuple.elem_equals?(item, 0, :esbuild) or Tuple.elem_equals?(item, 0, :tailwind)
+    end
 
-        has_tailwind ->
-          Igniter.add_warning(igniter, """
-          Found `config :tailwind` in config/config.exs.
-          Please remove it manually — Volt replaces the Tailwind CLI.
-          Also remove the tailwind watcher from config/dev.exs.
-          """)
+    defp update_aliases(igniter) do
+      igniter
+      |> TaskAliases.modify_existing_alias(:"assets.setup", &replace_with_empty/1)
+      |> TaskAliases.modify_existing_alias(:"assets.build", &replace_with_build/1)
+      |> TaskAliases.modify_existing_alias(:"assets.deploy", &replace_with_deploy/1)
+    end
 
-        true ->
-          igniter
-      end
+    defp replace_with_empty(zipper), do: {:ok, Common.replace_code(zipper, [])}
+
+    defp replace_with_build(zipper) do
+      {:ok, Common.replace_code(zipper, ["compile", "volt.build --tailwind"])}
+    end
+
+    defp replace_with_deploy(zipper) do
+      {:ok, Common.replace_code(zipper, ["volt.build --tailwind", "phx.digest"])}
     end
 
     # ── Add Volt config ──
 
     defp add_volt_config(igniter) do
       igniter
-      |> Igniter.Project.Config.configure("config.exs", :volt, [:entry], "assets/js/app.ts")
-      |> Igniter.Project.Config.configure("config.exs", :volt, [:outdir], "priv/static/assets")
-      |> Igniter.Project.Config.configure("config.exs", :volt, [:target], :es2020)
-      |> Igniter.Project.Config.configure("config.exs", :volt, [:sourcemap], :hidden)
-      |> Igniter.Project.Config.configure(
+      |> ProjectConfig.configure("config.exs", :volt, [:entry], "assets/js/app.ts")
+      |> ProjectConfig.configure("config.exs", :volt, [:outdir], "priv/static/assets")
+      |> ProjectConfig.configure("config.exs", :volt, [:target], :es2020)
+      |> ProjectConfig.configure("config.exs", :volt, [:sourcemap], :hidden)
+      |> ProjectConfig.configure(
         "config.exs",
         :volt,
         [:tailwind],
@@ -133,7 +165,7 @@ if Code.ensure_loaded?(Igniter) do
 
       code = Enum.map_join(format_kw, ",\n  ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
 
-      Igniter.Project.Config.configure(
+      ProjectConfig.configure(
         igniter,
         "config.exs",
         :volt,
@@ -143,7 +175,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp add_lint_config(igniter) do
-      Igniter.Project.Config.configure(
+      ProjectConfig.configure(
         igniter,
         "config.exs",
         :volt,
@@ -162,29 +194,20 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp add_formatter_plugin(igniter) do
-      Igniter.Project.Formatter.add_formatter_plugin(igniter, Volt.Formatter)
+      ProjectFormatter.add_formatter_plugin(igniter, Volt.Formatter)
     end
 
-    defp add_dev_config(igniter, app_name) do
-      endpoint = endpoint_module(igniter)
-
-      Igniter.Project.Config.configure(
-        igniter,
-        "dev.exs",
-        app_name,
-        [endpoint, :watchers, :volt],
+    defp add_dev_config(igniter, app_name, endpoint) do
+      watcher =
         {:code,
          Sourceror.parse_string!("""
          {Mix.Tasks.Volt.Dev, :run, [~w(--tailwind)]}
          """)}
-      )
-      |> Igniter.Project.Config.configure(
-        "dev.exs",
-        :volt,
-        [:server, :prefix],
-        "/assets"
-      )
-      |> Igniter.Project.Config.configure(
+
+      igniter
+      |> ProjectConfig.configure("dev.exs", app_name, [endpoint, :watchers, :volt], watcher)
+      |> ProjectConfig.configure("dev.exs", :volt, [:server, :prefix], "/assets")
+      |> ProjectConfig.configure(
         "dev.exs",
         :volt,
         [:server, :watch_dirs],
@@ -218,14 +241,10 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp insert_dev_server_plug(zipper, endpoint) do
-      with :error <-
-             Igniter.Code.Common.move_to(zipper, fn z ->
-               Igniter.Code.Function.function_call?(z, :plug) and
-                 Igniter.Code.Function.argument_equals?(z, 0, Volt.DevServer)
-             end),
-           {:ok, zipper} <- Igniter.Code.Common.move_to(zipper, &code_reloading?/1) do
+      with :error <- Common.move_to(zipper, &has_dev_server_plug?/1),
+           {:ok, zipper} <- Common.move_to(zipper, &code_reloading?/1) do
         {:ok,
-         Igniter.Code.Common.add_code(
+         Common.add_code(
            zipper,
            """
            plug Volt.DevServer, root: "assets"
@@ -233,38 +252,45 @@ if Code.ensure_loaded?(Igniter) do
            placement: :after
          )}
       else
-        {:ok, _} ->
-          {:ok, zipper}
-
-        :error ->
-          {:warning,
-           """
-           Could not find the code_reloading? section in `#{inspect(endpoint)}`.
-           Please add the plug manually inside `if code_reloading? do`:
-
-             plug Volt.DevServer, root: "assets"
-           """}
+        {:ok, _} -> {:ok, zipper}
+        :error -> dev_server_warning(endpoint)
       end
+    end
+
+    defp has_dev_server_plug?(zipper) do
+      Function.function_call?(zipper, :plug) and
+        Function.argument_equals?(zipper, 0, Volt.DevServer)
+    end
+
+    defp dev_server_warning(endpoint) do
+      {:warning,
+       """
+       Could not find the code_reloading? section in `#{inspect(endpoint)}`.
+       Please add the plug manually inside `if code_reloading? do`:
+
+         plug Volt.DevServer, root: "assets"
+       """}
     end
 
     # ── Helpers ──
 
     defp code_reloading?(zipper) do
-      Igniter.Code.Function.function_call?(zipper, :if, 2) &&
-        Igniter.Code.Function.argument_matches_predicate?(
+      Function.function_call?(zipper, :if, 2) &&
+        Function.argument_matches_predicate?(
           zipper,
           0,
-          &Igniter.Code.Common.variable?(&1, :code_reloading?)
+          &Common.variable?(&1, :code_reloading?)
         )
     end
 
     defp endpoint_module(igniter) do
-      app_name = Igniter.Project.Application.app_name(igniter)
+      app_name =
+        igniter
+        |> Igniter.Project.Application.app_name()
+        |> to_string()
+        |> Macro.camelize()
 
-      app_name
-      |> to_string()
-      |> Macro.camelize()
-      |> then(&Module.concat([String.to_atom("#{&1}Web"), Endpoint]))
+      Module.concat([String.to_atom("#{app_name}Web"), Endpoint])
     end
   end
 else
