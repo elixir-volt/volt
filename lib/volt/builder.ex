@@ -76,7 +76,12 @@ defmodule Volt.Builder do
     name = Keyword.get(opts, :name)
 
     env_define = Volt.Env.define(mode: mode, root: File.cwd!())
-    all_define = Map.merge(env_define, define)
+    plugin_define = Volt.PluginRunner.define(plugins, mode)
+
+    all_define =
+      env_define
+      |> Map.merge(plugin_define)
+      |> Map.merge(define)
 
     ctx = %{
       node_modules: node_modules,

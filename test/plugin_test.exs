@@ -53,6 +53,38 @@ defmodule Volt.PluginTest do
     end
   end
 
+  describe "PluginRunner.define/2" do
+    test "collects plugin-provided defines" do
+      defmodule DefinePlugin do
+        @behaviour Volt.Plugin
+        def name, do: "define"
+        def define(mode), do: %{"import.meta.env.CUSTOM_MODE" => Jason.encode!(mode)}
+      end
+
+      assert Volt.PluginRunner.define([DefinePlugin], "production") == %{
+               "__VUE_OPTIONS_API__" => "true",
+               "__VUE_PROD_DEVTOOLS__" => "false",
+               "__VUE_PROD_HYDRATION_MISMATCH_DETAILS__" => "false",
+               "import.meta.env.CUSTOM_MODE" => ~s("production")
+             }
+    end
+
+    test "passes tuple options to define callbacks" do
+      defmodule ConfiguredDefinePlugin do
+        @behaviour Volt.Plugin
+        def name, do: "configured-define"
+        def define(_mode, opts), do: Keyword.fetch!(opts, :define)
+      end
+
+      assert Volt.PluginRunner.define(
+               [{ConfiguredDefinePlugin, define: %{"APP" => "true"}}],
+               "test"
+             )[
+               "APP"
+             ] == "true"
+    end
+  end
+
   describe "PluginRunner.resolve/3" do
     test "resolves via plugin" do
       assert {:ok, "virtual:config"} =

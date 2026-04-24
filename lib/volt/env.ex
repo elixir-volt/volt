@@ -48,7 +48,8 @@ defmodule Volt.Env do
     base = %{
       "import.meta.env.MODE" => Jason.encode!(mode),
       "import.meta.env.DEV" => to_string(mode != "production"),
-      "import.meta.env.PROD" => to_string(mode == "production")
+      "import.meta.env.PROD" => to_string(mode == "production"),
+      "process.env.NODE_ENV" => Jason.encode!(mode)
     }
 
     env_defines =

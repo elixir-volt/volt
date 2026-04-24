@@ -9,6 +9,15 @@ defmodule Volt.Plugin.Vue do
   def extensions(_kind), do: []
 
   @impl true
+  def define(_mode) do
+    %{
+      "__VUE_OPTIONS_API__" => "true",
+      "__VUE_PROD_DEVTOOLS__" => "false",
+      "__VUE_PROD_HYDRATION_MISMATCH_DETAILS__" => "false"
+    }
+  end
+
+  @impl true
   def compile(path, source, opts) do
     if Path.extname(path) == ".vue" do
       vapor = Keyword.get(opts, :vapor, false)

@@ -69,6 +69,14 @@ defmodule Volt.PluginRunner do
     end)
   end
 
+  @doc "Collect plugin-provided compile-time replacements for a build mode."
+  @spec define([module() | {module(), keyword()}], String.t()) :: %{String.t() => String.t()}
+  def define(plugins, mode) do
+    Enum.reduce(plugins(plugins), %{}, fn plugin, acc ->
+      Map.merge(acc, call_optional(plugin, :define, [mode], %{}))
+    end)
+  end
+
   @doc "Resolve a plugin-provided canonical prebundle specifier."
   @spec prebundle_alias([module() | {module(), keyword()}], String.t()) :: String.t()
   def prebundle_alias(plugins, specifier) do

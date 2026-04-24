@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1
+
+### Added
+
+- Vue compile-time feature flags are now provided by the built-in Vue plugin.
+- `process.env.NODE_ENV` is now defined automatically from Volt's build mode.
+
 ## 0.9.0
 
 ### Added

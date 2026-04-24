@@ -59,12 +59,13 @@ defmodule Volt.EnvTest do
       refute Map.has_key?(defines, "import.meta.env.SECRET")
     end
 
-    test "includes MODE, DEV, PROD" do
+    test "includes MODE, DEV, PROD, and NODE_ENV" do
       defines = Volt.Env.define(root: @fixture_dir, mode: "development")
 
       assert defines["import.meta.env.MODE"] == ~s("development")
       assert defines["import.meta.env.DEV"] == "true"
       assert defines["import.meta.env.PROD"] == "false"
+      assert defines["process.env.NODE_ENV"] == ~s("development")
     end
 
     test "production mode" do

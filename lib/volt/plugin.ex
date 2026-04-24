@@ -45,6 +45,9 @@ defmodule Volt.Plugin do
   @doc "Transform compiled JavaScript before serving or bundling."
   @callback transform(code :: String.t(), path :: String.t()) :: {:ok, String.t()} | nil
 
+  @doc "Return compile-time replacements for a build mode."
+  @callback define(mode :: String.t()) :: %{String.t() => String.t()}
+
   @doc "Return the canonical prebundle specifier to use for an import, or pass with `nil`."
   @callback prebundle_alias(specifier :: String.t()) :: String.t() | nil
 
@@ -63,6 +66,7 @@ defmodule Volt.Plugin do
                       compile: 3,
                       extract_imports: 3,
                       transform: 2,
+                      define: 1,
                       prebundle_alias: 1,
                       prebundle_entry: 1,
                       render_chunk: 2
