@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.0
+
+### Added
+
+- Added `Volt.entry_path/2` for resolving source entries in development and hashed manifest assets in production.
+- Added built-in React prebundle coordination for React, React DOM client, and JSX runtime imports.
+- Added plugin prebundle hooks for canonical dependency aliases and generated proxy entries.
+- Added Vue, Svelte, and React example Phoenix apps.
+- Added built-in Svelte support, including prebundle coordination for `svelte` and `svelte/internal/client` through a single runtime bundle.
+
+### Changed
+
+- Vendor prebundling now uses filesystem entries through OXC with browser conditions, named exports, and strict entry signatures.
+- Updated dependencies to QuickBEAM 0.10.6 and OXC 0.11.0.
+- Replaced the old demo app with focused framework examples.
+
+### Fixed
+
+- Package imports using `#` specifiers now resolve in both dev server rewriting and production builds.
+- Production entry paths now read Volt's manifest output through a first-class helper instead of requiring app-local layout helpers.
+
 ## 0.8.4
 
 ### Fixed
