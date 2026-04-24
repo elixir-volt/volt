@@ -97,7 +97,7 @@ defmodule Volt.JS.GlobImport do
       |> Enum.with_index()
       |> Enum.map(fn {call, i} ->
         files = resolve_glob(call.pattern, base_dir)
-        {preamble_lines(files, i * 100), entries_eager(files, i * 100)}
+        {preamble_lines(files, i * 100), eager_expansion(files, i * 100)}
       end)
 
     preamble =
@@ -107,9 +107,9 @@ defmodule Volt.JS.GlobImport do
 
     eager_patches =
       eager_calls
-      |> Enum.zip(Enum.map(eager_preamble, fn {_, entries} -> entries end))
-      |> Enum.map(fn {call, entries} ->
-        %{start: call.start, end: call.end, change: "{\n#{entries}\n}"}
+      |> Enum.zip(Enum.map(eager_preamble, fn {_, expansion} -> expansion end))
+      |> Enum.map(fn {call, expansion} ->
+        %{start: call.start, end: call.end, change: expansion}
       end)
 
     lazy_patches =
@@ -135,23 +135,64 @@ defmodule Volt.JS.GlobImport do
   end
 
   defp lazy_expansion(files) do
-    entries =
-      Enum.map_join(files, ",\n", fn file ->
-        "  \"#{file}\": () => import(\"#{file}\")"
-      end)
-
-    "{\n#{entries}\n}"
+    files
+    |> Enum.map(&lazy_entry/1)
+    |> object_expression()
   end
 
   defp preamble_lines(files, offset) do
     files
     |> Enum.with_index(offset)
-    |> Enum.map(fn {file, i} -> ~s(import * as __glob_#{i} from "#{file}") end)
+    |> Enum.map(fn {file, i} -> namespace_import("__glob_#{i}", file) end)
   end
 
-  defp entries_eager(files, offset) do
+  defp eager_expansion(files, offset) do
     files
     |> Enum.with_index(offset)
-    |> Enum.map_join(",\n", fn {file, i} -> ~s(  "#{file}": __glob_#{i}) end)
+    |> Enum.map(fn {file, i} -> eager_entry(file, "__glob_#{i}") end)
+    |> object_expression()
+  end
+
+  defp lazy_entry(file) do
+    "#{Jason.encode!(file)}: () => import(#{Jason.encode!(file)})"
+  end
+
+  defp eager_entry(file, identifier) do
+    "#{Jason.encode!(file)}: #{identifier}"
+  end
+
+  defp object_expression(entries) do
+    ast =
+      "const __glob = { $entries };"
+      |> OXC.parse!("glob-object-template.js")
+      |> OXC.splice(:entries, entries)
+
+    ast
+    |> OXC.codegen!()
+    |> String.trim()
+    |> String.trim_leading("const __glob = ")
+    |> String.trim_trailing(";")
+  end
+
+  defp namespace_import(identifier, specifier) do
+    ast =
+      "import * as $name from \"__specifier__\";"
+      |> OXC.parse!("glob-import-template.js")
+      |> OXC.bind(name: identifier)
+      |> replace_literal("__specifier__", specifier)
+
+    ast
+    |> OXC.codegen!()
+    |> String.trim()
+  end
+
+  defp replace_literal(ast, old_value, new_value) do
+    OXC.postwalk(ast, fn
+      %{type: :literal, value: ^old_value} = node ->
+        %{node | value: new_value, raw: Jason.encode!(new_value)}
+
+      node ->
+        node
+    end)
   end
 end
