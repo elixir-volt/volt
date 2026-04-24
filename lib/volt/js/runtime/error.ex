@@ -1,5 +1,7 @@
 defmodule Volt.JS.Runtime.Error do
-  @moduledoc false
+  @moduledoc """
+  Error returned when a JavaScript runtime cannot be prepared or started.
+  """
 
   defexception [:message, :reason, :stage]
 
