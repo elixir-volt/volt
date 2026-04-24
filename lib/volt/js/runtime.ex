@@ -6,6 +6,7 @@ defmodule Volt.JS.Runtime do
 
   alias Volt.JS.Runtime.Bundler
   alias Volt.JS.Runtime.Entry
+  alias Volt.JS.Runtime.Error
   alias Volt.JS.Runtime.Installer
 
   defstruct [:name, :pid, :install_dir, :node_modules, :packages, :entry]
@@ -40,33 +41,11 @@ defmodule Volt.JS.Runtime do
     end
   end
 
-  @spec start(keyword()) :: {:ok, t()} | {:error, term()}
+  @spec start(keyword()) :: {:ok, t()} | {:error, Error.t()}
   def start(opts) do
-    packages = Keyword.get(opts, :packages, %{})
-    install = Installer.install!(packages, opts)
-    runtime = runtime_struct(opts, packages, install, nil)
-    entry = materialize_entry(opts, runtime)
-    runtime = %{runtime | entry: entry}
-    define = build_define(opts, runtime)
-
-    quickbeam_opts =
-      opts
-      |> Keyword.take([
-        :name,
-        :apis,
-        :memory_limit,
-        :max_stack_size,
-        :max_convert_depth,
-        :max_convert_nodes
-      ])
-      |> maybe_put(:script, entry)
-      |> Keyword.put(:handlers, build_handlers(opts, runtime))
-      |> Keyword.put(:define, define)
-
-    case QuickBEAM.start(quickbeam_opts) do
-      {:ok, pid} -> {:ok, %{runtime | pid: pid}}
-      {:error, {:already_started, pid}} -> {:ok, %{runtime | pid: pid}}
-      {:error, _} = error -> error
+    with {:ok, runtime} <- prepare_runtime(opts),
+         {:ok, pid} <- start_quickbeam(opts, runtime) do
+      {:ok, %{runtime | pid: pid}}
     end
   end
 
@@ -116,7 +95,7 @@ defmodule Volt.JS.Runtime do
   defp start!(opts) do
     case start(opts) do
       {:ok, runtime} -> runtime
-      {:error, reason} -> raise "Could not start JS runtime: #{inspect(reason)}"
+      {:error, error} -> raise error
     end
   end
 
@@ -124,6 +103,46 @@ defmodule Volt.JS.Runtime do
     packages = Keyword.get(opts, :packages, %{})
     install = Installer.install!(packages, opts)
     runtime_struct(opts, packages, install, pid) |> Map.put(:name, name)
+  end
+
+  defp prepare_runtime(opts) do
+    packages = Keyword.get(opts, :packages, %{})
+    install = Installer.install!(packages, opts)
+    runtime = runtime_struct(opts, packages, install, nil)
+    entry = materialize_entry(opts, runtime)
+    {:ok, %{runtime | entry: entry}}
+  rescue
+    exception ->
+      {:error,
+       Error.exception(
+         stage: :prepare,
+         reason: exception,
+         message: Exception.message(exception)
+       )}
+  end
+
+  defp start_quickbeam(opts, runtime) do
+    define = build_define(opts, runtime)
+
+    quickbeam_opts =
+      opts
+      |> Keyword.take([
+        :name,
+        :apis,
+        :memory_limit,
+        :max_stack_size,
+        :max_convert_depth,
+        :max_convert_nodes
+      ])
+      |> maybe_put(:script, runtime.entry)
+      |> Keyword.put(:handlers, build_handlers(opts, runtime))
+      |> Keyword.put(:define, define)
+
+    case QuickBEAM.start(quickbeam_opts) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      {:error, reason} -> {:error, Error.exception(stage: :start, reason: reason)}
+    end
   end
 
   defp runtime_struct(opts, packages, install, pid) do
@@ -153,22 +172,43 @@ defmodule Volt.JS.Runtime do
   end
 
   defp bundle_entry!(path, runtime) do
-    case Bundler.bundle_file(path, node_modules: runtime.node_modules) do
-      {:ok, code} when is_binary(code) ->
-        Entry.materialize(
-          {:source, code, Path.basename(path, Path.extname(path)) <> ".js"},
-          runtime.install_dir
-        )
+    bundle_path = bundle_cache_path(path, runtime)
 
-      {:ok, %{code: code}} when is_binary(code) ->
-        Entry.materialize(
-          {:source, code, Path.basename(path, Path.extname(path)) <> ".js"},
-          runtime.install_dir
-        )
+    if File.regular?(bundle_path) do
+      bundle_path
+    else
+      case Bundler.bundle_file(path, node_modules: runtime.node_modules) do
+        {:ok, code} when is_binary(code) ->
+          write_bundle!(bundle_path, code)
 
-      {:error, reason} ->
-        raise "Could not bundle JS runtime entry #{inspect(path)}: #{inspect(reason)}"
+        {:ok, %{code: code}} when is_binary(code) ->
+          write_bundle!(bundle_path, code)
+
+        {:error, reason} ->
+          raise Error,
+            stage: :bundle,
+            reason: reason,
+            message: "Could not bundle JS runtime entry #{inspect(path)}: #{inspect(reason)}"
+      end
     end
+  end
+
+  defp bundle_cache_path(path, runtime) do
+    source = File.read!(path)
+
+    hash =
+      :crypto.hash(:sha256, :erlang.term_to_binary({source, runtime.packages}))
+      |> Base.encode16(case: :lower)
+      |> binary_part(0, 12)
+
+    filename = Path.basename(path, Path.extname(path)) <> "-" <> hash <> ".js"
+    Path.join([runtime.install_dir, "runtime", "bundles", filename])
+  end
+
+  defp write_bundle!(path, code) do
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, code)
+    path
   end
 
   defp build_handlers(opts, runtime) do
