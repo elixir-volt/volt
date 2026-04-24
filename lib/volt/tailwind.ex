@@ -75,18 +75,21 @@ defmodule Volt.Tailwind do
   end
 
   defp ensure_runtime(%{runtime: nil} = state) do
-    {:ok, rt} =
-      QuickBEAM.start(
+    runtime =
+      Volt.JS.Runtime.ensure!(
+        packages: Volt.Tailwind.Loader.runtime_packages(),
         apis: [:browser, :node],
-        handlers: Volt.Tailwind.Loader.handlers(),
-        define: %{
-          "TAILWIND_ROOT" => Volt.Tailwind.Loader.ensure_runtime_root!(),
-          "TAILWIND_DEFAULT_BASE" => File.cwd!()
-        },
-        script: Volt.JS.Asset.path_for("tailwind-runtime.ts")
+        handlers: fn runtime -> Volt.Tailwind.Loader.handlers(runtime.node_modules) end,
+        define: fn runtime ->
+          %{
+            "TAILWIND_ROOT" => Volt.JS.Runtime.package_path!(runtime, "tailwindcss"),
+            "TAILWIND_DEFAULT_BASE" => File.cwd!()
+          }
+        end,
+        entry: {:volt_asset, "tailwind-runtime.ts"}
       )
 
-    %{state | runtime: rt, scanner: build_scanner(state.sources)}
+    %{state | runtime: runtime, scanner: build_scanner(state.sources)}
   end
 
   defp ensure_runtime(state), do: state
@@ -153,8 +156,8 @@ defmodule Volt.Tailwind do
   @impl true
   def terminate(_reason, %{runtime: nil}), do: :ok
 
-  def terminate(_reason, %{runtime: rt}) do
-    QuickBEAM.stop(rt)
+  def terminate(_reason, %{runtime: runtime}) do
+    Volt.JS.Runtime.stop(runtime)
     :ok
   end
 
@@ -166,7 +169,7 @@ defmodule Volt.Tailwind do
   end
 
   defp compile_css(runtime, css_input, candidates, css_base) do
-    case QuickBEAM.call(runtime, "compileTailwindCss", [
+    case Volt.JS.Runtime.call(runtime, "compileTailwindCss", [
            css_input,
            candidates,
            Path.expand(css_base)

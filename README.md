@@ -2,13 +2,14 @@
 
 Elixir-native frontend build tool. Dev server with HMR, Tailwind CSS compilation, and production bundling — no Node.js, no esbuild, no Vite.
 
-Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https://hex.pm/packages/vize) for Vue SFCs + LightningCSS, [Oxide](https://hex.pm/packages/oxide_ex) for Tailwind scanning, and [QuickBEAM](https://hex.pm/packages/quickbeam) for the Tailwind compiler.
+Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https://hex.pm/packages/vize) for Vue SFCs + LightningCSS, [Oxide](https://hex.pm/packages/oxide_ex) for Tailwind scanning, and [QuickBEAM](https://hex.pm/packages/quickbeam) for JavaScript tool runtimes like Tailwind and Svelte.
 
 ## Features
 
 - **No JavaScript app bundler** — Volt builds app assets natively without esbuild or Vite
 - **JS/TS bundling** — parse, transform, minify via OXC (Rust)
 - **Vue SFC support** — single-file components with scoped CSS and Vapor IR
+- **Svelte support** — `.svelte` components compiled through QuickBEAM without Node.js
 - **Tailwind CSS v4** — parallel content scanning + full compiler, ~40ms builds
 - **Dev server** — on-demand compilation with mtime caching and error overlays
 - **HMR** — file watcher, WebSocket push, CSS hot-swap without page reload
@@ -283,7 +284,7 @@ end
 config :volt, plugins: [MyApp.MarkdownPlugin]
 ```
 
-Hooks: `resolve/2`, `load/1`, `transform/2`, `render_chunk/2` — all optional.
+Hooks: `extensions/1`, `resolve/2`, `load/1`, `compile/3`, `extract_imports/3`, `transform/2`, `render_chunk/2` — all optional.
 
 ## Tailwind CSS
 
@@ -487,22 +488,22 @@ volt
 ├── oxc       — JS/TS parse, transform, bundle, minify, lint (Rust NIF)
 ├── vize      — Vue SFC compilation, CSS Modules, LightningCSS (Rust NIF)
 ├── oxide_ex  — Tailwind content scanning, candidate extraction (Rust NIF)
-├── quickbeam — Tailwind compiler runtime (QuickJS on BEAM)
+├── quickbeam — JavaScript tool runtime (QuickJS on BEAM)
 └── plug      — HTTP dev server
 ```
 
 ## Plugins
 
-Volt core handles JavaScript/TypeScript, CSS, JSON, assets, bundling, the dev server, and HMR. Vue support is included out of the box, so `.vue` files can be imported directly from your app.
+Volt core handles JavaScript/TypeScript, CSS, JSON, assets, bundling, the dev server, and HMR. Vue and Svelte support are included out of the box, so `.vue` and `.svelte` files can be imported directly from your app.
 
-Additional file formats can be enabled by adding plugins to your Volt config. For example, once Svelte support is available, setup should look like:
+Additional file formats can be enabled by adding plugins to your Volt config:
 
 ```elixir
 config :volt,
-  plugins: [VoltSvelte]
+  plugins: [MyApp.MarkdownPlugin]
 ```
 
-After that, `.svelte` files should work like any other import.
+Plugins can also run JavaScript build tools through `Volt.JS.Runtime`, which installs npm packages into Volt's cache and executes them in QuickBEAM without requiring Node.js in the application.
 
 ## Demo
 

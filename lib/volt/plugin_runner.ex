@@ -3,7 +3,7 @@ defmodule Volt.PluginRunner do
   Execute Volt plugin hooks.
   """
 
-  @default_plugins [Volt.Plugin.Vue]
+  @default_plugins [Volt.Plugin.Vue, Volt.Plugin.Svelte]
 
   def plugins(plugins) do
     (@default_plugins ++ List.wrap(plugins))

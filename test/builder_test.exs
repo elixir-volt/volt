@@ -190,6 +190,42 @@ defmodule Volt.BuilderTest do
       assert manifest["main.css"]["assets"] == [Path.basename(result.css.path)]
     end
 
+    @tag :integration
+    test "bundles Svelte components with runtime package resolution" do
+      File.write!(Path.join(@fixture_dir, "src/App.svelte"), """
+      <script>
+        export let name = 'Volt'
+      </script>
+
+      <style>
+        h1 { color: rebeccapurple }
+      </style>
+
+      <h1>Hello {name}</h1>
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/main.ts"), """
+      import App from './App.svelte'
+      console.log(App)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/main.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert File.regular?(result.js.path)
+      js = File.read!(result.js.path)
+      assert js =~ "Hello"
+      assert js =~ "template_effect"
+
+      assert result.css != nil
+      assert File.read!(result.css.path) =~ "#639"
+    end
+
     test "builds standalone CSS entries from HTML manifests" do
       File.write!(Path.join(@fixture_dir, "src/site.css"), ".site { color: blue }")
 

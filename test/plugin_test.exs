@@ -99,7 +99,30 @@ defmodule Volt.PluginTest do
       end
 
       assert ".vue" in Volt.PluginRunner.extensions([], :compile)
+      assert ".svelte" in Volt.PluginRunner.extensions([], :compile)
       assert ".sfc" in Volt.PluginRunner.extensions([SfcPlugin], :compile)
+    end
+  end
+
+  describe "Volt.Plugin.Svelte" do
+    test "extracts imports from script blocks" do
+      source = """
+      <script module>
+        import config from './config'
+      </script>
+      <script lang="ts">
+        import Child from './Child.svelte'
+        import { format } from '../format'
+      </script>
+      <h1>{format(config.title)}</h1>
+      """
+
+      assert {:ok, %{imports: imports, workers: []}} =
+               Volt.Plugin.Svelte.extract_imports("App.svelte", source, [])
+
+      assert {:static, "./config"} in imports
+      assert {:static, "./Child.svelte"} in imports
+      assert {:static, "../format"} in imports
     end
   end
 

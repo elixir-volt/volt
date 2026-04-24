@@ -1,29 +1,43 @@
 defmodule Volt.Tailwind.Resolver do
   @moduledoc "Resolves stylesheet and module paths for the Tailwind runtime."
 
-  @module_extensions ["", ".js", ".cjs", ".json"]
-  @module_index_files ["/index.js", "/index.cjs", "/index.json"]
+  @module_extensions Volt.JS.Extensions.node_resolvable_with_exact()
+  @module_index_files Enum.map(Volt.JS.Extensions.node_resolvable(), &("/index" <> &1))
   @stylesheet_extensions ["", ".css"]
   @stylesheet_index_files ["/index.css"]
   @cjs_conditions ["require", "default", "browser", "import"]
 
-  def resolve_stylesheet_path!(id, base) do
+  def resolve_stylesheet_path!(id, base, runtime_node_modules) do
     base = normalize_base(base)
 
     if NPM.PackageResolver.relative?(id) or absolute?(id) do
       resolve_path!(base, id, @stylesheet_extensions, @stylesheet_index_files)
     else
-      resolve_bare_path!(id, base, @stylesheet_extensions, @stylesheet_index_files, "stylesheet")
+      resolve_bare_path!(
+        id,
+        base,
+        @stylesheet_extensions,
+        @stylesheet_index_files,
+        "stylesheet",
+        runtime_node_modules
+      )
     end
   end
 
-  def resolve_module_path!(id, base, kind) do
+  def resolve_module_path!(id, base, kind, runtime_node_modules) do
     base = normalize_base(base)
 
     if NPM.PackageResolver.relative?(id) or absolute?(id) do
       resolve_path!(base, id, @module_extensions, @module_index_files)
     else
-      resolve_bare_path!(id, base, @module_extensions, @module_index_files, kind)
+      resolve_bare_path!(
+        id,
+        base,
+        @module_extensions,
+        @module_index_files,
+        kind,
+        runtime_node_modules
+      )
     end
   end
 
@@ -33,11 +47,11 @@ defmodule Volt.Tailwind.Resolver do
 
   defp absolute?(id), do: Volt.Builder.Resolver.absolute?(id)
 
-  defp resolve_bare_path!(id, base, extensions, index_files, kind) do
+  defp resolve_bare_path!(id, base, extensions, index_files, kind, runtime_node_modules) do
     {package_name, subpath} = NPM.PackageResolver.split_specifier(id)
 
     resolved =
-      [find_node_modules_for(base), installed_node_modules_dir()]
+      [find_node_modules_for(base), runtime_node_modules]
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
       |> Enum.find_value(fn node_modules ->
@@ -118,6 +132,4 @@ defmodule Volt.Tailwind.Resolver do
   defp find_node_modules_for(base) do
     base |> normalize_base() |> NPM.PackageResolver.find_node_modules()
   end
-
-  defp installed_node_modules_dir, do: NPM.node_modules_dir!()
 end
