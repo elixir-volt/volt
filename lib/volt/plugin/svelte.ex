@@ -17,6 +17,17 @@ defmodule Volt.Plugin.Svelte do
   def extensions(_), do: []
 
   @impl true
+  def prebundle_alias("svelte/internal/client"), do: "svelte"
+  def prebundle_alias(_specifier), do: nil
+
+  @impl true
+  def prebundle_entry("svelte") do
+    {:proxy, "svelte.js", exports: [%{all_from: "svelte"}, %{all_from: "svelte/internal/client"}]}
+  end
+
+  def prebundle_entry(_specifier), do: nil
+
+  @impl true
   def resolve("svelte" <> _ = specifier, _importer) do
     install = Volt.JS.Runtime.Installer.install!(@runtime_packages)
 

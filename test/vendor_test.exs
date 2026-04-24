@@ -170,7 +170,7 @@ defmodule Volt.JS.VendorTest do
       assert code =~ "development"
     end
 
-    test "rewrites cross-package require() to ESM /@vendor/ imports" do
+    test "bundles cross-package CommonJS dependencies through OXC" do
       File.mkdir_p!(Path.join(@node_modules, "dep-a"))
       File.mkdir_p!(Path.join(@node_modules, "dep-b"))
 
@@ -210,9 +210,8 @@ defmodule Volt.JS.VendorTest do
         )
 
       {:ok, code} = Volt.JS.Vendor.read("dep-b")
-      assert code =~ "import * as __vendor_dep_a from"
-      assert code =~ "/@vendor/dep-a.js"
-      assert code =~ "__vendor_dep_a"
+      assert code =~ "require_dep_a"
+      assert code =~ "exports.b = a.a + 1"
     end
   end
 

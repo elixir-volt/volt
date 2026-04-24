@@ -3,7 +3,7 @@ defmodule Volt.PluginRunner do
   Execute Volt plugin hooks.
   """
 
-  @default_plugins [Volt.Plugin.Vue, Volt.Plugin.Svelte]
+  @default_plugins [Volt.Plugin.Vue, Volt.Plugin.Svelte, Volt.Plugin.React]
 
   def plugins(plugins) do
     (@default_plugins ++ List.wrap(plugins))
@@ -66,6 +66,23 @@ defmodule Volt.PluginRunner do
         {:ok, transformed} -> transformed
         nil -> acc
       end
+    end)
+  end
+
+  @doc "Resolve a plugin-provided canonical prebundle specifier."
+  @spec prebundle_alias([module() | {module(), keyword()}], String.t()) :: String.t()
+  def prebundle_alias(plugins, specifier) do
+    Enum.find_value(plugins(plugins), specifier, fn plugin ->
+      call_optional(plugin, :prebundle_alias, [specifier], nil)
+    end)
+  end
+
+  @doc "Resolve a plugin-provided generated prebundle entry."
+  @spec prebundle_entry([module() | {module(), keyword()}], String.t()) ::
+          {:source, String.t(), String.t()} | {:proxy, String.t(), keyword()} | nil
+  def prebundle_entry(plugins, specifier) do
+    Enum.find_value(plugins(plugins), fn plugin ->
+      call_optional(plugin, :prebundle_entry, [specifier], nil)
     end)
   end
 

@@ -229,14 +229,26 @@ defmodule Volt.DevServer do
       NPM.Resolution.PackageResolver.node_builtin?(specifier) ->
         :keep
 
+      String.starts_with?(specifier, "#") ->
+        rewrite_package_import(specifier, importer, config)
+
       NPM.Resolution.PackageResolver.relative?(specifier) ->
         rewrite_relative(specifier, importer, config)
 
       true ->
         case Volt.JS.Resolver.resolve(specifier, config.aliases) do
           {:ok, resolved} -> rewrite_resolved_path(resolved, config)
-          :pass -> rewrite_bare(specifier)
+          :pass -> rewrite_bare(specifier, config)
         end
+    end
+  end
+
+  defp rewrite_package_import(specifier, importer, config) do
+    case Volt.JS.PackageResolver.resolve(specifier, Path.dirname(importer),
+           extensions: Volt.JS.Extensions.resolvable(config.plugins)
+         ) do
+      {:ok, resolved} -> rewrite_resolved_path(resolved, config)
+      _ -> :keep
     end
   end
 
@@ -262,7 +274,8 @@ defmodule Volt.DevServer do
     end
   end
 
-  defp rewrite_bare(specifier) do
+  defp rewrite_bare(specifier, config) do
+    specifier = Volt.PluginRunner.prebundle_alias(config.plugins, specifier)
     {:rewrite, Volt.JS.Vendor.vendor_url(specifier)}
   end
 
@@ -309,8 +322,11 @@ defmodule Volt.DevServer do
 
   defp serve_vendor(specifier, config) do
     case Volt.JS.Vendor.read(specifier) do
-      {:ok, _} = ok -> ok
-      {:error, :not_found} -> Volt.JS.Vendor.bundle_on_demand(specifier, config.node_modules)
+      {:ok, _} = ok ->
+        ok
+
+      {:error, :not_found} ->
+        Volt.JS.Vendor.bundle_on_demand(specifier, config.node_modules, config.plugins)
     end
   end
 

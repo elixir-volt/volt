@@ -11,9 +11,13 @@ defmodule Volt.JS.PackageResolver do
     NPM.Resolution.PackageResolver.relative_import_path(importer, target, project_root)
   end
 
+  def browser_conditions, do: ["browser", "import", "default"]
+
   def relative?(specifier), do: NPM.Resolution.PackageResolver.relative?(specifier)
 
   defp with_default_extensions(opts) do
-    Keyword.put_new(opts, :extensions, @default_extensions)
+    opts
+    |> Keyword.put_new(:extensions, @default_extensions)
+    |> Keyword.put_new(:conditions, browser_conditions())
   end
 end

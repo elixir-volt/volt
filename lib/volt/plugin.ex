@@ -45,6 +45,15 @@ defmodule Volt.Plugin do
   @doc "Transform compiled JavaScript before serving or bundling."
   @callback transform(code :: String.t(), path :: String.t()) :: {:ok, String.t()} | nil
 
+  @doc "Return the canonical prebundle specifier to use for an import, or pass with `nil`."
+  @callback prebundle_alias(specifier :: String.t()) :: String.t() | nil
+
+  @doc "Return a generated prebundle entry for a canonical specifier, or pass with `nil`."
+  @callback prebundle_entry(specifier :: String.t()) ::
+              {:source, filename :: String.t(), source :: String.t()}
+              | {:proxy, filename :: String.t(), keyword()}
+              | nil
+
   @doc "Transform a final output chunk before writing."
   @callback render_chunk(code :: String.t(), chunk_info :: map()) :: {:ok, String.t()} | nil
 
@@ -54,5 +63,7 @@ defmodule Volt.Plugin do
                       compile: 3,
                       extract_imports: 3,
                       transform: 2,
+                      prebundle_alias: 1,
+                      prebundle_entry: 1,
                       render_chunk: 2
 end

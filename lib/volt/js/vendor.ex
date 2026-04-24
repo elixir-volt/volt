@@ -10,9 +10,6 @@ defmodule Volt.JS.Vendor do
   bundling. `process.env.NODE_ENV` is replaced with `"development"`
   so conditional CJS branches resolve correctly.
 
-  Cross-package CJS `require()` calls (e.g. `react-dom` requiring `react`)
-  are rewritten to ESM imports pointing at other `/@vendor/` modules.
-
   Bundled files are cached on disk in `_build/volt/vendor/`.
   """
 
@@ -46,9 +43,10 @@ defmodule Volt.JS.Vendor do
          :ok <- ensure_cache_dir() do
       vendor_map =
         specifiers
+        |> Enum.map(&Volt.PluginRunner.prebundle_alias(plugins, &1))
         |> Enum.uniq()
         |> Enum.reduce(%{}, fn spec, acc ->
-          case safe_bundle_vendor(spec, node_modules, force) do
+          case safe_bundle_vendor(spec, node_modules, force, plugins) do
             {:ok, path} -> Map.put(acc, spec, path)
             {:error, _} -> acc
           end
@@ -65,11 +63,13 @@ defmodule Volt.JS.Vendor do
   specifier that wasn't caught by `prebundle/1` (e.g. transitive
   dependency, or newly added import).
   """
-  @spec bundle_on_demand(String.t(), String.t() | nil) :: {:ok, String.t()} | {:error, term()}
-  def bundle_on_demand(specifier, node_modules) do
+  @spec bundle_on_demand(String.t(), String.t() | nil, keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def bundle_on_demand(specifier, node_modules, plugins \\ []) do
     ensure_cache_dir()
+    specifier = Volt.PluginRunner.prebundle_alias(plugins, specifier)
 
-    case bundle_vendor(specifier, node_modules, false) do
+    case bundle_vendor(specifier, node_modules, false, plugins) do
       {:ok, path} -> File.read(path)
       {:error, _} = error -> error
     end
@@ -127,8 +127,8 @@ defmodule Volt.JS.Vendor do
 
   # ── Bundling ──────────────────────────────────────────────────────
 
-  defp safe_bundle_vendor(specifier, node_modules, force) do
-    bundle_vendor(specifier, node_modules, force)
+  defp safe_bundle_vendor(specifier, node_modules, force, plugins) do
+    bundle_vendor(specifier, node_modules, force, plugins)
   rescue
     exception ->
       Logger.debug(
@@ -138,34 +138,32 @@ defmodule Volt.JS.Vendor do
       {:error, exception}
   end
 
-  defp bundle_vendor(specifier, node_modules, force) do
+  defp bundle_vendor(specifier, node_modules, force, plugins) do
     path = cache_path(specifier)
 
     if not force and File.regular?(path) do
       {:ok, path}
     else
-      do_bundle_vendor(specifier, node_modules, path)
+      do_bundle_vendor(specifier, node_modules, path, plugins)
     end
   end
 
-  defp do_bundle_vendor(specifier, node_modules, output_path) do
-    case resolve_package_entry(specifier, node_modules) do
-      {:ok, entry_path} ->
-        {package_name, _subpath} = NPM.Resolution.PackageResolver.split_specifier(specifier)
-        package_dir = Path.join(node_modules, package_name)
-
-        files = collect_package_files(entry_path, package_dir, node_modules)
-        entry_label = entry_label(entry_path, node_modules)
-
+  defp do_bundle_vendor(specifier, node_modules, output_path, plugins) do
+    case prebundle_entry(specifier, node_modules, plugins) do
+      {:ok, entry_path, project_root} ->
         bundle_opts = [
-          entry: entry_label,
-          format: :esm
+          cwd: project_root,
+          format: :esm,
+          conditions: Volt.JS.PackageResolver.browser_conditions(),
+          modules: [node_modules],
+          define: %{"process.env.NODE_ENV" => ~s("development")},
+          exports: :named,
+          preserve_entry_signatures: :strict
         ]
 
-        case OXC.bundle(files, bundle_opts) do
+        case OXC.bundle(entry_path, bundle_opts) do
           {:ok, result} ->
-            code = extract_code(result) |> rewrite_cross_package_requires()
-            File.write!(output_path, code)
+            File.write!(output_path, extract_code(result))
             {:ok, output_path}
 
           {:error, _} = error ->
@@ -177,123 +175,50 @@ defmodule Volt.JS.Vendor do
     end
   end
 
-  defp collect_package_files(entry_path, package_dir, node_modules) do
-    project_root = common_root(entry_path, node_modules)
-    entry_label = Path.relative_to(entry_path, project_root)
+  defp prebundle_entry(specifier, node_modules, plugins) do
+    case Volt.PluginRunner.prebundle_entry(plugins, specifier) do
+      {:source, filename, source} ->
+        synthetic_prebundle_entry(specifier, filename, source, node_modules)
 
-    package_files =
-      package_dir
-      |> Path.join("**/*")
-      |> Path.wildcard()
-      |> Enum.filter(&(Path.extname(&1) in Volt.JS.Extensions.bundleable() and File.regular?(&1)))
-      |> Enum.map(fn path ->
-        label = Path.relative_to(path, project_root)
-        {label, File.read!(path)}
-      end)
+      {:proxy, filename, _opts} = entry ->
+        synthetic_prebundle_entry(
+          specifier,
+          filename,
+          Volt.JS.PrebundleEntry.source(entry),
+          node_modules
+        )
 
-    has_entry = Enum.any?(package_files, fn {label, _} -> label == entry_label end)
-
-    if has_entry do
-      package_files
-    else
-      [{entry_label, File.read!(entry_path)} | package_files]
+      nil ->
+        package_prebundle_entry(specifier, node_modules)
     end
   end
 
-  # ── Cross-package require rewriting ───────────────────────────────
+  defp synthetic_prebundle_entry(specifier, filename, source, node_modules) do
+    dir = Path.join([cache_dir(), "entries", encode_specifier(specifier)])
+    path = Path.join(dir, filename)
+    File.mkdir_p!(dir)
+    File.write!(path, source)
+    {:ok, path, Path.dirname(node_modules)}
+  end
 
-  defp rewrite_cross_package_requires(code) do
-    case OXC.parse(code, "vendor.js") do
-      {:ok, ast} ->
-        {_ast, %{calls: calls, decl: decl}} =
-          OXC.postwalk(ast, %{calls: [], decl: nil}, &collect_require_info/2)
-
-        deps = calls |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
-
-        if deps == [] do
-          code
-        else
-          apply_require_rewrite(code, deps, decl)
-        end
-
-      {:error, _} ->
-        code
+  defp package_prebundle_entry(specifier, node_modules) do
+    case resolve_package_entry(specifier, node_modules) do
+      {:ok, entry_path} -> {:ok, entry_path, package_project_root(entry_path, node_modules)}
+      :error -> :error
     end
   end
 
-  defp collect_require_info(
-         %{type: :variable_declaration, declarations: decls, start: s, end: e} = node,
-         acc
-       ) do
-    if Enum.any?(decls, &match?(%{id: %{name: "__require"}}, &1)) do
-      {node, %{acc | decl: %{start: s, end: e}}}
-    else
-      {node, acc}
-    end
-  end
-
-  defp collect_require_info(
-         %{
-           type: :call_expression,
-           callee: %{type: :identifier, name: "__require"},
-           arguments: [%{type: :literal, value: spec}]
-         } = node,
-         acc
-       )
-       when is_binary(spec) do
-    {node, %{acc | calls: [{spec, node.start, node.end} | acc.calls]}}
-  end
-
-  defp collect_require_info(node, acc), do: {node, acc}
-
-  defp apply_require_rewrite(code, deps, decl) do
-    safe_name = fn spec -> "__vendor_" <> String.replace(spec, ~r/[^a-zA-Z0-9]/, "_") end
-
-    import_stmts =
-      Enum.map(deps, fn spec ->
-        "import * as #{safe_name.(spec)} from '#{vendor_url(spec)}';"
-      end)
-
-    prop_stmts =
-      Enum.map(deps, fn spec ->
-        ~s|"#{spec}": #{safe_name.(spec)}|
-      end)
-
-    preamble =
-      OXC.parse!("$imports\nvar __require = (id) => ({$entries})[id];", "shim.js")
-      |> OXC.splice(:imports, import_stmts)
-      |> OXC.splice(:entries, prop_stmts)
-      |> OXC.codegen!()
-
-    if decl do
-      shim_code =
-        OXC.parse!("var __require = (id) => ({$entries})[id];", "shim.js")
-        |> OXC.splice(:entries, prop_stmts)
-        |> OXC.codegen!()
-        |> String.trim_trailing()
-
-      preamble <> OXC.patch_string(code, [%{start: decl.start, end: decl.end, change: shim_code}])
-    else
-      preamble <> code
+  defp package_project_root(entry_path, node_modules) do
+    entry_path
+    |> Path.dirname()
+    |> NPM.Resolution.PackageResolver.nearest_package()
+    |> case do
+      {:ok, package_dir, _package} -> Path.dirname(package_dir)
+      :error -> Path.dirname(node_modules)
     end
   end
 
   # ── Helpers ───────────────────────────────────────────────────────
-
-  defp entry_label(entry_path, node_modules) do
-    project_root = common_root(entry_path, node_modules)
-    Path.relative_to(entry_path, project_root)
-  end
-
-  defp common_root(entry_path, node_modules) do
-    entry_parts = Path.split(entry_path)
-    nm_parts = Path.split(node_modules)
-
-    Enum.zip(entry_parts, nm_parts)
-    |> Enum.take_while(fn {a, b} -> a == b end)
-    |> Enum.map(&elem(&1, 0))
-    |> Path.join()
-  end
 
   defp extract_code(result) when is_binary(result), do: result
   defp extract_code(%{code: code}), do: code

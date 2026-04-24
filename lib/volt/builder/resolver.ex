@@ -44,6 +44,9 @@ defmodule Volt.Builder.Resolver do
       NPM.Resolution.PackageResolver.node_builtin?(specifier) ->
         :skip
 
+      String.starts_with?(specifier, "#") ->
+        resolve_package_import(specifier, importer, ctx)
+
       NPM.Resolution.PackageResolver.relative?(specifier) ->
         resolve_relative(specifier, importer, ctx)
 
@@ -53,6 +56,16 @@ defmodule Volt.Builder.Resolver do
   end
 
   @js_to_ts_map %{".js" => [".ts", ".tsx"], ".jsx" => [".tsx"], ".mjs" => [".mts"]}
+
+  defp resolve_package_import(specifier, importer, ctx) do
+    case Volt.JS.PackageResolver.resolve(specifier, Path.dirname(importer),
+           extensions: Volt.JS.Extensions.resolvable(ctx.plugins)
+         ) do
+      {:ok, _} = ok -> ok
+      :error -> {:error, {:not_found, specifier}}
+      {:builtin, _} -> :skip
+    end
+  end
 
   defp resolve_relative(specifier, importer, ctx) do
     base = Path.expand(specifier, Path.dirname(importer))
@@ -119,7 +132,8 @@ defmodule Volt.Builder.Resolver do
 
     case NPM.Resolution.PackageResolver.resolve_entry(package_dir,
            subpath: subpath,
-           extensions: extensions
+           extensions: extensions,
+           conditions: Volt.JS.PackageResolver.browser_conditions()
          ) do
       {:ok, resolved} ->
         maybe_try_direct_path(resolved, subpath, dir, specifier, package_dir, extensions)
@@ -155,7 +169,8 @@ defmodule Volt.Builder.Resolver do
   defp resolve_main(package_dir, extensions) do
     case NPM.Resolution.PackageResolver.resolve_entry(package_dir,
            subpath: ".",
-           extensions: extensions
+           extensions: extensions,
+           conditions: Volt.JS.PackageResolver.browser_conditions()
          ) do
       {:ok, path} -> path
       :error -> nil
