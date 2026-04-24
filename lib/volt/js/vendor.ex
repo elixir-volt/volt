@@ -299,11 +299,7 @@ defmodule Volt.JS.Vendor do
   defp extract_code(%{code: code}), do: code
 
   defp resolve_package_entry(specifier, node_modules) when is_binary(node_modules) do
-    {package_name, subpath} = NPM.PackageResolver.split_specifier(specifier)
-    package_dir = Path.join(node_modules, package_name)
-
-    NPM.PackageResolver.resolve_entry(package_dir,
-      subpath: subpath || ".",
+    Volt.JS.PackageResolver.resolve(specifier, node_modules,
       extensions: Volt.JS.Extensions.resolvable()
     )
   end

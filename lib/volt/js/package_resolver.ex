@@ -5,12 +5,7 @@ defmodule Volt.JS.PackageResolver do
   @conditions ["import", "browser", "default", "module", "require"]
 
   def resolve(specifier, from_dir, opts \\ []) do
-    case NPM.PackageResolver.resolve(specifier, from_dir, opts) do
-      :error -> fallback_resolve(specifier, from_dir, opts)
-      result -> result
-    end
-  rescue
-    CaseClauseError -> fallback_resolve(specifier, from_dir, opts)
+    do_resolve(specifier, from_dir, opts)
   end
 
   def relative_import_path(importer, target, project_root) do
@@ -19,7 +14,7 @@ defmodule Volt.JS.PackageResolver do
 
   def relative?(specifier), do: NPM.PackageResolver.relative?(specifier)
 
-  defp fallback_resolve(specifier, from_dir, opts) do
+  defp do_resolve(specifier, from_dir, opts) do
     cond do
       NPM.PackageResolver.node_builtin?(specifier) ->
         {:builtin, specifier}
@@ -42,7 +37,7 @@ defmodule Volt.JS.PackageResolver do
       imports
       |> export_candidates(specifier)
       |> Enum.find_value(:error, fn target ->
-        resolve_target(package_dir, target, specifier, extensions(opts))
+        resolve_target(package_dir, target, extensions(opts))
       end)
     else
       _ -> :error
@@ -87,7 +82,7 @@ defmodule Volt.JS.PackageResolver do
     package_json_path = Path.join(package_dir, "package.json")
 
     with {:ok, package} <- read_json(package_json_path),
-         :error <- resolve_exports(package, package_dir, subpath, extensions) do
+         :error <- resolve_exports(package, package_dir, subpath, extensions, conditions(opts)) do
       resolve_fields(package, package_dir, subpath, extensions)
     else
       {:ok, _} = ok -> ok
@@ -95,17 +90,17 @@ defmodule Volt.JS.PackageResolver do
     end
   end
 
-  defp resolve_exports(%{"exports" => exports}, package_dir, subpath, extensions) do
+  defp resolve_exports(%{"exports" => exports}, package_dir, subpath, extensions, conditions) do
     exports = normalize_exports(exports)
 
     exports
-    |> export_candidates(subpath)
+    |> export_candidates(subpath, conditions)
     |> Enum.find_value(:error, fn target ->
-      resolve_target(package_dir, target, subpath, extensions)
+      resolve_target(package_dir, target, extensions)
     end)
   end
 
-  defp resolve_exports(_, _, _, _), do: :error
+  defp resolve_exports(_, _, _, _, _), do: :error
 
   defp normalize_exports(exports) when is_binary(exports), do: %{"." => exports}
 
@@ -119,8 +114,8 @@ defmodule Volt.JS.PackageResolver do
 
   defp normalize_exports(_), do: %{}
 
-  defp export_candidates(exports, subpath) do
-    exact = Map.get(exports, subpath) |> flatten_conditions()
+  defp export_candidates(exports, subpath, conditions \\ @conditions) do
+    exact = Map.get(exports, subpath) |> flatten_conditions(conditions)
 
     wildcard =
       exports
@@ -130,20 +125,27 @@ defmodule Volt.JS.PackageResolver do
             []
 
           replacement ->
-            Enum.map(flatten_conditions(target), &String.replace(&1, "*", replacement))
+            Enum.map(
+              flatten_conditions(target, conditions),
+              &String.replace(&1, "*", replacement)
+            )
         end
       end)
 
     exact ++ wildcard
   end
 
-  defp flatten_conditions(nil), do: []
-  defp flatten_conditions(path) when is_binary(path), do: [path]
-  defp flatten_conditions(list) when is_list(list), do: Enum.flat_map(list, &flatten_conditions/1)
+  defp flatten_conditions(nil, _conditions), do: []
+  defp flatten_conditions(path, _conditions) when is_binary(path), do: [path]
 
-  defp flatten_conditions(map) when is_map(map) do
-    @conditions
-    |> Enum.flat_map(fn condition -> Map.get(map, condition) |> flatten_conditions() end)
+  defp flatten_conditions(list, conditions) when is_list(list),
+    do: Enum.flat_map(list, &flatten_conditions(&1, conditions))
+
+  defp flatten_conditions(map, conditions) when is_map(map) do
+    conditions
+    |> Enum.flat_map(fn condition ->
+      Map.get(map, condition) |> flatten_conditions(conditions)
+    end)
   end
 
   defp wildcard_replacement(pattern, subpath) do
@@ -163,13 +165,13 @@ defmodule Volt.JS.PackageResolver do
   defp trim_suffix(value, ""), do: value
   defp trim_suffix(value, suffix), do: String.trim_trailing(value, suffix)
 
-  defp resolve_target(package_dir, "./" <> _ = target, _subpath, extensions) do
+  defp resolve_target(package_dir, "./" <> _ = target, extensions) do
     Path.join(package_dir, String.trim_leading(target, "./"))
     |> try_resolve(extensions)
     |> ok_or_nil()
   end
 
-  defp resolve_target(package_dir, target, _subpath, extensions) when is_binary(target) do
+  defp resolve_target(package_dir, target, extensions) when is_binary(target) do
     Path.join(package_dir, target)
     |> try_resolve(extensions)
     |> ok_or_nil()
@@ -215,4 +217,5 @@ defmodule Volt.JS.PackageResolver do
   end
 
   defp extensions(opts), do: Keyword.get(opts, :extensions, @default_extensions)
+  defp conditions(opts), do: Keyword.get(opts, :conditions, @conditions)
 end
