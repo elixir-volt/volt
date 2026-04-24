@@ -505,9 +505,9 @@ config :volt,
 
 Plugins can also run JavaScript build tools through `Volt.JS.Runtime`, which installs npm packages into Volt's cache and executes them in QuickBEAM without requiring Node.js in the application.
 
-## Demo
+## Examples
 
-See the [demo app](https://github.com/elixir-volt/volt/tree/master/examples/demo) for a full Phoenix app using Volt + [PhoenixVapor](https://github.com/dannote/phoenix_vapor) — Vue templates rendered as native LiveView, Tailwind CSS, no JavaScript runtime for SSR.
+See the example apps for minimal Phoenix projects using Volt with [Vue](https://github.com/elixir-volt/volt/tree/master/examples/vue), [Svelte](https://github.com/elixir-volt/volt/tree/master/examples/svelte), and [React](https://github.com/elixir-volt/volt/tree/master/examples/react).
 
 ## License
 

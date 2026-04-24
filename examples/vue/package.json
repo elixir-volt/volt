@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "dependencies": {
+    "vue": "^3.5.18",
+    "phoenix": "^1.8.0",
+    "phoenix_html": "^4.2.1",
+    "phoenix_live_view": "^1.1.0"
+  }
+}

@@ -1,0 +1,6 @@
+/_build/
+/cover/
+/deps/
+/node_modules/
+/priv/static/assets/
+/npm.lock
