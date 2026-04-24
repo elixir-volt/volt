@@ -38,7 +38,7 @@ defmodule Volt.JS.Vendor do
   def prebundle(opts) do
     root = Keyword.fetch!(opts, :root)
     force = Keyword.get(opts, :force, false)
-    node_modules = opts[:node_modules] || NPM.PackageResolver.find_node_modules(root)
+    node_modules = opts[:node_modules] || NPM.Resolution.PackageResolver.find_node_modules(root)
 
     plugins = Keyword.get(opts, :plugins, [])
 
@@ -108,7 +108,7 @@ defmodule Volt.JS.Vendor do
       Enum.flat_map(source_files, fn file ->
         with {:ok, source} <- File.read(file),
              {:ok, imports} <- extract_imports(source, file, plugins) do
-          Enum.filter(imports, &NPM.PackageResolver.bare?/1)
+          Enum.filter(imports, &NPM.Resolution.PackageResolver.bare?/1)
         else
           _ -> []
         end
@@ -151,7 +151,7 @@ defmodule Volt.JS.Vendor do
   defp do_bundle_vendor(specifier, node_modules, output_path) do
     case resolve_package_entry(specifier, node_modules) do
       {:ok, entry_path} ->
-        {package_name, _subpath} = NPM.PackageResolver.split_specifier(specifier)
+        {package_name, _subpath} = NPM.Resolution.PackageResolver.split_specifier(specifier)
         package_dir = Path.join(node_modules, package_name)
 
         files = collect_package_files(entry_path, package_dir, node_modules)

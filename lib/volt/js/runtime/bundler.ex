@@ -11,7 +11,7 @@ defmodule Volt.JS.Runtime.Bundler do
 
     node_modules =
       Keyword.get(opts, :node_modules) ||
-        NPM.PackageResolver.find_node_modules(Path.dirname(entry_path))
+        NPM.Resolution.PackageResolver.find_node_modules(Path.dirname(entry_path))
 
     project_root = project_root(entry_path, node_modules)
     entry_label = Path.relative_to(entry_path, project_root, separator: "/")

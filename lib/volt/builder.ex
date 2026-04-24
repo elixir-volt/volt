@@ -68,7 +68,7 @@ defmodule Volt.Builder do
 
     node_modules =
       Keyword.get(opts, :node_modules) ||
-        NPM.PackageResolver.find_node_modules(Path.dirname(first_entry))
+        NPM.Resolution.PackageResolver.find_node_modules(Path.dirname(first_entry))
 
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
     loaders = Keyword.get(opts, :loaders, %{})

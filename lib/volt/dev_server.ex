@@ -40,7 +40,7 @@ defmodule Volt.DevServer do
     root = Keyword.get(opts, :root) || to_string(config.root)
     expanded_root = Path.expand(root)
 
-    node_modules = NPM.PackageResolver.find_node_modules(expanded_root)
+    node_modules = NPM.Resolution.PackageResolver.find_node_modules(expanded_root)
     plugins = config.plugins
 
     prebundle_vendor(expanded_root, node_modules, plugins)
@@ -226,10 +226,10 @@ defmodule Volt.DevServer do
 
   defp rewrite_dev_specifier(specifier, importer, config) do
     cond do
-      NPM.PackageResolver.node_builtin?(specifier) ->
+      NPM.Resolution.PackageResolver.node_builtin?(specifier) ->
         :keep
 
-      NPM.PackageResolver.relative?(specifier) ->
+      NPM.Resolution.PackageResolver.relative?(specifier) ->
         rewrite_relative(specifier, importer, config)
 
       true ->
@@ -270,7 +270,7 @@ defmodule Volt.DevServer do
     if Path.extname(path) != "" and File.regular?(path) do
       path
     else
-      case NPM.PackageResolver.try_resolve(path,
+      case NPM.Resolution.PackageResolver.try_resolve(path,
              extensions: Volt.JS.Extensions.resolvable(plugins)
            ) do
         {:ok, resolved} -> resolved

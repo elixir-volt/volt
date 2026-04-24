@@ -10,7 +10,7 @@ defmodule Volt.Tailwind.Resolver do
   def resolve_stylesheet_path!(id, base, runtime_node_modules) do
     base = normalize_base(base)
 
-    if NPM.PackageResolver.relative?(id) or absolute?(id) do
+    if NPM.Resolution.PackageResolver.relative?(id) or absolute?(id) do
       resolve_path!(base, id, @stylesheet_extensions, @stylesheet_index_files)
     else
       resolve_bare_path!(
@@ -27,7 +27,7 @@ defmodule Volt.Tailwind.Resolver do
   def resolve_module_path!(id, base, kind, runtime_node_modules) do
     base = normalize_base(base)
 
-    if NPM.PackageResolver.relative?(id) or absolute?(id) do
+    if NPM.Resolution.PackageResolver.relative?(id) or absolute?(id) do
       resolve_path!(base, id, @module_extensions, @module_index_files)
     else
       resolve_bare_path!(
@@ -41,14 +41,16 @@ defmodule Volt.Tailwind.Resolver do
     end
   end
 
-  def node_builtin_specifier?(specifier), do: NPM.PackageResolver.node_builtin?(specifier)
-  def relative_specifier?(specifier), do: NPM.PackageResolver.relative?(specifier)
+  def node_builtin_specifier?(specifier),
+    do: NPM.Resolution.PackageResolver.node_builtin?(specifier)
+
+  def relative_specifier?(specifier), do: NPM.Resolution.PackageResolver.relative?(specifier)
   def absolute_specifier?(specifier), do: absolute?(specifier)
 
   defp absolute?(id), do: Volt.Builder.Resolver.absolute?(id)
 
   defp resolve_bare_path!(id, base, extensions, index_files, kind, runtime_node_modules) do
-    {package_name, subpath} = NPM.PackageResolver.split_specifier(id)
+    {package_name, subpath} = NPM.Resolution.PackageResolver.split_specifier(id)
 
     resolved =
       [find_node_modules_for(base), runtime_node_modules]
@@ -80,7 +82,7 @@ defmodule Volt.Tailwind.Resolver do
   end
 
   defp resolve_package_entry(package_dir, extensions, index_files) do
-    case NPM.PackageResolver.resolve_entry(package_dir, conditions: @cjs_conditions) do
+    case NPM.Resolution.PackageResolver.resolve_entry(package_dir, conditions: @cjs_conditions) do
       {:ok, _} = ok ->
         ok
 
@@ -90,7 +92,7 @@ defmodule Volt.Tailwind.Resolver do
   end
 
   defp resolve_package_subpath(package_dir, subpath, extensions, index_files) do
-    case NPM.PackageResolver.resolve_entry(package_dir,
+    case NPM.Resolution.PackageResolver.resolve_entry(package_dir,
            subpath: subpath,
            conditions: @cjs_conditions
          ) do
@@ -130,6 +132,6 @@ defmodule Volt.Tailwind.Resolver do
   def normalize_base(base), do: Path.expand(base)
 
   defp find_node_modules_for(base) do
-    base |> normalize_base() |> NPM.PackageResolver.find_node_modules()
+    base |> normalize_base() |> NPM.Resolution.PackageResolver.find_node_modules()
   end
 end

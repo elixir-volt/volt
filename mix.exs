@@ -44,7 +44,7 @@ defmodule Volt.MixProject do
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:igniter, "~> 0.5", optional: true},
-      {:npm, "~> 0.5.1"},
+      {:npm, "~> 0.6.0"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
