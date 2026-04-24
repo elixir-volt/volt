@@ -60,6 +60,7 @@ defmodule Volt.Builder do
     plugins = Keyword.get(opts, :plugins, [])
     code_splitting = Keyword.get(opts, :code_splitting, true)
     chunks = Keyword.get(opts, :chunks, %{})
+    format = Keyword.get(opts, :format, :iife)
     external_raw = Keyword.get(opts, :external, [])
     {external_set, external_globals} = normalize_external(external_raw)
 
@@ -91,7 +92,8 @@ defmodule Volt.Builder do
       minify: minify,
       sourcemap: sourcemap,
       target: target,
-      define: all_define
+      define: all_define,
+      format: format
     ]
 
     build_ctx = %{

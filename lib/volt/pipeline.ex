@@ -16,7 +16,6 @@ defmodule Volt.Pipeline do
             %{template: String.t() | nil, style: String.t() | nil, script: String.t() | nil} | nil
         }
 
-  @vue_ext ".vue"
   @css_exts ~w(.css)
   @json_ext ".json"
 
@@ -49,11 +48,11 @@ defmodule Volt.Pipeline do
 
     result =
       cond do
+        plugin_result = Volt.PluginRunner.compile(plugins, path, source, opts) ->
+          plugin_result
+
         content_type in ~w(application/javascript text/javascript) ->
           compile_js(path, source, opts)
-
-        ext == @vue_ext ->
-          compile_vue(path, source, opts)
 
         ext in Volt.JS.Extensions.js() ->
           compile_js(path, source, opts)
@@ -101,39 +100,6 @@ defmodule Volt.Pipeline do
       {:ok, %{compiled | code: workers_rewritten}}
     else
       {:error, _} -> {:ok, compiled}
-    end
-  end
-
-  defp compile_vue(path, source, opts) do
-    vapor = Keyword.get(opts, :vapor, false)
-
-    case Vize.compile_sfc(source, filename: Path.basename(path), vapor: vapor) do
-      {:ok, result} ->
-        code = strip_vue_typescript(result.code, path, opts)
-
-        {:ok,
-         compiled(code,
-           css: result.css,
-           hashes: %{
-             template: result.template_hash,
-             style: result.style_hash,
-             script: result.script_hash
-           }
-         )}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp strip_vue_typescript(code, path, opts) do
-    ts_name = Path.rootname(Path.basename(path)) <> ".ts"
-    transform_opts = [sourcemap: false] |> maybe_put(:target, Keyword.get(opts, :target))
-
-    case OXC.transform(code, ts_name, transform_opts) do
-      {:ok, %{code: stripped}} -> stripped
-      {:ok, stripped} when is_binary(stripped) -> stripped
-      {:error, _} -> code
     end
   end
 

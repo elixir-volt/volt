@@ -1,55 +1,104 @@
 defmodule Volt.PluginRunner do
   @moduledoc """
-  Execute plugin hooks in order, short-circuiting on first match.
+  Execute Volt plugin hooks.
   """
 
-  @doc "Run resolve hooks. Returns `{:ok, path}` or `nil`."
-  @spec resolve([module()], String.t(), String.t() | nil) :: {:ok, String.t()} | nil
+  @default_plugins [Volt.Plugin.Vue]
+
+  def plugins(plugins) do
+    (@default_plugins ++ List.wrap(plugins))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq_by(&plugin_module/1)
+  end
+
+  @doc "Run extension hooks and return plugin-provided extensions for a kind."
+  @spec extensions([module() | {module(), keyword()}], atom()) :: [String.t()]
+  def extensions(plugins, kind) do
+    plugins
+    |> plugins()
+    |> Enum.flat_map(fn plugin ->
+      call_optional(plugin, :extensions, [kind], [])
+    end)
+    |> Enum.uniq()
+  end
+
+  @doc "Run resolve hooks. Returns `{:ok, path}`, `:skip`, or `nil`."
+  @spec resolve([module() | {module(), keyword()}], String.t(), String.t() | nil) ::
+          {:ok, String.t()} | :skip | nil
   def resolve(plugins, specifier, importer) do
-    Enum.find_value(plugins, fn plugin ->
-      if function_exported?(plugin, :resolve, 2) do
-        plugin.resolve(specifier, importer)
-      end
+    Enum.find_value(plugins(plugins), fn plugin ->
+      call_optional(plugin, :resolve, [specifier, importer], nil)
     end)
   end
 
-  @doc "Run load hooks. Returns `{:ok, code, content_type}` or `nil`."
-  @spec load([module()], String.t()) :: {:ok, String.t(), String.t()} | {:ok, String.t()} | nil
+  @doc "Run load hooks. Returns `{:ok, code, content_type}`, `{:ok, code}`, or `nil`."
+  @spec load([module() | {module(), keyword()}], String.t()) ::
+          {:ok, String.t(), String.t()} | {:ok, String.t()} | nil
   def load(plugins, path) do
-    Enum.find_value(plugins, fn plugin ->
-      if function_exported?(plugin, :load, 1) do
-        plugin.load(path)
-      end
+    Enum.find_value(plugins(plugins), fn plugin ->
+      call_optional(plugin, :load, [path], nil)
+    end)
+  end
+
+  @doc "Run compile hooks. Returns `{:ok, compiled}`, `{:error, term}`, or `nil`."
+  @spec compile([module() | {module(), keyword()}], String.t(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, term()} | nil
+  def compile(plugins, path, source, opts) do
+    Enum.find_value(plugins(plugins), fn plugin ->
+      call_optional(plugin, :compile, [path, source, opts], nil)
+    end)
+  end
+
+  @doc "Run import extraction hooks. Returns import metadata or `nil`."
+  @spec extract_imports([module() | {module(), keyword()}], String.t(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, term()} | nil
+  def extract_imports(plugins, path, source, opts) do
+    Enum.find_value(plugins(plugins), fn plugin ->
+      call_optional(plugin, :extract_imports, [path, source, opts], nil)
     end)
   end
 
   @doc "Run transform hooks in sequence, piping code through each."
-  @spec transform([module()], String.t(), String.t()) :: String.t()
+  @spec transform([module() | {module(), keyword()}], String.t(), String.t()) :: String.t()
   def transform(plugins, code, path) do
-    Enum.reduce(plugins, code, fn plugin, acc ->
-      if function_exported?(plugin, :transform, 2) do
-        case plugin.transform(acc, path) do
-          {:ok, transformed} -> transformed
-          nil -> acc
-        end
-      else
-        acc
+    Enum.reduce(plugins(plugins), code, fn plugin, acc ->
+      case call_optional(plugin, :transform, [acc, path], nil) do
+        {:ok, transformed} -> transformed
+        nil -> acc
       end
     end)
   end
 
   @doc "Run render_chunk hooks in sequence."
-  @spec render_chunk([module()], String.t(), map()) :: String.t()
+  @spec render_chunk([module() | {module(), keyword()}], String.t(), map()) :: String.t()
   def render_chunk(plugins, code, chunk_info) do
-    Enum.reduce(plugins, code, fn plugin, acc ->
-      if function_exported?(plugin, :render_chunk, 2) do
-        case plugin.render_chunk(acc, chunk_info) do
-          {:ok, transformed} -> transformed
-          nil -> acc
-        end
-      else
-        acc
+    Enum.reduce(plugins(plugins), code, fn plugin, acc ->
+      case call_optional(plugin, :render_chunk, [acc, chunk_info], nil) do
+        {:ok, transformed} -> transformed
+        nil -> acc
       end
     end)
   end
+
+  defp call_optional(plugin, fun, args, default) do
+    module = plugin_module(plugin)
+    opts = plugin_opts(plugin)
+
+    cond do
+      Code.ensure_loaded?(module) and function_exported?(module, fun, length(args) + 1) ->
+        apply(module, fun, args ++ [opts])
+
+      Code.ensure_loaded?(module) and function_exported?(module, fun, length(args)) ->
+        apply(module, fun, args)
+
+      true ->
+        default
+    end
+  end
+
+  defp plugin_module({module, _opts}), do: module
+  defp plugin_module(module), do: module
+
+  defp plugin_opts({_module, opts}), do: opts
+  defp plugin_opts(_module), do: []
 end

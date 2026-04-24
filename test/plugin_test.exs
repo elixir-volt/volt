@@ -75,7 +75,54 @@ defmodule Volt.PluginTest do
     end
   end
 
+  describe "PluginRunner.extensions/2" do
+    test "passes tuple options to plugins with arity-aware callbacks" do
+      defmodule ConfiguredExtensionsPlugin do
+        @behaviour Volt.Plugin
+        def name, do: "configured-extensions"
+        def extensions(:compile, opts), do: Keyword.fetch!(opts, :extensions)
+        def extensions(_, _opts), do: []
+      end
+
+      assert ".widget" in Volt.PluginRunner.extensions(
+               [{ConfiguredExtensionsPlugin, extensions: [".widget"]}],
+               :compile
+             )
+    end
+
+    test "includes built-in Vue extensions and custom plugin extensions" do
+      defmodule SfcPlugin do
+        @behaviour Volt.Plugin
+        def name, do: "sfc"
+        def extensions(:compile), do: [".sfc"]
+        def extensions(_), do: []
+      end
+
+      assert ".vue" in Volt.PluginRunner.extensions([], :compile)
+      assert ".sfc" in Volt.PluginRunner.extensions([SfcPlugin], :compile)
+    end
+  end
+
   describe "Pipeline integration" do
+    test "plugins can compile custom file types" do
+      defmodule CustomCompilerPlugin do
+        @behaviour Volt.Plugin
+        def name, do: "custom-compiler"
+        def extensions(:compile), do: [".custom"]
+        def extensions(_), do: []
+
+        def compile("component.custom", source, _opts) do
+          {:ok,
+           %{code: "export default #{inspect(source)}", sourcemap: nil, css: nil, hashes: nil}}
+        end
+
+        def compile(_, _, _), do: nil
+      end
+
+      assert {:ok, %{code: ~s(export default "hello")}} =
+               Volt.Pipeline.compile("component.custom", "hello", plugins: [CustomCompilerPlugin])
+    end
+
     test "plugins receive compiled output" do
       {:ok, result} =
         Volt.Pipeline.compile("app.ts", "const x: number = 42", plugins: [UppercasePlugin])

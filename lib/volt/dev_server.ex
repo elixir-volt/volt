@@ -41,8 +41,9 @@ defmodule Volt.DevServer do
     expanded_root = Path.expand(root)
 
     node_modules = NPM.PackageResolver.find_node_modules(expanded_root)
+    plugins = config.plugins
 
-    prebundle_vendor(expanded_root, node_modules)
+    prebundle_vendor(expanded_root, node_modules, plugins)
 
     %{
       root: expanded_root,
@@ -50,7 +51,7 @@ defmodule Volt.DevServer do
       target: to_string(config.target),
       import_source: to_string(config.import_source),
       vapor: config.vapor,
-      plugins: config.plugins,
+      plugins: plugins,
       aliases: config.aliases,
       node_modules: node_modules
     }
@@ -123,7 +124,7 @@ defmodule Volt.DevServer do
     file_path = Path.join(config.root, relative)
 
     cond do
-      compilable?(file_path) and File.regular?(file_path) ->
+      compilable?(file_path, config) and File.regular?(file_path) ->
         serve_compiled(conn, file_path, relative, config)
 
       Volt.Assets.asset?(file_path) and File.regular?(file_path) ->
@@ -134,7 +135,8 @@ defmodule Volt.DevServer do
     end
   end
 
-  defp compilable?(path), do: Path.extname(path) in Volt.JS.Extensions.compilable()
+  defp compilable?(path, config),
+    do: Path.extname(path) in Volt.JS.Extensions.compilable(config.plugins)
 
   defp serve_compiled(conn, file_path, relative, config) do
     mtime = Volt.Format.file_mtime(file_path)
@@ -242,7 +244,7 @@ defmodule Volt.DevServer do
     resolved = Path.expand(Path.join(Path.dirname(importer), specifier))
 
     if String.starts_with?(resolved, config.root) do
-      resolved = resolve_with_extension(resolved)
+      resolved = resolve_with_extension(resolved, config.plugins)
       relative = Path.relative_to(resolved, config.root)
       {:rewrite, Path.join(config.prefix, relative)}
     else
@@ -252,7 +254,7 @@ defmodule Volt.DevServer do
 
   defp rewrite_resolved_path(resolved, config) do
     if String.starts_with?(resolved, config.root) do
-      resolved = resolve_with_extension(resolved)
+      resolved = resolve_with_extension(resolved, config.plugins)
       relative = Path.relative_to(resolved, config.root)
       {:rewrite, Path.join(config.prefix, relative)}
     else
@@ -264,12 +266,12 @@ defmodule Volt.DevServer do
     {:rewrite, Volt.JS.Vendor.vendor_url(specifier)}
   end
 
-  defp resolve_with_extension(path) do
+  defp resolve_with_extension(path, plugins) do
     if Path.extname(path) != "" and File.regular?(path) do
       path
     else
       case NPM.PackageResolver.try_resolve(path,
-             extensions: Volt.JS.Extensions.resolvable()
+             extensions: Volt.JS.Extensions.resolvable(plugins)
            ) do
         {:ok, resolved} -> resolved
         :error -> path
@@ -294,8 +296,8 @@ defmodule Volt.DevServer do
 
   # ── Vendor pre-bundling ───────────────────────────────────────────
 
-  defp prebundle_vendor(root, node_modules) do
-    case Volt.JS.Vendor.prebundle(root: root, node_modules: node_modules) do
+  defp prebundle_vendor(root, node_modules, plugins) do
+    case Volt.JS.Vendor.prebundle(root: root, node_modules: node_modules, plugins: plugins) do
       {:ok, vendor_map} when map_size(vendor_map) > 0 ->
         count = map_size(vendor_map)
         Logger.debug("[Volt] Pre-bundled #{count} vendor package(s)")

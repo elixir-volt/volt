@@ -3,18 +3,17 @@ defmodule Volt.JS.Extensions do
 
   @js ~w(.ts .tsx .js .jsx .mts .mjs)
   @cjs ~w(.cjs .cts)
-  @vue ~w(.vue)
   @css ~w(.css)
   @json ~w(.json)
   @template ~w(.ex .heex .eex .leex .sface)
 
   def js, do: @js
   def bundleable, do: @js ++ @cjs
-  def compilable, do: @vue ++ @js ++ @css ++ @json
-  def scannable, do: @vue ++ @js
-  def resolvable, do: ["" | @js ++ @cjs ++ @vue ++ @json]
+  def compilable(plugins \\ []), do: plugin_exts(plugins, :compile) ++ @js ++ @css ++ @json
+  def scannable(plugins \\ []), do: plugin_exts(plugins, :scan) ++ @js
+  def resolvable(plugins \\ []), do: ["" | @js ++ @cjs ++ plugin_exts(plugins, :resolve) ++ @json]
   def resolvable_index, do: ~w(/index.ts /index.tsx /index.js /index.jsx)
-  def watchable_js, do: @vue ++ @js ++ @css
+  def watchable_js(plugins \\ []), do: plugin_exts(plugins, :watch) ++ @js ++ @css
   def template, do: @template
   def css, do: @css ++ ~w(.scss .sass .less .styl)
 
@@ -26,5 +25,9 @@ defmodule Volt.JS.Extensions do
       "tsx" -> Path.rootname(filename) <> ".tsx"
       _ -> filename
     end
+  end
+
+  defp plugin_exts(plugins, kind) do
+    Volt.PluginRunner.extensions(plugins, kind)
   end
 end

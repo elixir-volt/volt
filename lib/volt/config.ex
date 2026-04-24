@@ -65,6 +65,7 @@ defmodule Volt.Config do
     sourcemap: true,
     hash: true,
     code_splitting: true,
+    format: :iife,
     mode: :production,
     external: [],
     aliases: %{},

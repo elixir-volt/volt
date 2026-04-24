@@ -113,7 +113,7 @@ defmodule Volt.Watcher do
       ext = Path.extname(path)
 
       cond do
-        ext in Volt.JS.Extensions.watchable_js() ->
+        ext in Volt.JS.Extensions.watchable_js(state.config[:plugins] || []) ->
           state = schedule_rebuild(state, path)
           state = maybe_schedule_tailwind(state, path)
           {:noreply, state}

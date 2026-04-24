@@ -40,13 +40,15 @@ defmodule Volt.JS.Vendor do
     force = Keyword.get(opts, :force, false)
     node_modules = opts[:node_modules] || NPM.PackageResolver.find_node_modules(root)
 
-    with {:ok, specifiers} <- scan_bare_imports(root),
+    plugins = Keyword.get(opts, :plugins, [])
+
+    with {:ok, specifiers} <- scan_bare_imports(root, plugins),
          :ok <- ensure_cache_dir() do
       vendor_map =
         specifiers
         |> Enum.uniq()
         |> Enum.reduce(%{}, fn spec, acc ->
-          case bundle_vendor(spec, node_modules, force) do
+          case safe_bundle_vendor(spec, node_modules, force) do
             {:ok, path} -> Map.put(acc, spec, path)
             {:error, _} -> acc
           end
@@ -96,16 +98,16 @@ defmodule Volt.JS.Vendor do
 
   # ── Scanning ──────────────────────────────────────────────────────
 
-  defp scan_bare_imports(root) do
+  defp scan_bare_imports(root, plugins) do
     source_files =
-      Volt.JS.Extensions.scannable()
+      Volt.JS.Extensions.scannable(plugins)
       |> Enum.flat_map(fn ext -> Path.wildcard(Path.join(root, "**/*" <> ext)) end)
       |> Enum.uniq()
 
     specifiers =
       Enum.flat_map(source_files, fn file ->
         with {:ok, source} <- File.read(file),
-             {:ok, imports} <- extract_imports(source, Path.basename(file)) do
+             {:ok, imports} <- extract_imports(source, file, plugins) do
           Enum.filter(imports, &NPM.PackageResolver.bare?/1)
         else
           _ -> []
@@ -115,15 +117,26 @@ defmodule Volt.JS.Vendor do
     {:ok, specifiers}
   end
 
-  defp extract_imports(source, filename) do
-    if Path.extname(filename) == ".vue" do
-      Volt.JS.VueImports.extract(source)
-    else
-      OXC.imports(source, filename)
+  defp extract_imports(source, path, plugins) do
+    case Volt.PluginRunner.extract_imports(plugins, path, source, []) do
+      {:ok, %{imports: imports}} -> {:ok, Enum.map(imports, fn {_type, spec} -> spec end)}
+      nil -> OXC.imports(source, Path.basename(path))
+      {:error, _} = error -> error
     end
   end
 
   # ── Bundling ──────────────────────────────────────────────────────
+
+  defp safe_bundle_vendor(specifier, node_modules, force) do
+    bundle_vendor(specifier, node_modules, force)
+  rescue
+    exception ->
+      Logger.debug(
+        "[Volt] Vendor prebundle skipped #{specifier}: #{Exception.message(exception)}"
+      )
+
+      {:error, exception}
+  end
 
   defp bundle_vendor(specifier, node_modules, force) do
     path = cache_path(specifier)

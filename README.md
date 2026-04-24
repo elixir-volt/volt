@@ -66,6 +66,7 @@ config :volt,
   chunks: %{
     "vendor" => ["vue", "vue-router"]
   },
+  format: :iife,
   plugins: [],
   tailwind: [
     css: "assets/css/app.css",
@@ -435,6 +436,7 @@ Build production assets. Reads from `config :volt`, CLI flags override.
 --no-hash        Stable filenames
 --no-code-splitting  Disable chunk splitting
 --mode           Build mode for env variables
+--format         Output format: iife, esm, or cjs
 --resolve-dir    Additional resolution directory (repeatable)
 --tailwind       Build Tailwind CSS
 --tailwind-css   Custom Tailwind input CSS file
@@ -488,6 +490,19 @@ volt
 ├── quickbeam — Tailwind compiler runtime (QuickJS on BEAM)
 └── plug      — HTTP dev server
 ```
+
+## Plugins
+
+Volt core handles JavaScript/TypeScript, CSS, JSON, assets, bundling, the dev server, and HMR. Vue support is included out of the box, so `.vue` files can be imported directly from your app.
+
+Additional file formats can be enabled by adding plugins to your Volt config. For example, once Svelte support is available, setup should look like:
+
+```elixir
+config :volt,
+  plugins: [VoltSvelte]
+```
+
+After that, `.svelte` files should work like any other import.
 
 ## Demo
 

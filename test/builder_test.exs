@@ -76,6 +76,29 @@ defmodule Volt.BuilderTest do
       assert filename =~ ~r/^app-[a-f0-9]{8}\.js$/
     end
 
+    test "supports ESM output for SSR/library entries" do
+      File.write!(
+        Path.join(@fixture_dir, "src/server.ts"),
+        "export function render() { return 'ok' }"
+      )
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/server.ts"),
+          outdir: @outdir,
+          name: "server",
+          format: :esm,
+          minify: false,
+          sourcemap: false,
+          code_splitting: false,
+          hash: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "export { render }"
+      refute js =~ "return exports"
+    end
+
     test "writes manifest.json" do
       {:ok, _result} =
         Volt.Builder.build(
@@ -322,6 +345,33 @@ defmodule Volt.BuilderTest do
       assert result.chunks != nil
       chunk_files = Enum.map(result.chunks, &Path.basename(&1.path))
       assert Enum.any?(chunk_files, &(&1 =~ "lib"))
+    end
+
+    test "eager import.meta.glob dependencies resolve from original source directory" do
+      File.mkdir_p!(Path.join(@fixture_dir, "src/components"))
+
+      File.write!(Path.join(@fixture_dir, "src/components/One.vue"), """
+      <script setup lang=\"ts\">
+      const message: string = 'one'
+      </script>
+      <template><p>{{ message }}</p></template>
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/glob_app.ts"), """
+      const components = import.meta.glob('./components/**/*.vue', { eager: true })
+      console.log(Object.keys(components))
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/glob_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          node_modules: Path.expand("../node_modules", __DIR__)
+        )
+
+      assert File.read!(result.js.path) =~ "One.vue"
     end
 
     test "alias-imported Vue SFC resolves bare npm imports" do

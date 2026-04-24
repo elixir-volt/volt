@@ -25,14 +25,14 @@ defmodule Volt.Builder.Resolver do
 
   defp resolve_specifier(specifier, importer, ctx) do
     case Volt.JS.Resolver.resolve(specifier, ctx.aliases) do
-      {:ok, aliased} -> resolve_aliased(aliased)
+      {:ok, aliased} -> resolve_aliased(aliased, ctx)
       :pass -> resolve_by_type(specifier, importer, ctx)
     end
   end
 
-  defp resolve_aliased(aliased) do
+  defp resolve_aliased(aliased, ctx) do
     case NPM.PackageResolver.try_resolve(Path.expand(aliased),
-           extensions: Volt.JS.Extensions.resolvable()
+           extensions: Volt.JS.Extensions.resolvable(ctx.plugins)
          ) do
       {:ok, _} = ok -> ok
       :error -> {:error, {:not_found, aliased}}
@@ -45,19 +45,21 @@ defmodule Volt.Builder.Resolver do
         :skip
 
       NPM.PackageResolver.relative?(specifier) ->
-        resolve_relative(specifier, importer)
+        resolve_relative(specifier, importer, ctx)
 
       true ->
-        resolve_bare(specifier, ctx.node_modules, ctx.resolve_dirs)
+        resolve_bare(specifier, ctx.node_modules, ctx.resolve_dirs, ctx.plugins)
     end
   end
 
   @js_to_ts_map %{".js" => [".ts", ".tsx"], ".jsx" => [".tsx"], ".mjs" => [".mts"]}
 
-  defp resolve_relative(specifier, importer) do
+  defp resolve_relative(specifier, importer, ctx) do
     base = Path.expand(specifier, Path.dirname(importer))
 
-    case NPM.PackageResolver.try_resolve(base, extensions: Volt.JS.Extensions.resolvable()) do
+    case NPM.PackageResolver.try_resolve(base,
+           extensions: Volt.JS.Extensions.resolvable(ctx.plugins)
+         ) do
       {:ok, _} = ok ->
         ok
 
@@ -98,7 +100,7 @@ defmodule Volt.Builder.Resolver do
       Enum.any?(external, &String.starts_with?(specifier, &1 <> "/"))
   end
 
-  defp resolve_bare(specifier, node_modules, resolve_dirs) do
+  defp resolve_bare(specifier, node_modules, resolve_dirs, plugins) do
     dirs = if node_modules, do: [node_modules | resolve_dirs], else: resolve_dirs
 
     Enum.find_value(dirs, :skip, fn dir ->
@@ -106,14 +108,14 @@ defmodule Volt.Builder.Resolver do
       package_dir = Path.join(dir, package_name)
 
       if File.dir?(package_dir) do
-        resolve_in_package(specifier, dir, package_dir)
+        resolve_in_package(specifier, dir, package_dir, plugins)
       end
     end)
   end
 
-  defp resolve_in_package(specifier, dir, package_dir) do
+  defp resolve_in_package(specifier, dir, package_dir, plugins) do
     subpath = subpath_for(specifier)
-    extensions = Volt.JS.Extensions.resolvable()
+    extensions = Volt.JS.Extensions.resolvable(plugins)
 
     case NPM.PackageResolver.resolve_entry(package_dir, subpath: subpath, extensions: extensions) do
       {:ok, resolved} ->
@@ -131,7 +133,7 @@ defmodule Volt.Builder.Resolver do
     do: {:ok, resolved}
 
   defp maybe_try_direct_path(resolved, _subpath, dir, specifier, package_dir, extensions) do
-    main = resolve_main(package_dir)
+    main = resolve_main(package_dir, extensions)
 
     if resolved == main do
       case NPM.PackageResolver.try_resolve(Path.join(dir, specifier), extensions: extensions) do
@@ -143,10 +145,10 @@ defmodule Volt.Builder.Resolver do
     end
   end
 
-  defp resolve_main(package_dir) do
+  defp resolve_main(package_dir, extensions) do
     case NPM.PackageResolver.resolve_entry(package_dir,
            subpath: ".",
-           extensions: Volt.JS.Extensions.resolvable()
+           extensions: extensions
          ) do
       {:ok, path} -> path
       :error -> nil

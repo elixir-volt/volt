@@ -2,81 +2,57 @@ defmodule Volt.Plugin do
   @moduledoc """
   Behaviour for Volt build plugins.
 
-  Plugins hook into the compilation pipeline at four stages:
+  Plugins can participate in resolution, loading, compilation, import
+  extraction, and final chunk rendering. All callbacks except `name/0` are
+  optional.
 
-    1. **resolve** — remap import specifiers before file lookup
-    2. **load** — provide virtual module content for a specifier
-    3. **transform** — modify compiled output before it's served/bundled
-    4. **render_chunk** — modify final bundled chunks before writing
-
-  Each callback is optional. Return `nil` or `:pass` to skip.
-
-  ## Example
-
-      defmodule MyApp.SvgPlugin do
-        @behaviour Volt.Plugin
-
-        @impl true
-        def name, do: "svg"
-
-        @impl true
-        def resolve(specifier, _importer) do
-          if String.ends_with?(specifier, ".svg") do
-            {:ok, specifier}
-          end
-        end
-
-        @impl true
-        def load(path) do
-          if String.ends_with?(path, ".svg") do
-            svg = File.read!(path)
-            {:ok, "export default " <> Jason.encode!(svg), "application/javascript"}
-          end
-        end
-
-        @impl true
-        def transform(_code, _path), do: nil
-
-        @impl true
-        def render_chunk(_code, _chunk_info), do: nil
-      end
+  Plugins may be configured as modules or `{module, opts}` tuples. When a
+  plugin defines a callback with one extra arity, Volt passes the tuple opts as
+  the final argument.
   """
+
+  @type compiled :: %{
+          code: String.t(),
+          sourcemap: String.t() | nil,
+          css: String.t() | nil,
+          hashes: map() | nil
+        }
 
   @doc "Plugin name for identification and error messages."
   @callback name() :: String.t()
 
-  @doc """
-  Resolve an import specifier to a file path or virtual module ID.
+  @doc "Return extensions owned by this plugin for `:compile`, `:resolve`, `:watch`, or `:scan`."
+  @callback extensions(kind :: atom()) :: [String.t()]
 
-  Return `{:ok, resolved_path}` to handle, `nil` to pass to the next plugin.
-  """
+  @doc "Resolve an import specifier to a file path, `:skip`, or pass with `nil`."
   @callback resolve(specifier :: String.t(), importer :: String.t() | nil) ::
-              {:ok, String.t()} | nil
+              {:ok, String.t()} | :skip | nil
 
-  @doc """
-  Load content for a resolved module path.
-
-  Return `{:ok, code, content_type}` to provide content,
-  `{:ok, code}` (defaults to JS), or `nil` to pass.
-  """
+  @doc "Load content for a resolved module path."
   @callback load(path :: String.t()) ::
               {:ok, String.t(), String.t()} | {:ok, String.t()} | nil
 
-  @doc """
-  Transform compiled code.
+  @doc "Compile a source file into browser-ready JavaScript plus optional CSS."
+  @callback compile(path :: String.t(), source :: String.t(), opts :: keyword()) ::
+              {:ok, compiled()} | {:error, term()} | nil
 
-  Return `{:ok, code}` with modified code, or `nil` to pass.
-  """
-  @callback transform(code :: String.t(), path :: String.t()) ::
-              {:ok, String.t()} | nil
+  @doc "Extract static/dynamic imports and worker specifiers from a source file."
+  @callback extract_imports(path :: String.t(), source :: String.t(), opts :: keyword()) ::
+              {:ok, %{imports: [{:static | :dynamic, String.t()}], workers: [String.t()]}}
+              | {:error, term()}
+              | nil
 
-  @doc """
-  Transform a final output chunk before writing.
+  @doc "Transform compiled JavaScript before serving or bundling."
+  @callback transform(code :: String.t(), path :: String.t()) :: {:ok, String.t()} | nil
 
-  Return `{:ok, code}` with modified code, or `nil` to pass.
-  """
-  @callback render_chunk(code :: String.t(), chunk_info :: map()) ::
-              {:ok, String.t()} | nil
+  @doc "Transform a final output chunk before writing."
+  @callback render_chunk(code :: String.t(), chunk_info :: map()) :: {:ok, String.t()} | nil
 
-  @optional_callbacks resolve: 2, load: 1, transform: 2, render_chunk: 2
+  @optional_callbacks extensions: 1,
+                      resolve: 2,
+                      load: 1,
+                      compile: 3,
+                      extract_imports: 3,
+                      transform: 2,
+                      render_chunk: 2
 end

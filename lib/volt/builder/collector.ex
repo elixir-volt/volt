@@ -67,13 +67,21 @@ defmodule Volt.Builder.Collector do
   end
 
   defp process_source(abs_path, label, source, content_type, state) do
+    source = Volt.JS.GlobImport.transform(source, Path.dirname(abs_path))
+
     state = %{
       state
       | seen: MapSet.put(state.seen, abs_path),
         files: [{abs_path, label, source} | state.files]
     }
 
-    case extract_typed_imports(source, abs_path, content_type, state.ctx.loaders) do
+    case extract_typed_imports(
+           source,
+           abs_path,
+           content_type,
+           state.ctx.loaders,
+           state.ctx.plugins
+         ) do
       {:ok, %{imports: typed_imports, workers: worker_specs}} ->
         state = %{
           state
@@ -167,24 +175,25 @@ defmodule Volt.Builder.Collector do
     end
   end
 
-  defp extract_typed_imports(source, path, content_type, loaders) do
+  defp extract_typed_imports(source, path, content_type, loaders, plugins) do
     ext = Path.extname(path)
     filename = Volt.JS.Extensions.apply_loader(Path.basename(path), loaders)
 
-    cond do
-      content_type in ~w(application/javascript text/javascript) ->
-        extract_js_typed_imports(source, filename)
+    case Volt.PluginRunner.extract_imports(plugins, path, source, loaders: loaders) do
+      nil ->
+        cond do
+          content_type in ~w(application/javascript text/javascript) ->
+            extract_js_typed_imports(source, filename)
 
-      ext == ".vue" ->
-        case Volt.JS.VueImports.extract(source) do
-          {:ok, specs} -> {:ok, %{imports: Enum.map(specs, &{:static, &1}), workers: []}}
+          ext == ".json" ->
+            {:ok, %{imports: [], workers: []}}
+
+          true ->
+            extract_js_typed_imports(source, filename)
         end
 
-      ext == ".json" ->
-        {:ok, %{imports: [], workers: []}}
-
-      true ->
-        extract_js_typed_imports(source, filename)
+      result ->
+        result
     end
   end
 

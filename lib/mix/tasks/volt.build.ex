@@ -22,6 +22,7 @@ defmodule Mix.Tasks.Volt.Build do
     * `--no-hash` — stable filenames (no content hash)
     * `--no-code-splitting` — disable chunk splitting
     * `--mode` — build mode for env variables (default: `"production"`)
+    * `--format` — output format: `iife`, `esm`, or `cjs` (default from config)
     * `--tailwind` — build Tailwind CSS
     * `--tailwind-css` — custom Tailwind input CSS file
     * `--tailwind-source` — source directory for Tailwind scanning (repeatable)
@@ -43,6 +44,7 @@ defmodule Mix.Tasks.Volt.Build do
           name: :string,
           hash: :boolean,
           mode: :string,
+          format: :string,
           resolve_dir: [:string, :keep],
           external: [:string, :keep],
           code_splitting: :boolean,
@@ -100,6 +102,7 @@ defmodule Mix.Tasks.Volt.Build do
       plugins: config.plugins,
       hash: Keyword.get(parsed, :hash, config.hash),
       mode: Keyword.get(parsed, :mode) || to_string(config.mode),
+      format: parse_format(Keyword.get(parsed, :format), config.format),
       code_splitting: Keyword.get(parsed, :code_splitting, config.code_splitting),
       chunks: config.chunks,
       name: parsed[:name]
@@ -204,6 +207,13 @@ defmodule Mix.Tasks.Volt.Build do
         exit({:shutdown, 1})
     end
   end
+
+  defp parse_format(nil, default), do: default
+
+  defp parse_format(value, _default) when value in ["iife", "esm", "cjs"],
+    do: String.to_atom(value)
+
+  defp parse_format(_value, default), do: default
 
   defp parse_sourcemap("hidden", _default), do: :hidden
   defp parse_sourcemap("false", _default), do: false
