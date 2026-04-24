@@ -105,6 +105,15 @@ defmodule Volt.PluginTest do
   end
 
   describe "Volt.Plugin.Svelte" do
+    @tag :integration
+    test "accepts plugin compiler options" do
+      assert {:ok, %{code: code, warnings: warnings}} =
+               Volt.Plugin.Svelte.compile("App.svelte", "<h1>Hello</h1>", [], generate: :server)
+
+      assert code =~ "svelte/internal/server"
+      assert is_list(warnings)
+    end
+
     test "extracts imports from script blocks" do
       source = """
       <script module>
