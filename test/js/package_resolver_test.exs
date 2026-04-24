@@ -3,8 +3,12 @@ defmodule Volt.JS.PackageResolverTest do
 
   test "resolves package imports and extensionless CommonJS requires" do
     root =
-      Path.join(System.tmp_dir!(), "volt-package-resolver-#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "volt-package-resolver-#{System.unique_integer([:positive, :monotonic])}"
+      )
 
+    File.rm_rf!(root)
     package_dir = Path.join([root, "node_modules", "pkg"])
     File.mkdir_p!(Path.join(package_dir, "src"))
     File.mkdir_p!(Path.join(package_dir, "lib"))
