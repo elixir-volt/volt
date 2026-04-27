@@ -64,89 +64,106 @@ defmodule Volt.Builder.Output do
     graph = Volt.ChunkGraph.build(entry, modules, dep_map, manual_chunks: manual_chunks)
     js_map = Map.new(js_files)
 
-    chunk_bundles = build_chunk_bundles(graph.chunks, js_map, bundle_opts, ctx)
+    with {:ok, chunk_bundles} <-
+           build_chunk_bundles(graph.chunks, js_map, bundle_opts, ctx, graph) do
+      chunk_url_map =
+        Map.new(chunk_bundles, fn {chunk_id, {_code, _sourcemap}} ->
+          chunk = graph.chunks[chunk_id]
+          chunk_name = if chunk.type == :entry, do: name, else: "#{name}-#{chunk_id}"
 
-    chunk_url_map =
-      Map.new(chunk_bundles, fn {chunk_id, {_code, _sourcemap}} ->
-        chunk = graph.chunks[chunk_id]
-        chunk_name = if chunk.type == :entry, do: name, else: "#{name}-#{chunk_id}"
-        {chunk_id, Writer.hashed_name(chunk_name, elem(chunk_bundles[chunk_id], 0), ".js", hash)}
-      end)
+          {chunk_id,
+           Writer.hashed_name(chunk_name, elem(chunk_bundles[chunk_id], 0), ".js", hash)}
+        end)
 
-    js_results =
-      Enum.map(chunk_bundles, fn {chunk_id, {code, sourcemap}} ->
-        chunk = graph.chunks[chunk_id]
-        chunk_js = select_chunk_files(chunk.modules, js_map)
-        code = Rewriter.inject_external_preamble(code, chunk_js, ctx)
-        code = Rewriter.rewrite_dynamic_imports(code, graph.module_to_chunk, chunk_url_map)
+      js_results =
+        Enum.map(chunk_bundles, fn {chunk_id, {code, sourcemap}} ->
+          chunk = graph.chunks[chunk_id]
+          chunk_js = select_chunk_files(chunk.modules, js_map)
+          code = Rewriter.inject_external_preamble(code, chunk_js, ctx)
+          code = Rewriter.rewrite_chunk_imports(code, graph.module_to_chunk, chunk_url_map)
 
-        code =
-          Rewriter.rewrite_worker_urls(code, Rewriter.entry_worker_map(chunk_js, ctx), chunk_id)
+          code =
+            Rewriter.rewrite_worker_urls(code, Rewriter.entry_worker_map(chunk_js, ctx), chunk_id)
 
-        code =
-          Volt.PluginRunner.render_chunk(ctx.plugins, code, %{name: chunk_id, type: chunk.type})
+          code =
+            Volt.PluginRunner.render_chunk(ctx.plugins, code, %{name: chunk_id, type: chunk.type})
 
-        filename =
-          Writer.hashed_name(
-            if(chunk.type == :entry, do: name, else: "#{name}-#{chunk_id}"),
-            code,
-            ".js",
-            hash
-          )
+          filename =
+            Writer.hashed_name(
+              if(chunk.type == :entry, do: name, else: "#{name}-#{chunk_id}"),
+              code,
+              ".js",
+              hash
+            )
 
-        Writer.write_js(outdir, filename, code, sourcemap, hidden: sourcemap_hidden)
+          Writer.write_js(outdir, filename, code, sourcemap, hidden: sourcemap_hidden)
 
-        %{
-          path: Path.join(outdir, filename),
-          size: byte_size(code),
-          chunk_id: chunk_id,
-          type: chunk.type
-        }
-      end)
+          %{
+            path: Path.join(outdir, filename),
+            size: byte_size(code),
+            chunk_id: chunk_id,
+            type: chunk.type
+          }
+        end)
 
-    entry_js = Enum.find(js_results, &(&1.type == :entry)) || hd(js_results)
-    css_result = Writer.write_css(css_parts, outdir, name, hash, bundle_opts)
+      entry_js = Enum.find(js_results, &(&1.type == :entry)) || hd(js_results)
+      css_result = Writer.write_css(css_parts, outdir, name, hash, bundle_opts)
 
-    manifest =
-      js_results
-      |> Enum.reduce(%{}, fn js, acc ->
-        filename = Path.basename(js.path)
-        Map.put(acc, filename, %{"file" => filename, "src" => filename})
-      end)
-      |> Map.put("#{name}.js", %{"file" => Path.basename(entry_js.path), "src" => "#{name}.js"})
+      manifest =
+        js_results
+        |> Enum.reduce(%{}, fn js, acc ->
+          filename = Path.basename(js.path)
+          Map.put(acc, filename, %{"file" => filename, "src" => filename})
+        end)
+        |> Map.put("#{name}.js", %{"file" => Path.basename(entry_js.path), "src" => "#{name}.js"})
 
-    manifest = Writer.add_css_to_manifest(manifest, name, css_result)
+      manifest = Writer.add_css_to_manifest(manifest, name, css_result)
 
-    Writer.write_manifest(outdir, manifest)
+      Writer.write_manifest(outdir, manifest)
 
-    {:ok,
-     %{
-       js: entry_js,
-       css: css_result,
-       manifest: manifest,
-       chunks: js_results
-     }}
+      {:ok,
+       %{
+         js: entry_js,
+         css: css_result,
+         manifest: manifest,
+         chunks: js_results
+       }}
+    end
   end
 
-  defp build_chunk_bundles(chunks, js_map, bundle_opts, ctx) do
-    Enum.reduce(chunks, %{}, fn {chunk_id, chunk}, acc ->
+  defp build_chunk_bundles(chunks, js_map, bundle_opts, ctx, graph) do
+    Enum.reduce_while(chunks, {:ok, %{}}, fn {chunk_id, chunk}, {:ok, acc} ->
       chunk_js = select_chunk_files(chunk.modules, js_map)
 
       if chunk_js == [] do
-        acc
+        {:cont, {:ok, acc}}
       else
         chunk_js = Rewriter.rewrite_external_imports(chunk_js, ctx)
-        bundle_opts = Keyword.put(bundle_opts, :entry, chunk_entry_label(chunk_js))
+
+        external = Rewriter.external_chunk_imports(chunk_js, graph.module_to_chunk, chunk_id)
+
+        bundle_opts =
+          bundle_opts
+          |> Keyword.put(:entry, chunk_entry_label(chunk_js))
+          |> put_external_imports(external)
 
         case OXC.bundle(chunk_js, bundle_opts) do
           {:ok, result} ->
             {code, sourcemap} = BundleResult.extract(result)
-            Map.put(acc, chunk_id, {code, sourcemap})
+            {:cont, {:ok, Map.put(acc, chunk_id, {code, sourcemap})}}
 
-          {:error, _} ->
-            acc
+          {:error, errors} ->
+            {:halt, {:error, {:chunk_bundle_failed, chunk_id, errors}}}
         end
       end
+    end)
+  end
+
+  defp put_external_imports(bundle_opts, []), do: bundle_opts
+
+  defp put_external_imports(bundle_opts, external) do
+    Keyword.update(bundle_opts, :external, external, fn existing ->
+      Enum.uniq(List.wrap(existing) ++ external)
     end)
   end
 

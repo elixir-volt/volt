@@ -383,6 +383,47 @@ defmodule Volt.BuilderTest do
       assert Enum.any?(chunk_files, &(&1 =~ "lib"))
     end
 
+    test "code splitting keeps entry bundle when entry has dynamic import" do
+      File.write!(Path.join(@fixture_dir, "src/lazy.ts"), """
+      export const lazyValue = 'lazy-loaded'
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/dynamic_entry.ts"), """
+      const $volt_ = (value: string) => value.toUpperCase()
+      document.body.dataset.entry = $volt_('dynamic-entry')
+
+      import('./lazy').then((mod) => {
+        document.body.dataset.lazy = mod.lazyValue
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/dynamic_entry.ts"),
+          outdir: @outdir,
+          name: "dynamic-entry",
+          format: :esm,
+          hash: false,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert File.regular?(result.js.path)
+      assert Path.basename(result.js.path) == "dynamic-entry.js"
+
+      entry_js = File.read!(Path.join(@outdir, "dynamic-entry.js"))
+      assert entry_js =~ "dynamic-entry"
+      assert entry_js =~ ~r/import\(["']\.\/dynamic-entry-lazy\.js["']\)/
+      assert entry_js =~ "$volt_("
+      refute entry_js =~ "import(\"dynamic-entry\")"
+
+      lazy_js = File.read!(Path.join(@outdir, "dynamic-entry-lazy.js"))
+      assert lazy_js =~ "lazy-loaded"
+
+      manifest = Path.join(@outdir, "manifest.json") |> File.read!() |> :json.decode()
+      assert manifest["dynamic-entry.js"]["file"] == "dynamic-entry.js"
+    end
+
     test "eager import.meta.glob dependencies resolve from original source directory" do
       File.mkdir_p!(Path.join(@fixture_dir, "src/components"))
 

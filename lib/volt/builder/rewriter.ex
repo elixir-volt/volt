@@ -11,6 +11,14 @@ defmodule Volt.Builder.Rewriter do
     end
   end
 
+  def external_chunk_imports(js_files, module_to_chunk, current_chunk_id) do
+    js_files
+    |> Enum.flat_map(fn {_label, code} ->
+      collect_external_chunk_imports(code, module_to_chunk, current_chunk_id)
+    end)
+    |> Enum.uniq()
+  end
+
   def inject_external_preamble(code, js_files, ctx) do
     if MapSet.size(ctx.external_set) == 0 do
       code
@@ -26,10 +34,10 @@ defmodule Volt.Builder.Rewriter do
     end
   end
 
-  def rewrite_dynamic_imports(code, module_to_chunk, chunk_url_map) do
+  def rewrite_chunk_imports(code, module_to_chunk, chunk_url_map) do
     case OXC.parse(code, "chunk.js") do
       {:ok, ast} ->
-        patches = collect_dynamic_import_patches(ast, module_to_chunk, chunk_url_map)
+        patches = collect_import_patches(ast, module_to_chunk, chunk_url_map)
         worker_patches = collect_worker_patches(ast, module_to_chunk, chunk_url_map)
         all_patches = patches ++ worker_patches
         if all_patches == [], do: code, else: OXC.patch_string(code, all_patches)
@@ -66,9 +74,75 @@ defmodule Volt.Builder.Rewriter do
     end
   end
 
-  defp collect_dynamic_import_patches(ast, module_to_chunk, chunk_url_map) do
+  defp collect_external_chunk_imports(code, module_to_chunk, current_chunk_id) do
+    case OXC.parse(code, "chunk.js") do
+      {:ok, ast} ->
+        {_ast, specifiers} =
+          OXC.postwalk(ast, [], fn
+            %{source: %{type: :literal, value: spec}} = node, specifiers
+            when node.type in [
+                   :import_declaration,
+                   :export_named_declaration,
+                   :export_all_declaration
+                 ] and
+                   is_binary(spec) ->
+              maybe_external_chunk_specifier(
+                node,
+                specifiers,
+                spec,
+                module_to_chunk,
+                current_chunk_id
+              )
+
+            %{type: :import_expression, source: %{type: :literal, value: spec}} = node, specifiers
+            when is_binary(spec) ->
+              maybe_external_chunk_specifier(
+                node,
+                specifiers,
+                spec,
+                module_to_chunk,
+                current_chunk_id
+              )
+
+            node, specifiers ->
+              {node, specifiers}
+          end)
+
+        specifiers
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp maybe_external_chunk_specifier(node, specifiers, spec, module_to_chunk, current_chunk_id) do
+    if external_chunk_import?(spec, module_to_chunk, current_chunk_id) do
+      {node, [spec | specifiers]}
+    else
+      {node, specifiers}
+    end
+  end
+
+  defp external_chunk_import?(spec, module_to_chunk, current_chunk_id) do
+    case find_chunk_id(spec, module_to_chunk) do
+      nil -> false
+      ^current_chunk_id -> false
+      _chunk_id -> true
+    end
+  end
+
+  defp collect_import_patches(ast, module_to_chunk, chunk_url_map) do
     {_ast, patches} =
       OXC.postwalk(ast, [], fn
+        %{source: %{type: :literal, value: spec, start: s, end: e}} = node, patches
+        when node.type in [
+               :import_declaration,
+               :export_named_declaration,
+               :export_all_declaration
+             ] and
+               is_binary(spec) ->
+          maybe_patch_specifier(node, patches, spec, s, e, module_to_chunk, chunk_url_map)
+
         %{type: :import_expression, source: %{type: :literal, value: spec, start: s, end: e}} =
             node,
         patches
@@ -115,22 +189,26 @@ defmodule Volt.Builder.Rewriter do
   end
 
   defp find_chunk_url(spec, module_to_chunk, chunk_url_map) do
+    case find_chunk_id(spec, module_to_chunk) do
+      nil -> nil
+      chunk_id -> chunk_url_map[chunk_id]
+    end
+  end
+
+  defp find_chunk_id(spec, module_to_chunk) do
     spec_normalized =
       spec
       |> String.trim_leading("./")
       |> String.trim_leading("../")
       |> Path.rootname()
 
-    chunk_id =
-      Enum.find_value(module_to_chunk, fn {mod_path, chunk_id} ->
-        mod_normalized = Path.rootname(mod_path)
+    Enum.find_value(module_to_chunk, fn {mod_path, chunk_id} ->
+      mod_normalized = Path.rootname(mod_path)
 
-        if String.ends_with?(mod_normalized, spec_normalized) do
-          chunk_id
-        end
-      end)
-
-    if chunk_id, do: chunk_url_map[chunk_id]
+      if String.ends_with?(mod_normalized, spec_normalized) do
+        chunk_id
+      end
+    end)
   end
 
   defp inject_into_iife(code, preamble) do
