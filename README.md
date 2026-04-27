@@ -158,7 +158,7 @@ Production builds write `.map` files by default:
 - `sourcemap: :hidden` — write `.map` files without the URL comment (for Sentry, Datadog, etc.)
 - `sourcemap: false` — no source maps
 
-CLI: `--sourcemap hidden` or `--no-sourcemap`.
+CLI: `--sourcemap hidden` or `--sourcemap false`.
 
 ## External Modules
 
@@ -433,7 +433,7 @@ Build production assets. Reads from `config :volt`, CLI flags override.
 --target         JS target (e.g. es2020)
 --external       Exclude from bundle (repeatable)
 --no-minify      Skip minification
---no-sourcemap   Skip source maps
+--sourcemap      Source maps: true, false, or hidden
 --no-hash        Stable filenames
 --no-code-splitting  Disable chunk splitting
 --mode           Build mode for env variables

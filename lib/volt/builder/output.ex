@@ -18,7 +18,7 @@ defmodule Volt.Builder.Output do
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
     bundle_opts = Keyword.put(bundle_opts, :entry, Path.basename(entry))
 
-    case OXC.bundle(js_files, bundle_opts) do
+    case bundle_js_files(js_files, bundle_opts) do
       {:ok, bundle_result} ->
         {js_code, js_sourcemap} = BundleResult.extract(bundle_result)
         js_code = Rewriter.inject_external_preamble(js_code, js_files, ctx)
@@ -147,7 +147,7 @@ defmodule Volt.Builder.Output do
           |> Keyword.put(:entry, chunk_entry_label(chunk_js))
           |> put_external_imports(external)
 
-        case OXC.bundle(chunk_js, bundle_opts) do
+        case bundle_js_files(chunk_js, bundle_opts) do
           {:ok, result} ->
             {code, sourcemap} = BundleResult.extract(result)
             {:cont, {:ok, Map.put(acc, chunk_id, {code, sourcemap})}}
@@ -157,6 +157,20 @@ defmodule Volt.Builder.Output do
         end
       end
     end)
+  end
+
+  defp bundle_js_files(js_files, bundle_opts) do
+    case OXC.bundle(js_files, bundle_opts) do
+      {:error, [%{message: "Rolldown did not produce a source map"}]} = error ->
+        if Keyword.get(bundle_opts, :sourcemap) do
+          OXC.bundle(js_files, Keyword.put(bundle_opts, :sourcemap, false))
+        else
+          error
+        end
+
+      result ->
+        result
+    end
   end
 
   defp put_external_imports(bundle_opts, []), do: bundle_opts

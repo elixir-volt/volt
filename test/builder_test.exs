@@ -63,6 +63,38 @@ defmodule Volt.BuilderTest do
       assert js =~ "Hello"
     end
 
+    test "empty entry builds without sourcemap when Rolldown omits one" do
+      File.write!(Path.join(@fixture_dir, "src/empty.js"), "")
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/empty.js"),
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: true
+        )
+
+      assert File.regular?(result.js.path)
+      refute File.exists?(result.js.path <> ".map")
+    end
+
+    test "CSS-only JS entry builds with sourcemap enabled" do
+      File.write!(Path.join(@fixture_dir, "src/styles.css"), "body { color: red; }")
+      File.write!(Path.join(@fixture_dir, "src/css_only.js"), "import './styles.css'")
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/css_only.js"),
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: true
+        )
+
+      assert File.regular?(result.js.path)
+    end
+
     test "generates content-hashed filenames" do
       {:ok, result} =
         Volt.Builder.build(

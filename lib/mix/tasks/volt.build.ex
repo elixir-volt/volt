@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Volt.Build do
     * `--outdir` — output directory (default: `"priv/static/assets"`)
     * `--target` — JS target (default: `es2020`)
     * `--no-minify` — skip minification
-    * `--no-sourcemap` — skip source map generation
+    * `--sourcemap false` — skip source map generation
     * `--sourcemap hidden` — write `.map` files but omit `sourceMappingURL` comment
     * `--resolve-dir` — additional directory for bare specifier resolution (repeatable)
     * `--external` — specifier to exclude from bundle (repeatable)
