@@ -34,6 +34,8 @@ defmodule Mix.Tasks.Volt.BuildTest do
       "--no-hash",
       "--no-minify",
       "--no-tailwind",
+      "--format",
+      "iife",
       "--sourcemap",
       "false"
     ])

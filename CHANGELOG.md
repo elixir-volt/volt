@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.2
+
+### Fixed
+
+- Code-split builds now preserve the real entry chunk when the entry contains dynamic imports.
+- Per-chunk bundle failures now surface as build errors instead of producing manifests that point entries at async chunks.
+- Empty and CSS-only JS entries now build successfully when source maps are enabled and Rolldown omits a map.
+- `mix volt.build` documentation now uses the supported `--sourcemap false` CLI form for disabling production source maps.
+
 ## 0.9.1
 
 ### Added
