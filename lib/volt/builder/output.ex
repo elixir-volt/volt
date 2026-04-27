@@ -136,11 +136,13 @@ defmodule Volt.Builder.Output do
         acc
       else
         chunk_js = Rewriter.rewrite_external_imports(chunk_js, ctx)
+        chunk_js = Rewriter.protect_dynamic_imports(chunk_js)
         bundle_opts = Keyword.put(bundle_opts, :entry, chunk_entry_label(chunk_js))
 
         case OXC.bundle(chunk_js, bundle_opts) do
           {:ok, result} ->
             {code, sourcemap} = BundleResult.extract(result)
+            code = Rewriter.restore_dynamic_imports(code)
             Map.put(acc, chunk_id, {code, sourcemap})
 
           {:error, _} ->

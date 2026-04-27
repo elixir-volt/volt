@@ -3,12 +3,25 @@ defmodule Volt.Builder.Rewriter do
 
   alias Volt.Builder.Externals
 
+  @dynamic_import_keyword "import"
+  @dynamic_import_placeholder "$volt_"
+
   def rewrite_external_imports(js_files, ctx) do
     if MapSet.size(ctx.external_set) == 0 do
       js_files
     else
       Externals.rewrite_imports(js_files, ctx.external_set, ctx.external_globals)
     end
+  end
+
+  def protect_dynamic_imports(js_files) do
+    Enum.map(js_files, fn {label, code} ->
+      {label, protect_dynamic_imports_in_code(code)}
+    end)
+  end
+
+  def restore_dynamic_imports(code) do
+    String.replace(code, @dynamic_import_placeholder <> "(", @dynamic_import_keyword <> "(")
   end
 
   def inject_external_preamble(code, js_files, ctx) do
@@ -64,6 +77,38 @@ defmodule Volt.Builder.Rewriter do
       {:ok, rewritten} -> rewritten
       {:error, _} -> code
     end
+  end
+
+  defp protect_dynamic_imports_in_code(code) do
+    case OXC.parse(code, "chunk.js") do
+      {:ok, ast} ->
+        patches = collect_dynamic_import_protection_patches(ast)
+        if patches == [], do: code, else: OXC.patch_string(code, patches)
+
+      {:error, _} ->
+        code
+    end
+  end
+
+  defp collect_dynamic_import_protection_patches(ast) do
+    {_ast, patches} =
+      OXC.postwalk(ast, [], fn
+        %{type: :import_expression, start: start} = node, patches when is_integer(start) ->
+          {node, [dynamic_import_protection_patch(start) | patches]}
+
+        node, patches ->
+          {node, patches}
+      end)
+
+    patches
+  end
+
+  defp dynamic_import_protection_patch(start) do
+    %{
+      start: start,
+      end: start + byte_size(@dynamic_import_keyword),
+      change: @dynamic_import_placeholder
+    }
   end
 
   defp collect_dynamic_import_patches(ast, module_to_chunk, chunk_url_map) do
