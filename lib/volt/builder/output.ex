@@ -63,9 +63,10 @@ defmodule Volt.Builder.Output do
 
     graph = Volt.ChunkGraph.build(entry, modules, dep_map, manual_chunks: manual_chunks)
     js_map = Map.new(js_files)
+    module_labels = Map.new(modules, fn {path, label, _source} -> {path, label} end)
 
     with {:ok, chunk_bundles} <-
-           build_chunk_bundles(graph.chunks, js_map, bundle_opts, ctx, graph) do
+           build_chunk_bundles(graph.chunks, js_map, module_labels, bundle_opts, ctx, graph) do
       chunk_url_map =
         Map.new(chunk_bundles, fn {chunk_id, {_code, _sourcemap}} ->
           chunk = graph.chunks[chunk_id]
@@ -78,7 +79,7 @@ defmodule Volt.Builder.Output do
       js_results =
         Enum.map(chunk_bundles, fn {chunk_id, {code, sourcemap}} ->
           chunk = graph.chunks[chunk_id]
-          chunk_js = select_chunk_files(chunk.modules, js_map)
+          chunk_js = select_chunk_files(chunk.modules, js_map, module_labels)
           code = Rewriter.inject_external_preamble(code, chunk_js, ctx)
           code = Rewriter.rewrite_chunk_imports(code, graph.module_to_chunk, chunk_url_map)
 
@@ -131,14 +132,15 @@ defmodule Volt.Builder.Output do
     end
   end
 
-  defp build_chunk_bundles(chunks, js_map, bundle_opts, ctx, graph) do
+  defp build_chunk_bundles(chunks, js_map, module_labels, bundle_opts, ctx, graph) do
     Enum.reduce_while(chunks, {:ok, %{}}, fn {chunk_id, chunk}, {:ok, acc} ->
-      chunk_js = select_chunk_files(chunk.modules, js_map)
+      chunk_js = select_chunk_files(chunk.modules, js_map, module_labels)
 
       if chunk_js == [] do
         {:cont, {:ok, acc}}
       else
         chunk_js = Rewriter.rewrite_external_imports(chunk_js, ctx)
+        chunk_js = Rewriter.protect_dynamic_imports(chunk_js)
 
         external = Rewriter.external_chunk_imports(chunk_js, graph.module_to_chunk, chunk_id)
 
@@ -150,6 +152,7 @@ defmodule Volt.Builder.Output do
         case bundle_js_files(chunk_js, bundle_opts) do
           {:ok, result} ->
             {code, sourcemap} = BundleResult.extract(result)
+            code = Rewriter.restore_dynamic_imports(code)
             {:cont, {:ok, Map.put(acc, chunk_id, {code, sourcemap})}}
 
           {:error, errors} ->
@@ -183,14 +186,14 @@ defmodule Volt.Builder.Output do
 
   defp chunk_entry_label([{label, _code} | _]), do: label
 
-  defp select_chunk_files(module_paths, js_map) do
+  defp select_chunk_files(module_paths, js_map, module_labels) do
     module_paths
     |> Enum.flat_map(fn mod_path ->
-      case Enum.find(js_map, fn {label, _} ->
-             String.ends_with?(mod_path, "/" <> label) or mod_path == label
-           end) do
-        {label, code} -> [{label, code}]
-        nil -> []
+      with label when is_binary(label) <- module_labels[mod_path],
+           code when is_binary(code) <- js_map[label] do
+        [{label, code}]
+      else
+        _ -> []
       end
     end)
   end

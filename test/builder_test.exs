@@ -456,6 +456,76 @@ defmodule Volt.BuilderTest do
       assert manifest["dynamic-entry.js"]["file"] == "dynamic-entry.js"
     end
 
+    test "code splitting includes alias modules outside the entry root" do
+      File.mkdir_p!(Path.join(@fixture_dir, "shared"))
+
+      File.write!(Path.join(@fixture_dir, "shared/rendered.ts"), """
+      export const rendered = 'rendered-from-shared-root'
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/lazy.ts"), """
+      export const lazyValue = 'lazy-loaded'
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/external_alias_entry.ts"), """
+      import { rendered } from '@shared/rendered'
+
+      document.body.dataset.rendered = rendered
+
+      import('./lazy').then((mod) => {
+        document.body.dataset.lazy = mod.lazyValue
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/external_alias_entry.ts"),
+          outdir: @outdir,
+          name: "external-alias-entry",
+          format: :esm,
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          aliases: %{"@shared" => Path.join(@fixture_dir, "shared")}
+        )
+
+      assert File.regular?(result.js.path)
+
+      entry_js = File.read!(Path.join(@outdir, "external-alias-entry.js"))
+      assert entry_js =~ "rendered-from-shared-root"
+      assert entry_js =~ ~r/import\(["']\.\/external-alias-entry-lazy\.js["']\)/
+
+      lazy_js = File.read!(Path.join(@outdir, "external-alias-entry-lazy.js"))
+      assert lazy_js =~ "lazy-loaded"
+    end
+
+    test "dynamic CSS imports become inert browser-loadable modules" do
+      File.write!(Path.join(@fixture_dir, "src/theme.css"), "body { color: red }")
+
+      File.write!(Path.join(@fixture_dir, "src/dynamic_css_entry.ts"), """
+      import('./theme.css').then(() => {
+        document.body.dataset.css = 'loaded'
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/dynamic_css_entry.ts"),
+          outdir: @outdir,
+          name: "dynamic-css-entry",
+          format: :esm,
+          hash: false,
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "Promise.resolve({ default: undefined })"
+      refute js =~ "import("
+      refute js =~ "data:text/css"
+      refute js =~ "color: red"
+    end
+
     test "eager import.meta.glob dependencies resolve from original source directory" do
       File.mkdir_p!(Path.join(@fixture_dir, "src/components"))
 

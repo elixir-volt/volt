@@ -3,6 +3,9 @@ defmodule Volt.Builder.Rewriter do
 
   alias Volt.Builder.Externals
 
+  @dynamic_import_keyword "import"
+  @dynamic_import_placeholder "__volt_dynamic_import__"
+
   def rewrite_external_imports(js_files, ctx) do
     if MapSet.size(ctx.external_set) == 0 do
       js_files
@@ -17,6 +20,16 @@ defmodule Volt.Builder.Rewriter do
       collect_external_chunk_imports(code, module_to_chunk, current_chunk_id)
     end)
     |> Enum.uniq()
+  end
+
+  def protect_dynamic_imports(js_files) do
+    Enum.map(js_files, fn {label, code} ->
+      {label, protect_dynamic_imports_in_code(code)}
+    end)
+  end
+
+  def restore_dynamic_imports(code) do
+    String.replace(code, @dynamic_import_placeholder <> "(", @dynamic_import_keyword <> "(")
   end
 
   def inject_external_preamble(code, js_files, ctx) do
@@ -131,6 +144,38 @@ defmodule Volt.Builder.Rewriter do
     end
   end
 
+  defp protect_dynamic_imports_in_code(code) do
+    case OXC.parse(code, "chunk.js") do
+      {:ok, ast} ->
+        patches = collect_dynamic_import_protection_patches(ast)
+        if patches == [], do: code, else: OXC.patch_string(code, patches)
+
+      {:error, _} ->
+        code
+    end
+  end
+
+  defp collect_dynamic_import_protection_patches(ast) do
+    {_ast, patches} =
+      OXC.postwalk(ast, [], fn
+        %{type: :import_expression, start: start} = node, patches when is_integer(start) ->
+          {node, [dynamic_import_protection_patch(start) | patches]}
+
+        node, patches ->
+          {node, patches}
+      end)
+
+    patches
+  end
+
+  defp dynamic_import_protection_patch(start) do
+    %{
+      start: start,
+      end: start + byte_size(@dynamic_import_keyword),
+      change: @dynamic_import_placeholder
+    }
+  end
+
   defp collect_import_patches(ast, module_to_chunk, chunk_url_map) do
     {_ast, patches} =
       OXC.postwalk(ast, [], fn
@@ -200,6 +245,7 @@ defmodule Volt.Builder.Rewriter do
       spec
       |> String.trim_leading("./")
       |> String.trim_leading("../")
+      |> String.trim_leading("_external/")
       |> Path.rootname()
 
     Enum.find_value(module_to_chunk, fn {mod_path, chunk_id} ->
