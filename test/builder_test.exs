@@ -456,6 +456,73 @@ defmodule Volt.BuilderTest do
       assert manifest["dynamic-entry.js"]["file"] == "dynamic-entry.js"
     end
 
+    test "code splitting rewrites minified dynamic import chunk URLs" do
+      File.write!(
+        Path.join(@fixture_dir, "src/lazy.ts"),
+        "export const lazyValue = 'lazy-loaded'"
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/minified_dynamic_entry.ts"), """
+      import('./lazy').then((mod) => {
+        document.body.dataset.lazy = mod.lazyValue
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/minified_dynamic_entry.ts"),
+          outdir: @outdir,
+          name: "minified-dynamic-entry",
+          format: :esm,
+          hash: false,
+          sourcemap: false
+        )
+
+      assert File.regular?(result.js.path)
+
+      entry_js = File.read!(Path.join(@outdir, "minified-dynamic-entry.js"))
+      assert entry_js =~ "minified-dynamic-entry-lazy.js"
+      refute entry_js =~ "lazy.ts"
+      refute entry_js =~ ~r/import\([`'"]\.\/lazy[`'"]\)/
+    end
+
+    test "dynamic import protection avoids user identifier collisions" do
+      File.write!(
+        Path.join(@fixture_dir, "src/lazy.ts"),
+        "export const lazyValue = 'lazy-loaded'"
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/placeholder_collision_entry.ts"), """
+      function __volt_dynamic_import__0__(value: string) {
+        return value
+      }
+
+      document.body.dataset.placeholder = __volt_dynamic_import__0__('kept')
+
+      import('./lazy').then((mod) => {
+        document.body.dataset.lazy = mod.lazyValue
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/placeholder_collision_entry.ts"),
+          outdir: @outdir,
+          name: "placeholder-collision-entry",
+          format: :esm,
+          hash: false,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert File.regular?(result.js.path)
+
+      entry_js = File.read!(Path.join(@outdir, "placeholder-collision-entry.js"))
+      assert entry_js =~ "function __volt_dynamic_import__0__"
+      refute entry_js =~ "function import"
+      assert entry_js =~ ~r/import\([`'"]\.\/placeholder-collision-entry-lazy\.js[`'"]\)/
+    end
+
     test "code splitting includes alias modules outside the entry root" do
       File.mkdir_p!(Path.join(@fixture_dir, "shared"))
 

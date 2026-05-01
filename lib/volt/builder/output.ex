@@ -140,7 +140,7 @@ defmodule Volt.Builder.Output do
         {:cont, {:ok, acc}}
       else
         chunk_js = Rewriter.rewrite_external_imports(chunk_js, ctx)
-        chunk_js = Rewriter.protect_dynamic_imports(chunk_js)
+        {chunk_js, dynamic_import_placeholder} = Rewriter.protect_dynamic_imports(chunk_js)
 
         external = Rewriter.external_chunk_imports(chunk_js, graph.module_to_chunk, chunk_id)
 
@@ -152,7 +152,7 @@ defmodule Volt.Builder.Output do
         case bundle_js_files(chunk_js, bundle_opts) do
           {:ok, result} ->
             {code, sourcemap} = BundleResult.extract(result)
-            code = Rewriter.restore_dynamic_imports(code)
+            code = Rewriter.restore_dynamic_imports(code, dynamic_import_placeholder)
             {:cont, {:ok, Map.put(acc, chunk_id, {code, sourcemap})}}
 
           {:error, errors} ->
