@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Code-split builds now include alias-resolved modules outside the entry root.
+- Dynamic CSS imports in production builds now resolve to inert fulfilled promises instead of runtime CSS module imports.
+- Minified code-split builds now rewrite dynamic imports emitted as static template literals to generated chunk files.
+
 ## 0.9.2
 
 ### Fixed
