@@ -456,6 +456,143 @@ defmodule Volt.BuilderTest do
       assert manifest["dynamic-entry.js"]["file"] == "dynamic-entry.js"
     end
 
+    test "code splitting rewrites minified dynamic import chunk URLs" do
+      File.write!(
+        Path.join(@fixture_dir, "src/lazy.ts"),
+        "export const lazyValue = 'lazy-loaded'"
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/minified_dynamic_entry.ts"), """
+      import('./lazy').then((mod) => {
+        document.body.dataset.lazy = mod.lazyValue
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/minified_dynamic_entry.ts"),
+          outdir: @outdir,
+          name: "minified-dynamic-entry",
+          format: :esm,
+          hash: false,
+          sourcemap: false
+        )
+
+      assert File.regular?(result.js.path)
+
+      entry_js = File.read!(Path.join(@outdir, "minified-dynamic-entry.js"))
+      assert entry_js =~ "minified-dynamic-entry-lazy.js"
+      refute entry_js =~ "lazy.ts"
+      refute entry_js =~ ~r/import\([`'"]\.\/lazy[`'"]\)/
+    end
+
+    test "dynamic import protection avoids user identifier collisions" do
+      File.write!(
+        Path.join(@fixture_dir, "src/lazy.ts"),
+        "export const lazyValue = 'lazy-loaded'"
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/placeholder_collision_entry.ts"), """
+      function __volt_dynamic_import__0__(value: string) {
+        return value
+      }
+
+      document.body.dataset.placeholder = __volt_dynamic_import__0__('kept')
+
+      import('./lazy').then((mod) => {
+        document.body.dataset.lazy = mod.lazyValue
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/placeholder_collision_entry.ts"),
+          outdir: @outdir,
+          name: "placeholder-collision-entry",
+          format: :esm,
+          hash: false,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert File.regular?(result.js.path)
+
+      entry_js = File.read!(Path.join(@outdir, "placeholder-collision-entry.js"))
+      assert entry_js =~ "function __volt_dynamic_import__0__"
+      refute entry_js =~ "function import"
+      assert entry_js =~ ~r/import\([`'"]\.\/placeholder-collision-entry-lazy\.js[`'"]\)/
+    end
+
+    test "code splitting includes alias modules outside the entry root" do
+      File.mkdir_p!(Path.join(@fixture_dir, "shared"))
+
+      File.write!(Path.join(@fixture_dir, "shared/rendered.ts"), """
+      export const rendered = 'rendered-from-shared-root'
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/lazy.ts"), """
+      export const lazyValue = 'lazy-loaded'
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/external_alias_entry.ts"), """
+      import { rendered } from '@shared/rendered'
+
+      document.body.dataset.rendered = rendered
+
+      import('./lazy').then((mod) => {
+        document.body.dataset.lazy = mod.lazyValue
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/external_alias_entry.ts"),
+          outdir: @outdir,
+          name: "external-alias-entry",
+          format: :esm,
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          aliases: %{"@shared" => Path.join(@fixture_dir, "shared")}
+        )
+
+      assert File.regular?(result.js.path)
+
+      entry_js = File.read!(Path.join(@outdir, "external-alias-entry.js"))
+      assert entry_js =~ "rendered-from-shared-root"
+      assert entry_js =~ ~r/import\(["']\.\/external-alias-entry-lazy\.js["']\)/
+
+      lazy_js = File.read!(Path.join(@outdir, "external-alias-entry-lazy.js"))
+      assert lazy_js =~ "lazy-loaded"
+    end
+
+    test "dynamic CSS imports become inert browser-loadable modules" do
+      File.write!(Path.join(@fixture_dir, "src/theme.css"), "body { color: red }")
+
+      File.write!(Path.join(@fixture_dir, "src/dynamic_css_entry.ts"), """
+      import('./theme.css').then(() => {
+        document.body.dataset.css = 'loaded'
+      })
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/dynamic_css_entry.ts"),
+          outdir: @outdir,
+          name: "dynamic-css-entry",
+          format: :esm,
+          hash: false,
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "Promise.resolve({ default: undefined })"
+      refute js =~ "import("
+      refute js =~ "data:text/css"
+      refute js =~ "color: red"
+    end
+
     test "eager import.meta.glob dependencies resolve from original source directory" do
       File.mkdir_p!(Path.join(@fixture_dir, "src/components"))
 

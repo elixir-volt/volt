@@ -338,6 +338,8 @@ defmodule Volt.Builder do
   end
 
   defp rewrite_imports_to_labels(code, label_map, from_label, global_map) do
+    code = rewrite_dynamic_css_imports(code)
+
     case OXC.rewrite_specifiers(code, "module.js", fn specifier ->
            rewrite_specifier(specifier, label_map, from_label, global_map)
          end) do
@@ -347,9 +349,47 @@ defmodule Volt.Builder do
   end
 
   @css_exts Volt.JS.Extensions.css()
+  @css_import_noop "data:text/javascript,export{}"
+  @dynamic_css_import_noop "Promise.resolve({ default: undefined })"
+
+  defp rewrite_dynamic_css_imports(code) do
+    case OXC.parse(code, "module.js") do
+      {:ok, ast} ->
+        patches = collect_dynamic_css_import_patches(ast)
+        if patches == [], do: code, else: OXC.patch_string(code, patches)
+
+      {:error, _} ->
+        code
+    end
+  end
+
+  defp collect_dynamic_css_import_patches(ast) do
+    {_ast, patches} =
+      OXC.postwalk(ast, [], fn
+        %{
+          type: :import_expression,
+          source: %{type: :literal, value: spec},
+          start: start,
+          end: finish
+        } = node,
+        patches
+        when is_binary(spec) and is_integer(start) and is_integer(finish) ->
+          if Path.extname(spec) in @css_exts do
+            {node, [%{start: start, end: finish, change: @dynamic_css_import_noop} | patches]}
+          else
+            {node, patches}
+          end
+
+        node, patches ->
+          {node, patches}
+      end)
+
+    patches
+  end
+
   defp rewrite_specifier(specifier, label_map, from_label, global_map) do
     if Path.extname(specifier) in @css_exts do
-      {:rewrite, "data:text/css,"}
+      {:rewrite, @css_import_noop}
     else
       case Map.fetch(label_map, specifier) do
         {:ok, new_label} ->
