@@ -1,0 +1,172 @@
+# CLI
+
+## Mix Tasks
+{: .col-2}
+
+### Install
+
+```bash
+mix igniter.install volt
+```
+
+Set up Volt in a Phoenix project.
+
+### Build
+
+```bash
+mix volt.build
+mix volt.build --tailwind --no-hash
+```
+
+Build production assets.
+
+### Dev
+
+```bash
+mix volt.dev
+mix volt.dev --tailwind
+```
+
+Start the file watcher.
+
+### Format
+
+```bash
+mix volt.js.format
+```
+
+Format JS/TS assets with oxfmt.
+
+### Lint
+
+```bash
+mix volt.lint
+mix volt.lint --plugin react
+```
+
+Lint JS/TS assets with oxlint.
+
+### Check
+
+```bash
+mix volt.js.check
+```
+
+Check formatting and lint (CI-friendly).
+
+## `mix volt.build` Flags
+{: .col-2}
+
+### Entry
+
+```bash
+--entry assets/js/app.ts
+```
+
+Repeatable for multi-page apps.
+
+### Output
+
+```bash
+--outdir priv/static/assets
+```
+
+### Target
+
+```bash
+--target es2020
+```
+
+### Minification
+
+```bash
+--no-minify
+```
+
+### Source Maps
+
+```bash
+--sourcemap hidden
+--sourcemap false
+```
+
+### Hashing
+
+```bash
+--no-hash
+```
+
+### Code Splitting
+
+```bash
+--no-code-splitting
+```
+
+### Externals
+
+```bash
+--external phoenix
+--external phoenix_html
+```
+
+Repeatable.
+
+### Format
+
+```bash
+--format iife
+--format esm
+```
+
+### Mode
+
+```bash
+--mode production
+```
+
+### Tailwind
+
+```bash
+--tailwind
+--tailwind-css assets/css/app.css
+--tailwind-source lib/
+```
+
+### Resolve Dirs
+
+```bash
+--resolve-dir deps
+```
+
+Repeatable.
+
+## `mix volt.dev` Flags
+{: .col-2}
+
+### Root
+
+```bash
+--root assets/src
+```
+
+### Watch Dirs
+
+```bash
+--watch-dir lib/
+--watch-dir assets/
+```
+
+Repeatable.
+
+### Tailwind
+
+```bash
+--tailwind
+--tailwind-css assets/css/app.css
+```
+
+### Target
+
+```bash
+--target es2020
+```

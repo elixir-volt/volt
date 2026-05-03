@@ -79,9 +79,49 @@ defmodule Volt.MixProject do
 
   defp docs do
     [
-      main: "Volt",
-      extras: ["README.md"],
-      source_ref: "v#{@version}"
+      main: "readme",
+      source_ref: "v#{@version}",
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "guides/introduction/getting-started.md",
+        "guides/introduction/why-volt.md",
+        "guides/features/features.md",
+        "guides/features/frameworks.md",
+        "guides/features/tailwind.md",
+        "guides/features/hmr.md",
+        "guides/features/code-splitting.md",
+        "guides/features/css-modules.md",
+        "guides/features/static-assets.md",
+        "guides/features/environment-variables.md",
+        "guides/features/glob-imports.md",
+        "guides/features/plugins.md",
+        "guides/features/formatting-and-linting.md",
+        "guides/deployment/production-builds.md",
+        "guides/migration/from-esbuild.md",
+        "guides/cheatsheets/configuration.cheatmd",
+        "guides/cheatsheets/cli.cheatmd"
+      ],
+      groups_for_extras: [
+        Introduction: ~r/guides\/introduction\//,
+        Features: ~r/guides\/features\//,
+        Deployment: ~r/guides\/deployment\//,
+        Migration: ~r/guides\/migration\//,
+        Cheatsheets: ~r/guides\/cheatsheets\//
+      ],
+      groups_for_modules: [
+        "Core": [Volt, Volt.Pipeline, Volt.Config],
+        "Dev Server": [Volt.DevServer, Volt.Watcher, Volt.Dev.ConsoleForwarder],
+        "HMR": [Volt.HMR.Boundary, Volt.HMR.Client, Volt.HMR.Socket],
+        "Production Build": [Volt.Builder, Volt.ChunkGraph, Volt.Preload],
+        "Tailwind CSS": [Volt.Tailwind],
+        "CSS": [Volt.CSS.Modules],
+        "Plugins": [Volt.Plugin, Volt.Plugin.Vue, Volt.Plugin.Svelte, Volt.Plugin.React, Volt.PluginRunner],
+        "JavaScript": [Volt.JS.Runtime, Volt.JS.GlobImport, Volt.JS.PackageResolver, Volt.Env, Volt.Assets],
+        "Formatting": [Volt.Formatter],
+        "Mix Tasks": [Mix.Tasks.Volt.Build, Mix.Tasks.Volt.Dev, Mix.Tasks.Volt.Lint, Mix.Tasks.Volt.Js.Format, Mix.Tasks.Volt.Js.Check, Mix.Tasks.Volt.Install]
+      ],
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
     ]
   end
 end

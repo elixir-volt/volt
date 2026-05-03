@@ -1,0 +1,225 @@
+# Configuration
+
+## Build Options
+{: .col-2}
+
+### Entry
+
+```elixir
+config :volt, entry: "assets/js/app.ts"
+```
+
+Entry file path or list of paths.
+
+### Output Directory
+
+```elixir
+config :volt, outdir: "priv/static/assets"
+```
+
+### Root
+
+```elixir
+config :volt, root: "assets"
+```
+
+Source directory for asset resolution.
+
+### Sources
+
+```elixir
+config :volt, sources: ["**/*.{js,ts,jsx,tsx,vue}"]
+```
+
+Glob patterns for file discovery (formatting, linting).
+
+### Ignore
+
+```elixir
+config :volt, ignore: ["node_modules/**", "vendor/**"]
+```
+
+### Target
+
+```elixir
+config :volt, target: :es2020
+```
+
+JS downlevel target.
+
+### Format
+
+```elixir
+config :volt, format: :iife
+```
+
+Output format: `:iife`, `:esm`, or `:cjs`.
+
+### Minify
+
+```elixir
+config :volt, minify: true
+```
+
+### Hash
+
+```elixir
+config :volt, hash: true
+```
+
+Content-hash filenames for cache busting.
+
+### Source Maps
+
+```elixir
+config :volt, sourcemap: true
+```
+
+`true`, `:hidden` (no URL comment), or `false`.
+
+### Code Splitting
+
+```elixir
+config :volt, code_splitting: true
+```
+
+### External
+
+```elixir
+config :volt, external: ~w(phoenix phoenix_html)
+```
+
+Exclude packages from the bundle.
+
+### Aliases
+
+```elixir
+config :volt, aliases: %{"@" => "assets/src"}
+```
+
+Import path aliases.
+
+### Chunks
+
+```elixir
+config :volt, chunks: %{"vendor" => ["vue"]}
+```
+
+Manual chunk boundaries.
+
+### Plugins
+
+```elixir
+config :volt, plugins: [MyPlugin]
+```
+
+### Import Source
+
+```elixir
+config :volt, import_source: "react"
+```
+
+JSX import source for React.
+
+### Resolve Dirs
+
+```elixir
+config :volt, resolve_dirs: ["node_modules", "deps"]
+```
+
+Additional directories for bare import resolution.
+
+## Tailwind Options
+{: .col-2}
+
+### CSS Input
+
+```elixir
+config :volt, tailwind: [css: "assets/css/app.css"]
+```
+
+### Scan Sources
+
+```elixir
+config :volt, tailwind: [
+  sources: [
+    %{base: "lib/", pattern: "**/*.{ex,heex}"},
+    %{base: "assets/", pattern: "**/*.{vue,ts,tsx}"}
+  ]
+]
+```
+
+## Dev Server Options
+{: .col-2}
+
+### Prefix
+
+```elixir
+config :volt, :server, prefix: "/assets"
+```
+
+URL prefix for dev server routes.
+
+### Watch Dirs
+
+```elixir
+config :volt, :server, watch_dirs: ["lib/", "assets/"]
+```
+
+Directories to watch for HMR.
+
+## Formatting Options
+{: .col-2}
+
+### Semi
+
+```elixir
+config :volt, :format, semi: false
+```
+
+### Single Quote
+
+```elixir
+config :volt, :format, single_quote: true
+```
+
+### Print Width
+
+```elixir
+config :volt, :format, print_width: 100
+```
+
+### Trailing Comma
+
+```elixir
+config :volt, :format, trailing_comma: :none
+```
+
+### Arrow Parens
+
+```elixir
+config :volt, :format, arrow_parens: :always
+```
+
+## Lint Options
+{: .col-2}
+
+### Plugins
+
+```elixir
+config :volt, :lint, plugins: [:typescript, :react]
+```
+
+### Rules
+
+```elixir
+config :volt, :lint, rules: %{"eqeqeq" => :deny}
+```
+
+### Custom Rules
+
+```elixir
+config :volt, :lint, custom_rules: [
+  {MyApp.NoConsoleLog, :warn}
+]
+```
