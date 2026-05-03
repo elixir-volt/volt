@@ -78,6 +78,40 @@ const pages = import.meta.glob('./pages/*.ts', { eager: true })
 
 See [Glob Imports](glob-imports.md) for lazy vs eager loading.
 
+## `Volt.entry_path/2`
+
+Use `Volt.entry_path/2` in your root layout to link to the entry script:
+
+```heex
+<script defer phx-track-static type="module" src={Volt.entry_path(MyAppWeb.Endpoint)}></script>
+```
+
+In development, this returns the source path served by the dev server (e.g. `/assets/js/app.ts`). In production, it reads `manifest.json` and returns the content-hashed path (e.g. `/assets/js/app-5e6f7a8b.js`).
+
+## Multi-Entry Builds
+
+For multi-page apps, specify multiple entry points:
+
+```elixir
+config :volt, entry: ["assets/js/app.ts", "assets/js/admin.ts"]
+```
+
+Or via CLI: `mix volt.build --entry assets/js/app.ts --entry assets/js/admin.ts`
+
+Each entry produces its own bundle and manifest entry. Use `Volt.entry_path/2` with the `:name` override to reference a specific entry:
+
+```elixir
+Volt.entry_path(MyAppWeb.Endpoint, name: "admin")
+```
+
+## HTML Entry Points
+
+Entry files can be HTML — `<script src="...">` tags are extracted as JS entry points:
+
+```bash
+mix volt.build --entry index.html
+```
+
 ## Import Aliases
 
 Configure path aliases in Volt config:
@@ -109,6 +143,24 @@ Production builds write `.map` files by default. Use `sourcemap: :hidden` to wri
 Volt includes Prettier-compatible JS/TS formatting via oxfmt (~30× faster) and 650+ oxlint rules, both as Rust NIFs. `Volt.Formatter` integrates with `mix format`. Custom lint rules can be written in Elixir.
 
 See [Formatting and Linting](formatting-and-linting.md) for setup and configuration.
+
+## Web Workers
+
+Worker URLs using the standard pattern are rewritten in production builds:
+
+```typescript
+const worker = new Worker(new URL('./worker.ts', import.meta.url))
+```
+
+The worker file is built as a separate entry and the URL is rewritten to the hashed output path.
+
+## Dev Console Forwarding
+
+In development, browser `console.log`, `console.warn`, and `console.error` calls are forwarded to the Elixir terminal, so you can see client-side logs alongside server logs without opening browser DevTools.
+
+## Error Overlay
+
+Compilation errors in development are displayed as a full-screen browser overlay with the error message. The overlay dismisses on click and clears automatically when the error is fixed.
 
 ## Plugins
 

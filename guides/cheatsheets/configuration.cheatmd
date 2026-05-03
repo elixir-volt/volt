@@ -153,6 +153,14 @@ config :volt, custom_renderer: true
 
 Treat non-HTML tags as renderer-native elements (for PhoenixVapor).
 
+### Loaders
+
+```elixir
+config :volt, loaders: %{".js" => "jsx"}
+```
+
+Override file type parsing (e.g. for React projects using JSX in `.js` files).
+
 ## Tailwind Options
 {: .col-2}
 
