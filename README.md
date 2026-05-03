@@ -1,44 +1,23 @@
 # Volt ⚡
 
-Elixir-native frontend build tool. Dev server with HMR, Tailwind CSS compilation, and production bundling — no Node.js, no esbuild, no Vite.
+[![Hex.pm](https://img.shields.io/hexpm/v/volt.svg)](https://hex.pm/packages/volt) [![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/volt)
 
-Built on Rust NIFs: [OXC](https://hex.pm/packages/oxc) for JS/TS, [Vize](https://hex.pm/packages/vize) for Vue SFCs + LightningCSS, [Oxide](https://hex.pm/packages/oxide_ex) for Tailwind scanning, and [QuickBEAM](https://hex.pm/packages/quickbeam) for JavaScript tool runtimes like Tailwind and Svelte.
+Vite-level frontend tooling that runs inside the BEAM. One dep replaces esbuild, the Tailwind CLI, and Node.js with Rust NIFs powered by [OXC](https://oxc.rs) and [LightningCSS](https://lightningcss.dev).
 
-## Features
-
-- **No JavaScript app bundler** — Volt builds app assets natively without esbuild or Vite
-- **JS/TS bundling** — parse, transform, minify via OXC (Rust)
-- **Vue SFC support** — single-file components with scoped CSS and Vapor IR
-- **Svelte support** — `.svelte` components compiled through QuickBEAM without Node.js
-- **Tailwind CSS v4** — parallel content scanning + full compiler, ~40ms builds
-- **Dev server** — on-demand compilation with mtime caching and error overlays
-- **HMR** — file watcher, WebSocket push, CSS hot-swap without page reload
-- **Production builds** — tree-shaken bundles with content-hashed filenames and manifests
-- **Code splitting** — dynamic `import()` creates async chunks, shared code extracted automatically
-- **CSS Modules** — `.module.css` with LightningCSS-powered scoping
-- **Static assets** — images, fonts, SVGs inlined or hashed
-- **JSON imports** — `import data from './data.json'`
-- **Environment variables** — `.env` files with `import.meta.env.VOLT_*`
-- **Import aliases** — `@/components/Button` → `assets/src/components/Button`
-- **tsconfig.json paths** — reads `compilerOptions.paths` automatically, no config duplication
-- **Source maps** — production `.map` files with optional hidden mode for error tracking
-- **Manual chunks** — control chunk boundaries (e.g. vendor splitting) via config
-- **`import.meta.hot`** — per-module HMR with `accept()`, `dispose()`, and preserved state
-- **Plugin system** — resolve, load, transform, and render_chunk hooks
-- **External modules** — exclude packages from the bundle (e.g. Phoenix JS deps)
-- **JS/TS formatting** — Prettier-compatible oxfmt via NIF, ~30× faster than Prettier
-- **JS/TS linting** — 650+ oxlint rules via NIF, plus custom Elixir rules
-
-## Stack
-
+```bash
+mix igniter.install volt
+mix phx.server
 ```
-volt
-├── oxc       — JS/TS parse, transform, bundle, minify, lint (Rust NIF)
-├── vize      — Vue SFC compilation, CSS Modules, LightningCSS (Rust NIF)
-├── oxide_ex  — Tailwind content scanning, candidate extraction (Rust NIF)
-├── quickbeam — JavaScript tool runtime (QuickJS on BEAM)
-└── plug      — HTTP dev server
-```
+
+The installer configures everything. No binaries to download, no extra processes to manage.
+
+## Why Volt
+
+Phoenix ships with esbuild and a Tailwind CLI as separate binaries downloaded at compile time. They can't coordinate HMR or share work, and anything beyond vanilla JS requires Node.js.
+
+Volt replaces both with a single Elixir dep. `mix phx.server` starts the frontend toolchain automatically, rebuilding Tailwind in ~40ms on template changes and hot-swapping JS modules via HMR. Compilation errors show as a browser overlay. Production builds finish in under 100ms.
+
+You also get features you'd expect from Vite: code splitting, CSS Modules, `import.meta.glob()`, `.env` variables, static asset imports, import aliases, and `import.meta.hot` with state preservation.
 
 ## Installation
 
@@ -46,35 +25,105 @@ volt
 mix igniter.install volt
 ```
 
-This will add the dep, configure Volt in `config.exs` and `dev.exs`,
-add the dev server plug to your endpoint, and remove esbuild/tailwind.
-
-Or add manually:
+Or add the dep manually:
 
 ```elixir
 def deps do
-  [{:volt, "~> 0.9.2"}]
+  [{:volt, "~> 0.10.0"}]
 end
 ```
 
-## Quick Start
+See the [Getting Started guide](https://hexdocs.pm/volt/getting-started.html) for manual configuration.
 
-```bash
-mix igniter.install volt
-mix phx.server
+## Configuration
+
+Standard `config/*.exs`. No `vite.config.js`, no `tailwind.config.js`:
+
+```elixir
+config :volt,
+  entry: "assets/js/app.ts",
+  target: :es2020,
+  sourcemap: :hidden,
+  tailwind: [
+    css: "assets/css/app.css",
+    sources: [
+      %{base: "lib/", pattern: "**/*.{ex,heex}"},
+      %{base: "assets/", pattern: "**/*.{js,ts,jsx,tsx}"}
+    ]
+  ]
 ```
 
-The installer configures everything: build settings, dev server plug, watcher, format and lint config.
+`Volt.entry_path/1` resolves to the source file in dev and the content-hashed path in production, like `~p` for JS:
 
-See the [Getting Started guide](guides/introduction/getting-started.md) for manual setup.
+```heex
+<script defer phx-track-static type="module" src={Volt.entry_path(@endpoint)}></script>
+```
 
-## Examples
+## Production builds
 
-See the example apps for Phoenix projects using Volt with [vanilla TypeScript](https://github.com/elixir-volt/volt/tree/master/examples/vanilla), [Vue](https://github.com/elixir-volt/volt/tree/master/examples/vue), [Svelte](https://github.com/elixir-volt/volt/tree/master/examples/svelte), and [React](https://github.com/elixir-volt/volt/tree/master/examples/react).
+```
+$ mix volt.build
+
+Building Tailwind CSS...
+  app-1a2b3c4d.css  23.9 KB
+Built Tailwind in 43ms
+Building "assets/js/app.ts"...
+  app-5e6f7a8b.js  128.4 KB  (gzip: 38.2 KB)
+  manifest.json  2 entries
+Built in 15ms
+```
+
+Tree-shaking, minification, code splitting, content-hashed filenames, and source maps. Ready for `mix phx.digest`.
+
+## Framework support
+
+Vue SFCs with scoped CSS, React JSX with the automatic runtime, and Svelte 5 with runes all compile without Node.js installed. Plain TypeScript with LiveView hooks works too.
+
+See the [examples](https://github.com/elixir-volt/volt/tree/master/examples) for complete Phoenix projects with each framework.
+
+## Developer tools
+
+JS/TS formatting and linting run as Rust NIFs. `mix format` handles Elixir and JavaScript together:
+
+```elixir
+# .formatter.exs
+[plugins: [Volt.Formatter], inputs: ["assets/**/*.{js,ts,jsx,tsx}"]]
+```
+
+```bash
+mix format           # Elixir + JS/TS
+mix volt.lint        # 650+ oxlint rules
+mix volt.js.check    # format + lint for CI
+```
+
+## Plugins
+
+Extend the build pipeline with the `Volt.Plugin` behaviour:
+
+```elixir
+defmodule MyApp.MarkdownPlugin do
+  @behaviour Volt.Plugin
+
+  def name, do: "markdown"
+
+  def load(path) do
+    if String.ends_with?(path, ".md") do
+      html = path |> File.read!() |> Earmark.as_html!()
+      {:ok, "export default #{Jason.encode!(html)};\n"}
+    end
+  end
+end
+```
+
+```elixir
+config :volt, plugins: [MyApp.MarkdownPlugin]
+```
+
+See the [Plugins guide](https://hexdocs.pm/volt/plugins.html) for the full hook API.
 
 ## Documentation
 
-Full documentation is available on [HexDocs](https://hexdocs.pm/volt).
+Full documentation, guides, and cheatsheets on [HexDocs](https://hexdocs.pm/volt).
 
 ## License
 
