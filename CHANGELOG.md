@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.1
+
+### Added
+
+- Added `makeup_js` dependency for JavaScript syntax highlighting in hexdocs.
+- Expanded plugins guide with five practical examples: Markdown imports, banner injection, build-time constants, CSV compilation, and AST transforms with OXC.
+
+### Fixed
+
+- Fixed missing syntax highlighting for JavaScript code blocks in guides.
+
 ## 0.10.0
 
 ### Added
