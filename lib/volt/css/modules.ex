@@ -35,7 +35,8 @@ defmodule Volt.CSS.Modules do
     {:ok, result} =
       Vize.compile_css(source, minify: minify, css_modules: true, filename: filename)
 
-    js = "export default #{Jason.encode!(result.exports)};\n"
+    exports_json = Jason.encode!(result.exports)
+    js = "var _exports = #{exports_json};\nexport default _exports;\n"
     {:ok, js, result.code}
   end
 end

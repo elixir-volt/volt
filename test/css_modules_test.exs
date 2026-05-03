@@ -33,11 +33,7 @@ defmodule Volt.CSS.ModulesTest do
 
       {:ok, js, css} = Volt.CSS.Modules.compile(source, "heading.module.css")
 
-      mapping =
-        js
-        |> String.trim_leading("export default ")
-        |> String.trim_trailing(";\n")
-        |> Jason.decode!()
+      mapping = extract_mapping(js)
 
       assert Map.has_key?(mapping, "title")
       assert Map.has_key?(mapping, "subtitle")
@@ -52,20 +48,16 @@ defmodule Volt.CSS.ModulesTest do
       {:ok, js1, _css1} = Volt.CSS.Modules.compile(".box { }", "a.module.css")
       {:ok, js2, _css2} = Volt.CSS.Modules.compile(".box { }", "b.module.css")
 
-      map1 =
-        js1
-        |> String.trim_leading("export default ")
-        |> String.trim_trailing(";\n")
-        |> Jason.decode!()
-
-      map2 =
-        js2
-        |> String.trim_leading("export default ")
-        |> String.trim_trailing(";\n")
-        |> Jason.decode!()
+      map1 = extract_mapping(js1)
+      map2 = extract_mapping(js2)
 
       assert map1["box"] != map2["box"]
     end
+  end
+
+  defp extract_mapping(js) do
+    [_, json] = Regex.run(~r/(\{.*\})/, js)
+    Jason.decode!(json)
   end
 
   describe "Pipeline integration" do

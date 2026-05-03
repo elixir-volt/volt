@@ -105,6 +105,7 @@ defmodule Mix.Tasks.Volt.Build do
       format: parse_format(Keyword.get(parsed, :format), config.format),
       code_splitting: Keyword.get(parsed, :code_splitting, config.code_splitting),
       chunks: config.chunks,
+      import_source: config.import_source,
       name: parsed[:name]
     ]
 

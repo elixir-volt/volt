@@ -37,17 +37,36 @@ defmodule Volt.Builder.Collector do
   end
 
   defp do_collect(abs_path, label, state) do
-    if MapSet.member?(state.seen, abs_path) or Path.extname(abs_path) in Volt.JS.Extensions.css() do
-      {:ok, state}
-    else
-      case read_module(abs_path, state.ctx.plugins) do
-        {:ok, source, content_type} ->
-          process_source(abs_path, label, source, content_type, state)
+    cond do
+      MapSet.member?(state.seen, abs_path) or
+          (Path.extname(abs_path) in Volt.JS.Extensions.css() and
+             not Volt.CSS.Modules.css_module?(abs_path)) ->
+        {:ok, state}
 
-        {:error, reason} ->
-          {:error, {:file_read_error, abs_path, reason}}
-      end
+      Volt.Assets.asset?(abs_path) ->
+        collect_asset(abs_path, label, state)
+
+      true ->
+        case read_module(abs_path, state.ctx.plugins) do
+          {:ok, source, content_type} ->
+            process_source(abs_path, label, source, content_type, state)
+
+          {:error, reason} ->
+            {:error, {:file_read_error, abs_path, reason}}
+        end
     end
+  end
+
+  defp collect_asset(abs_path, label, state) do
+    source = ""
+
+    {:ok,
+     %{
+       state
+       | seen: MapSet.put(state.seen, abs_path),
+         files: [{abs_path, label, source} | state.files],
+         dep_map: Map.put(state.dep_map, abs_path, %{static: [], dynamic: []})
+     }}
   end
 
   defp read_module(path, plugins) do
@@ -67,7 +86,7 @@ defmodule Volt.Builder.Collector do
   end
 
   defp process_source(abs_path, label, source, content_type, state) do
-    source = Volt.JS.GlobImport.transform(source, Path.dirname(abs_path))
+    source = Volt.JS.GlobImport.transform(source, Path.dirname(abs_path), Path.basename(abs_path))
 
     state = %{
       state
@@ -113,7 +132,8 @@ defmodule Volt.Builder.Collector do
         collect_imports(rest, importer, state)
 
       {:ok, resolved_path, original_specifier} ->
-        if Path.extname(resolved_path) in Volt.JS.Extensions.css() do
+        if Path.extname(resolved_path) in Volt.JS.Extensions.css() and
+             not Volt.CSS.Modules.css_module?(resolved_path) do
           collect_imports(rest, importer, state)
         else
           {label, state} =
@@ -185,7 +205,7 @@ defmodule Volt.Builder.Collector do
           content_type in ~w(application/javascript text/javascript) ->
             extract_js_typed_imports(source, filename)
 
-          ext == ".json" ->
+          ext == ".json" or Volt.CSS.Modules.css_module?(path) ->
             {:ok, %{imports: [], workers: []}}
 
           true ->
@@ -343,7 +363,11 @@ defmodule Volt.Builder.Collector do
         end
       end
 
-    if Path.extname(label) == ".json", do: Path.rootname(label) <> ".json.js", else: label
+    cond do
+      Path.extname(label) == ".json" -> Path.rootname(label) <> ".json.js"
+      Volt.CSS.Modules.css_module?(label) -> label <> ".js"
+      true -> label
+    end
   end
 
   defp deduplicate_label(label, resolved_path, used) do

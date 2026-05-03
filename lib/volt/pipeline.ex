@@ -43,7 +43,7 @@ defmodule Volt.Pipeline do
         nil -> {source, nil}
       end
 
-    source = Volt.JS.GlobImport.transform(source, Path.dirname(path))
+    source = Volt.JS.GlobImport.transform(source, Path.dirname(path), Path.basename(path))
     ext = Path.extname(path)
 
     result =

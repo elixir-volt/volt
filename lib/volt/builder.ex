@@ -72,6 +72,7 @@ defmodule Volt.Builder do
 
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
     loaders = Keyword.get(opts, :loaders, %{})
+    import_source = opts |> Keyword.get(:import_source) |> to_string_or_nil()
     hash = Keyword.get(opts, :hash, true)
     name = Keyword.get(opts, :name)
 
@@ -90,7 +91,8 @@ defmodule Volt.Builder do
       plugins: plugins,
       external: external_set,
       external_globals: external_globals,
-      loaders: loaders
+      loaders: loaders,
+      import_source: import_source
     }
 
     bundle_opts = [
@@ -137,7 +139,7 @@ defmodule Volt.Builder do
 
     with {:ok, modules, dep_map, workers, specifier_labels, path_labels} <-
            Collector.collect(entry, ctx),
-         {:ok, compiled} <- compile_all(modules, target, ctx.plugins, ctx.loaders) do
+         {:ok, compiled} <- compile_all(modules, target, ctx) do
       compiled = rewrite_nonlocal_labels(compiled, specifier_labels, path_labels)
 
       output_ctx = %{
@@ -209,14 +211,18 @@ defmodule Volt.Builder do
 
   # ── Module compilation ──────────────────────────────────────────────
 
-  defp compile_all(modules, target, plugins, loaders) do
-    {batch, special} = split_batchable(modules, plugins, loaders)
+  defp compile_all(modules, target, ctx) do
+    {batch, special} = split_batchable(modules, ctx.plugins, ctx.loaders)
 
-    transform_opts = if target != "", do: [target: target], else: []
+    transform_opts =
+      []
+      |> maybe_put(:target, if(target != "", do: target))
+      |> maybe_put(:import_source, ctx.import_source)
+
     batch_inputs = Enum.map(batch, fn {source, filename, _label} -> {source, filename} end)
 
     with {:ok, batch_compiled} <- compile_batch(batch, batch_inputs, transform_opts),
-         {:ok, special_compiled} <- compile_special(special, target, plugins, loaders) do
+         {:ok, special_compiled} <- compile_special(special, target, ctx.plugins, ctx.loaders) do
       merge_compiled(batch_compiled, special_compiled)
     end
   end
@@ -388,7 +394,7 @@ defmodule Volt.Builder do
   end
 
   defp rewrite_specifier(specifier, label_map, from_label, global_map) do
-    if Path.extname(specifier) in @css_exts do
+    if Path.extname(specifier) in @css_exts and not Volt.CSS.Modules.css_module?(specifier) do
       {:rewrite, @css_import_noop}
     else
       case Map.fetch(label_map, specifier) do
@@ -438,6 +444,12 @@ defmodule Volt.Builder do
     |> String.split(~r"[-_/]")
     |> Enum.map_join(&String.capitalize/1)
   end
+
+  defp to_string_or_nil(nil), do: nil
+  defp to_string_or_nil(value), do: to_string(value)
+
+  defp maybe_put(opts, _key, nil), do: opts
+  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp merge_build_results(results) do
     Enum.reduce(results, %{js: [], css: nil, manifest: %{}}, fn {:ok, result}, acc ->

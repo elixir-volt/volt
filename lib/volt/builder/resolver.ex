@@ -105,7 +105,8 @@ defmodule Volt.Builder.Resolver do
   end
 
   defp css_specifier?(specifier) do
-    Path.extname(specifier) in Volt.JS.Extensions.css()
+    Path.extname(specifier) in Volt.JS.Extensions.css() and
+      not Volt.CSS.Modules.css_module?(specifier)
   end
 
   defp external?(specifier, external) do

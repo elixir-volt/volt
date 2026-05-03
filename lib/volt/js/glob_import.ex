@@ -31,9 +31,9 @@ defmodule Volt.JS.GlobImport do
   `base_dir` is the directory of the file containing the glob call,
   used to resolve the glob pattern to actual files.
   """
-  @spec transform(String.t(), String.t()) :: String.t()
-  def transform(source, base_dir) do
-    case OXC.parse(source, "glob.ts") do
+  @spec transform(String.t(), String.t(), String.t()) :: String.t()
+  def transform(source, base_dir, filename \\ "glob.ts") do
+    case OXC.parse(source, filename) do
       {:ok, ast} ->
         calls = collect_glob_calls(ast)
         if calls == [], do: source, else: apply_transforms(source, calls, base_dir)

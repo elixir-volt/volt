@@ -1,11 +1,38 @@
 <script>
-  let count = 0
+  import config from './config.json'
+  import logo from '../images/volt.svg'
+  import Counter from './Counter.svelte'
+  import Card from './Card.svelte'
+
+  const pages = import.meta.glob('./pages/*.ts', { eager: true })
+  const mode = import.meta.env.MODE
 </script>
 
-<main class="mx-auto mt-20 max-w-3xl rounded-3xl border border-emerald-200 bg-white p-10 shadow-2xl shadow-emerald-950/10">
-  <p class="mb-3 text-xs font-bold uppercase tracking-widest text-emerald-500">Built-in Svelte plugin</p>
-  <h1 class="text-5xl font-black tracking-tight text-slate-950 sm:text-7xl">Volt + Svelte</h1>
-  <p class="mt-5 max-w-xl text-lg leading-8 text-slate-600">Svelte components compile through QuickBEAM using Volt's JS runtime.</p>
-  <button type="button" class="mt-8 rounded-full bg-emerald-600 px-5 py-3 font-bold text-white shadow-lg shadow-emerald-600/25 transition hover:-translate-y-0.5 hover:bg-emerald-700" on:click={() => count += 1}>Count is {count}</button>
-  <p class="mt-4 text-sm text-slate-500">State updates are handled by Svelte in the browser.</p>
+<main class="mx-auto mt-12 max-w-2xl space-y-8 px-6 pb-12">
+  <header class="flex items-center gap-4">
+    <img src={logo} alt="" class="h-10 w-10 text-emerald-500" />
+    <div>
+      <h1 class="text-4xl font-black tracking-tight text-slate-950">
+        {config.name} + Svelte
+      </h1>
+      <p class="text-sm text-slate-500">v{config.version}</p>
+    </div>
+  </header>
+
+  <Card title="Counter">
+    <Counter />
+  </Card>
+
+  <Card title="Pages (glob import)">
+    <ul class="space-y-2">
+      {#each Object.entries(pages) as [path, mod]}
+        <li class="flex items-baseline gap-2">
+          <span class="font-semibold text-slate-800">{mod.title}</span>
+          <span class="text-sm text-slate-500">{mod.description}</span>
+        </li>
+      {/each}
+    </ul>
+  </Card>
+
+  <footer class="text-center text-xs text-slate-400">Mode: {mode}</footer>
 </main>
