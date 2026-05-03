@@ -76,7 +76,8 @@ defmodule Volt.Config do
     sources: ["**/*.{js,ts,jsx,tsx,vue}"],
     ignore: ["node_modules/**", "vendor/**"],
     import_source: nil,
-    vapor: false
+    vapor: false,
+    custom_renderer: false
   }
 
   @build_keys Map.keys(@defaults)
@@ -97,7 +98,10 @@ defmodule Volt.Config do
   """
   @spec build(keyword()) :: map()
   def build(overrides \\ []) do
-    app_env = Application.get_all_env(:volt) |> Keyword.take(@build_keys)
+    app_env =
+      Application.get_all_env(:volt)
+      |> Keyword.take(@build_keys)
+      |> Keyword.reject(fn {k, v} -> k == :format and not is_atom(v) end)
 
     config =
       @defaults

@@ -51,6 +51,7 @@ defmodule Volt.DevServer do
       target: to_string(config.target),
       import_source: to_string(config.import_source),
       vapor: config.vapor,
+      custom_renderer: config.custom_renderer,
       plugins: plugins,
       aliases: config.aliases,
       node_modules: node_modules
@@ -158,6 +159,7 @@ defmodule Volt.DevServer do
       target: config.target,
       import_source: config.import_source,
       vapor: config.vapor,
+      custom_renderer: config.custom_renderer,
       sourcemap: true,
       plugins: config.plugins,
       rewrite_import: &rewrite_dev_specifier(&1, file_path, config)
