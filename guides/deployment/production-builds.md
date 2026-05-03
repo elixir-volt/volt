@@ -34,6 +34,14 @@ config :volt, external: ~w(phoenix phoenix_html phoenix_live_view)
 
 Or per-build: `mix volt.build --external phoenix --external phoenix_html`
 
+## Module Preloading
+
+For code-split builds, `Volt.Preload.tags/2` generates `<link rel="modulepreload">` tags from the build manifest to preload async chunks:
+
+```heex
+<%= Volt.Preload.tags("priv/static/assets/js/manifest.json", "/assets/js") %>
+```
+
 ## Deploy Alias
 
 The installer generates an `assets.deploy` alias:

@@ -129,6 +129,30 @@ config :volt, resolve_dirs: ["node_modules", "deps"]
 
 Additional directories for bare import resolution.
 
+### Mode
+
+```elixir
+config :volt, mode: :production
+```
+
+Build mode for env variables. Override with `--mode`.
+
+### Vapor
+
+```elixir
+config :volt, vapor: true
+```
+
+Enable Vue Vapor mode compilation.
+
+### Custom Renderer
+
+```elixir
+config :volt, custom_renderer: true
+```
+
+Treat non-HTML tags as renderer-native elements (for PhoenixVapor).
+
 ## Tailwind Options
 {: .col-2}
 

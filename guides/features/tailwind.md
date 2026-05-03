@@ -20,6 +20,18 @@ config :volt,
 - `css` — path to your Tailwind input CSS file (with `@import "tailwindcss"`)
 - `sources` — list of `%{base, pattern}` maps defining where to scan for class names
 
+## Plugins and Config Files
+
+Tailwind `@plugin` and `@config` directives are resolved and bundled automatically:
+
+```css
+@plugin "@tailwindcss/typography";
+@plugin "./my-plugin.js";
+@config "./tailwind.config.js";
+```
+
+npm packages are resolved from `node_modules`. Local files are resolved relative to the CSS input file. The full `require()` graph is bundled so the Tailwind runtime evaluates self-contained modules.
+
 ## Incremental Rebuilds
 
 In dev mode, only changed files are re-scanned. If a `.heex` template adds new Tailwind classes, only those new candidates trigger a CSS rebuild — the browser gets a style-only update without a page reload.

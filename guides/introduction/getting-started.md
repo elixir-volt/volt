@@ -9,9 +9,11 @@ mix igniter.install volt
 The installer:
 - Adds `{:volt, "~> 0.9"}` to `mix.exs`
 - Configures build settings in `config/config.exs`
-- Adds the dev server plug to your endpoint
-- Sets up the file watcher in `config/dev.exs`
-- Configures `mix format` with `Volt.Formatter`
+- Adds format and lint config to `config/config.exs`
+- Adds `Volt.Formatter` plugin to `.formatter.exs`
+- Adds the `Volt.DevServer` plug to your endpoint
+- Adds the Volt watcher to `config/dev.exs`
+- Updates `assets.build` and `assets.deploy` aliases
 - Removes `esbuild` and `tailwind` deps if present
 
 Start the server:
@@ -32,51 +34,71 @@ end
 
 ### Build Configuration
 
-All config lives in your standard `config/*.exs` files:
-
 ```elixir
 # config/config.exs
 config :volt,
   entry: "assets/js/app.ts",
   root: "assets",
-  sources: ["**/*.{js,ts,jsx,tsx,vue}"],
-  ignore: ["node_modules/**", "vendor/**"],
+  sources: ["**/*.{js,ts,jsx,tsx}"],
   target: :es2020,
+  sourcemap: :hidden,
   tailwind: [
     css: "assets/css/app.css",
     sources: [
       %{base: "lib/", pattern: "**/*.{ex,heex}"},
-      %{base: "assets/", pattern: "**/*.{vue,ts,tsx}"}
+      %{base: "assets/", pattern: "**/*.{js,ts,jsx,tsx}"}
     ]
   ]
 ```
 
-### Dev Server
+### Dev Server and Watcher
 
-Add the dev server plug to your endpoint (before `Plug.Static`):
+Add the dev server plug to your endpoint (inside the `code_reloading?` block, after `Phoenix.CodeReloader`):
 
 ```elixir
 # lib/my_app_web/endpoint.ex
 if code_reloading? do
-  plug Volt.DevServer
+  # ...
+  plug Volt.DevServer, root: "assets"
 end
 ```
 
-Configure the watcher:
+Configure the dev server and add the watcher:
 
 ```elixir
 # config/dev.exs
 config :volt, :server,
   prefix: "/assets",
-  watch_dirs: ["lib/", "assets/"]
+  watch_dirs: ["lib/"]
+
+config :my_app, MyAppWeb.Endpoint,
+  watchers: [
+    volt: {Mix.Tasks.Volt.Dev, :run, [~w(--tailwind)]}
+  ]
 ```
 
-### Script Tag
+The watcher starts `mix volt.dev` automatically when `mix phx.server` runs, watching for file changes and triggering HMR updates and Tailwind rebuilds.
 
-In your root layout:
+### Layout Tags
+
+In your root layout, add both the CSS link and the JS script tag:
 
 ```heex
+<link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
 <script defer phx-track-static type="module" src={Volt.entry_path(MyAppWeb.Endpoint)}></script>
+```
+
+### Mix Aliases
+
+Update your build aliases in `mix.exs`:
+
+```elixir
+defp aliases do
+  [
+    "assets.build": ["volt.build --tailwind"],
+    "assets.deploy": ["volt.build --tailwind", "phx.digest"]
+  ]
+end
 ```
 
 ### Formatting
