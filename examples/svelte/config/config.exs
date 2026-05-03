@@ -22,7 +22,6 @@ config :volt,
   root: "assets",
   sources: ["**/*.{js,ts,jsx,tsx,svelte}"],
   target: :es2022,
-  format: :esm,
   minify: false,
   hash: false,
   resolve_dirs: ["node_modules", "deps"],
@@ -33,6 +32,10 @@ config :volt,
       %{base: "assets/", pattern: "**/*.{js,ts,jsx,tsx,svelte}"}
     ]
   ]
+
+config :volt, :format,
+  semi: false,
+  single_quote: true
 
 config :volt, :lint, plugins: [:typescript]
 

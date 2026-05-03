@@ -34,6 +34,10 @@ config :volt,
   ],
   import_source: "react"
 
+config :volt, :format,
+  semi: false,
+  single_quote: true
+
 config :volt, :lint, plugins: [:typescript, :react]
 
 import_config "#{config_env()}.exs"

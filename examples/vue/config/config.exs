@@ -33,6 +33,10 @@ config :volt,
     ]
   ]
 
+config :volt, :format,
+  semi: false,
+  single_quote: true
+
 config :volt, :lint, plugins: [:typescript, :vue]
 
 import_config "#{config_env()}.exs"

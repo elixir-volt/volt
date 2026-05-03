@@ -79,7 +79,7 @@ defmodule Mix.Tasks.Volt.Lint do
     custom_rules = Keyword.get(config, :custom_rules, [])
     fix = Keyword.get(parsed, :fix, false)
 
-    files = Volt.JS.Helpers.discover_files()
+    files = Volt.JS.Helpers.discover_files(only: ~w(.js .ts .jsx .tsx))
 
     if files == [] do
       Mix.shell().info("No lintable files found")

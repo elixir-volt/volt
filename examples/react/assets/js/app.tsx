@@ -16,7 +16,7 @@ function App() {
         <img src={logo} alt="" className="h-10 w-10 text-sky-500" />
         <div>
           <h1 className="text-4xl font-black tracking-tight text-slate-950">
-            {config.name}{' '}+{' '}React
+            {config.name} + React
           </h1>
           <p className="text-sm text-slate-500">v{config.version}</p>
         </div>
@@ -37,9 +37,7 @@ function App() {
         </ul>
       </Card>
 
-      <footer className="text-center text-xs text-slate-400">
-        Mode: {import.meta.env.MODE}
-      </footer>
+      <footer className="text-center text-xs text-slate-400">Mode: {import.meta.env.MODE}</footer>
     </main>
   )
 }
