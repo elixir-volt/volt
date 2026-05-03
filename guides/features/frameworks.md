@@ -142,6 +142,12 @@ if (import.meta.hot) {
 }
 ```
 
+## Vanilla TypeScript
+
+Volt works without any frontend framework. Use plain TypeScript with Phoenix LiveView hooks for interactivity — the same setup Phoenix uses by default, with Volt replacing esbuild.
+
+See the [vanilla example](https://github.com/elixir-volt/volt/tree/master/examples/vanilla) for a complete project with LiveView hooks, JSON imports, glob imports, and `import.meta.env`.
+
 ## Examples
 
 See the [example apps](https://github.com/elixir-volt/volt/tree/master/examples) for complete Phoenix projects using each framework.

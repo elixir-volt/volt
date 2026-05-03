@@ -70,7 +70,7 @@ See the [Getting Started guide](guides/introduction/getting-started.md) for manu
 
 ## Examples
 
-See the example apps for Phoenix projects using Volt with [Vue](https://github.com/elixir-volt/volt/tree/master/examples/vue), [Svelte](https://github.com/elixir-volt/volt/tree/master/examples/svelte), and [React](https://github.com/elixir-volt/volt/tree/master/examples/react). Each example demonstrates JSON imports, SVG assets, CSS Modules, glob imports, environment variables, HMR, and Tailwind CSS.
+See the example apps for Phoenix projects using Volt with [vanilla TypeScript](https://github.com/elixir-volt/volt/tree/master/examples/vanilla), [Vue](https://github.com/elixir-volt/volt/tree/master/examples/vue), [Svelte](https://github.com/elixir-volt/volt/tree/master/examples/svelte), and [React](https://github.com/elixir-volt/volt/tree/master/examples/react).
 
 ## Documentation
 
