@@ -13,7 +13,7 @@ Only variables prefixed with `VOLT_` are exposed to client code.
 
 ## Accessing Variables
 
-```typescript
+```javascript
 console.log(import.meta.env.VOLT_API_URL)
 console.log(import.meta.env.MODE)  // "development" or "production"
 console.log(import.meta.env.DEV)   // true/false

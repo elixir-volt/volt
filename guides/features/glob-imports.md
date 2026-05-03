@@ -4,13 +4,13 @@
 
 ## Lazy (Default)
 
-```typescript
+```javascript
 const modules = import.meta.glob('./pages/*.ts')
 ```
 
 Transforms into:
 
-```typescript
+```javascript
 const modules = {
   './pages/home.ts': () => import('./pages/home.ts'),
   './pages/about.ts': () => import('./pages/about.ts'),
@@ -21,13 +21,13 @@ Each entry is a function that returns a dynamic import — the module is only lo
 
 ## Eager
 
-```typescript
+```javascript
 const modules = import.meta.glob('./pages/*.ts', { eager: true })
 ```
 
 Transforms into:
 
-```typescript
+```javascript
 import * as __glob_0 from './pages/about.ts'
 import * as __glob_1 from './pages/home.ts'
 const modules = {

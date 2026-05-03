@@ -51,7 +51,7 @@ defmodule MyApp.MarkdownPlugin do
 end
 ```
 
-```typescript
+```javascript
 import readme from './README.md'
 document.getElementById('content').innerHTML = readme
 ```
@@ -98,7 +98,7 @@ defmodule MyApp.BuildInfo do
 end
 ```
 
-```typescript
+```javascript
 console.log(`Build ${__BUILD_HASH__} at ${__BUILD_TIME__}`)
 ```
 
@@ -141,7 +141,7 @@ defmodule MyApp.CSVPlugin do
 end
 ```
 
-```typescript
+```javascript
 import data from './prices.csv'
 // data = [["name", "price"], ["Widget", "9.99"], ...]
 ```

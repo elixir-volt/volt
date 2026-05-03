@@ -16,7 +16,7 @@ The browser client auto-reconnects on disconnect and shows compilation errors as
 
 Each module served in dev mode includes an `import.meta.hot` object for granular HMR:
 
-```typescript
+```javascript
 let timer: ReturnType<typeof setInterval>
 
 export function startClock(el: HTMLElement) {

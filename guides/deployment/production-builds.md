@@ -4,7 +4,7 @@
 mix volt.build
 ```
 
-```
+```text
 Building Tailwind CSS...
   app-1a2b3c4d.css  23.9 KB
 Built Tailwind in 43ms

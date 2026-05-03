@@ -76,7 +76,7 @@ config :volt, :lint, plugins: [:typescript, :vue]
 
 ### Entry Point
 
-```typescript
+```javascript
 import { createApp } from 'vue'
 import App from './App.vue'
 
@@ -129,7 +129,7 @@ config :volt, :lint, plugins: [:typescript]
 
 ### Entry Point
 
-```typescript
+```javascript
 import { mount, unmount } from 'svelte'
 import App from './App.svelte'
 

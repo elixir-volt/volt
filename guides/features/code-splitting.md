@@ -2,7 +2,7 @@
 
 Dynamic imports are automatically split into separate chunks:
 
-```typescript
+```javascript
 import { setup } from './core'
 
 const admin = await import('./admin')
@@ -10,7 +10,7 @@ const admin = await import('./admin')
 
 Produces:
 
-```
+```text
 app-5e6f7a8b.js        42 KB   (entry)
 app-admin-c3d4e5f6.js  86 KB   (async)
 manifest.json           3 entries

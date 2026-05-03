@@ -41,7 +41,7 @@ Files ending in `.module.css` get scoped class names via LightningCSS:
 .primary { color: blue }
 ```
 
-```typescript
+```javascript
 import styles from './button.module.css'
 console.log(styles.primary) // "ewq3O_primary"
 ```
@@ -50,14 +50,14 @@ console.log(styles.primary) // "ewq3O_primary"
 
 Images, fonts, and other files are handled automatically when imported:
 
-```typescript
+```javascript
 import logo from './logo.svg'  // small files → data URI
 import photo from './photo.jpg' // large files → hashed URL
 ```
 
 ## JSON Imports
 
-```typescript
+```javascript
 import config from './config.json'
 console.log(config.apiUrl)
 ```
@@ -72,7 +72,7 @@ See [Environment Variables](environment-variables.md) for file loading order and
 
 `import.meta.glob()` resolves glob patterns at build time:
 
-```typescript
+```javascript
 const pages = import.meta.glob('./pages/*.ts', { eager: true })
 ```
 
@@ -120,7 +120,7 @@ Configure path aliases in Volt config:
 config :volt, aliases: %{"@" => "assets/src"}
 ```
 
-```typescript
+```javascript
 import { Button } from '@/components/Button'
 ```
 
@@ -148,7 +148,7 @@ See [Formatting and Linting](formatting-and-linting.md) for setup and configurat
 
 Worker URLs using the standard pattern are rewritten in production builds:
 
-```typescript
+```javascript
 const worker = new Worker(new URL('./worker.ts', import.meta.url))
 ```
 

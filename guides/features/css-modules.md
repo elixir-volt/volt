@@ -10,7 +10,7 @@ Files ending in `.module.css` get scoped class names via LightningCSS.
 .large { font-size: 2em }
 ```
 
-```typescript
+```javascript
 import styles from './button.module.css'
 console.log(styles.primary) // "ewq3O_primary"
 console.log(styles.large)   // "ewq3O_large"
