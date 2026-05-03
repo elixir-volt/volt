@@ -2,8 +2,30 @@
 
 ## Unreleased
 
+### Added
+
+- Added `custom_renderer` config option for Vue Vapor renderer-native elements.
+- Added `guides/` documentation with 16 pages organized into Introduction, Features, Deployment, Migration, and Cheatsheets sections.
+- Added dedicated framework guide covering React, Vue, and Svelte setup.
+- Hexdocs now includes `groups_for_modules`, `groups_for_extras`, and CHANGELOG.
+- Framework examples now demonstrate JSON imports, SVG asset imports, `import.meta.glob()`, `import.meta.env`, `import.meta.hot`, multi-component structure, and Tailwind CSS.
+- Examples now use `Volt.Formatter` and `mix volt.lint` with framework-appropriate plugins.
+
+### Changed
+
+- Upgraded Vize from 0.8 to 0.10. Vue SFC TypeScript stripping now uses Vize's `strip_types` option in a single NIF call instead of a separate OXC transform pass.
+- Increased Svelte compiler stack size from 8 MB to 16 MB to handle real-world component complexity.
+- README slimmed from 514 lines to ~80 lines; reference content moved to guides.
+
 ### Fixed
 
+- `import.meta.glob()` now works in `.tsx` files (was hardcoded to parse as `.ts`).
+- `import_source` config (e.g. `"react"`) is now passed through to production builds, fixing JSX transform in `mix volt.build`.
+- Static asset imports (SVG, images) no longer crash the production builder.
+- CSS Modules (`.module.css`) now work in production builds — fixed resolver, collector, and bundler label handling.
+- CSS Modules JS output uses a variable assignment to avoid ambiguous `export default {}` parsing in the bundler.
+- `mix volt.lint` no longer attempts to parse `.svelte` and `.vue` files as JavaScript.
+- Build config `format:` is no longer clobbered by formatter config `config :volt, :format`.
 - Code-split builds now include alias-resolved modules outside the entry root.
 - Dynamic CSS imports in production builds now resolve to inert fulfilled promises instead of runtime CSS module imports.
 - Minified code-split builds now rewrite dynamic imports emitted as static template literals to generated chunk files.
