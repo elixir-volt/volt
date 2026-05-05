@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.2
+
+### Changed
+
+- Upgraded OXC toolchain to 0.12.0 (OXC Rust crates 0.117 → 0.129: 12 releases of parser, transformer, minifier, codegen, formatter, and linter improvements).
+- Upgraded Tailwind CSS Oxide scanner to v4.2.4 (was v4.1.8).
+- Upgraded QuickBEAM to 0.10.9.
+- Upgraded Reach to 2.0.
+- Bumped 9 other dependencies to latest versions.
+
 ## 0.10.1
 
 ### Added
