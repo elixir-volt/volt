@@ -118,6 +118,49 @@ defmodule Volt.DevServerTest do
       assert conn.status == 200
       assert conn.resp_body =~ "const x = 42"
     end
+
+    test "does not serve watcher analysis cache entries as browser responses" do
+      source_dir = Path.join(@fixture_dir, "src")
+      app_path = Path.join(source_dir, "app.ts")
+
+      File.write!(app_path, """
+      import "phoenix_html"
+      console.log(import.meta.env.DEV, "before")
+      """)
+
+      File.touch!(app_path, {{2026, 1, 1}, {0, 0, 0}})
+
+      conn = call_dev_server("/assets/app.ts")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "before"
+      assert conn.resp_body =~ "createHotContext"
+      assert conn.resp_body =~ "import.meta.env = "
+      assert conn.resp_body =~ "/@vendor/phoenix_html.js"
+      refute conn.resp_body =~ ~s(import "phoenix_html")
+
+      File.write!(app_path, """
+      import "phoenix_html"
+      console.log(import.meta.env.DEV, "after")
+      """)
+
+      File.touch!(app_path, {{2026, 1, 1}, {0, 0, 1}})
+
+      watcher =
+        start_supervised!({Volt.Watcher, root: source_dir, name: :test_dev_server_watcher_cache})
+
+      send(watcher, {:rebuild, app_path})
+      _ = :sys.get_state(watcher)
+
+      conn = call_dev_server("/assets/app.ts")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "after"
+      assert conn.resp_body =~ "createHotContext"
+      assert conn.resp_body =~ "import.meta.env = "
+      assert conn.resp_body =~ "/@vendor/phoenix_html.js"
+      refute conn.resp_body =~ ~s(import "phoenix_html")
+    end
   end
 
   describe "non-matching paths" do

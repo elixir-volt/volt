@@ -1,12 +1,14 @@
 defmodule Volt.Cache do
   @moduledoc """
-  ETS-backed module cache keyed by `{path, mtime}`.
+  ETS-backed module cache keyed by `{cache_key, mtime}`.
 
   Caches compiled output so repeated requests for unchanged files
   skip the compilation step entirely.
   """
 
   @table :volt_cache
+
+  @type key :: String.t() | {:watcher, String.t()}
 
   @type entry :: %{
           code: String.t(),
@@ -26,25 +28,25 @@ defmodule Volt.Cache do
   end
 
   @doc "Look up a cached entry. Returns `nil` on miss."
-  @spec get(String.t(), integer()) :: entry() | nil
-  def get(path, mtime) do
-    case :ets.lookup(@table, {path, mtime}) do
+  @spec get(key(), integer()) :: entry() | nil
+  def get(key, mtime) do
+    case :ets.lookup(@table, {key, mtime}) do
       [{_, entry}] -> entry
       [] -> nil
     end
   end
 
   @doc "Store a compiled entry."
-  @spec put(String.t(), integer(), entry()) :: :ok
-  def put(path, mtime, entry) do
-    :ets.insert(@table, {{path, mtime}, entry})
+  @spec put(key(), integer(), entry()) :: :ok
+  def put(key, mtime, entry) do
+    :ets.insert(@table, {{key, mtime}, entry})
     :ok
   end
 
-  @doc "Evict all entries for a path (any mtime)."
-  @spec evict(String.t()) :: :ok
-  def evict(path) do
-    :ets.match_delete(@table, {{path, :_}, :_})
+  @doc "Evict all entries for a cache key (any mtime)."
+  @spec evict(key()) :: :ok
+  def evict(key) do
+    :ets.match_delete(@table, {{key, :_}, :_})
     :ok
   end
 
