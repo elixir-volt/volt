@@ -8,6 +8,7 @@ defmodule Volt.Plugin.React do
   alias Volt.JS.PrebundleEntry.{Export, Import}
 
   @react_exports ~w(
+    Activity
     Children
     Component
     Fragment
@@ -15,6 +16,12 @@ defmodule Volt.Plugin.React do
     PureComponent
     StrictMode
     Suspense
+    __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE
+    __COMPILER_RUNTIME
+    act
+    cache
+    cacheSignal
+    captureOwnerStack
     cloneElement
     createContext
     createElement
@@ -31,6 +38,7 @@ defmodule Volt.Plugin.React do
     useDebugValue
     useDeferredValue
     useEffect
+    useEffectEvent
     useId
     useImperativeHandle
     useInsertionEffect
@@ -53,6 +61,16 @@ defmodule Volt.Plugin.React do
   def prebundle_alias("react/jsx-runtime"), do: "react"
   def prebundle_alias("react/jsx-dev-runtime"), do: "react"
   def prebundle_alias(_specifier), do: nil
+
+  @impl true
+  def prebundle_externals do
+    [
+      "react",
+      "react-dom/client",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime"
+    ]
+  end
 
   @impl true
   def prebundle_entry("react") do

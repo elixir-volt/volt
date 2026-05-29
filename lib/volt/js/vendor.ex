@@ -106,6 +106,10 @@ defmodule Volt.JS.Vendor do
     node_modules = Keyword.get(opts, :node_modules)
     module_dirs = module_dirs(node_modules, resolve_dirs)
 
+    browser_hash(module_dirs, plugins, module_types)
+  end
+
+  defp browser_hash(module_dirs, plugins, module_types) do
     :crypto.hash(
       :sha256,
       :erlang.term_to_binary(browser_signature(module_dirs, plugins, module_types))
@@ -202,11 +206,22 @@ defmodule Volt.JS.Vendor do
             preserve_entry_signatures: :strict
           ] ++ if(module_types != %{}, do: [module_types: module_types], else: [])
 
+        externals = prebundle_externals_for(specifier, plugins)
+        bundle_opts = put_external_imports(bundle_opts, externals)
+
         case OXC.bundle(entry_path, bundle_opts) do
           {:ok, result} ->
             write_cache_files!(
               output_path,
-              extract_code(result),
+              result
+              |> extract_code()
+              |> rewrite_external_imports(
+                entry_path,
+                externals,
+                plugins,
+                module_dirs,
+                module_types
+              ),
               specifier,
               module_dirs,
               plugins,
@@ -268,6 +283,46 @@ defmodule Volt.JS.Vendor do
   end
 
   # ── Helpers ───────────────────────────────────────────────────────
+
+  defp prebundle_externals_for(specifier, plugins) do
+    plugins
+    |> Volt.PluginRunner.prebundle_externals()
+    |> Enum.reject(fn external ->
+      Volt.PluginRunner.prebundle_alias(plugins, external) == specifier
+    end)
+  end
+
+  defp put_external_imports(bundle_opts, externals) do
+    Keyword.update(bundle_opts, :external, externals, fn existing ->
+      Enum.uniq(List.wrap(existing) ++ externals)
+    end)
+  end
+
+  defp rewrite_external_imports(code, entry_path, externals, plugins, module_dirs, module_types) do
+    rewrites =
+      Map.new(externals, fn external ->
+        canonical = Volt.PluginRunner.prebundle_alias(plugins, external)
+        {external, vendor_url_for_signature(canonical, module_dirs, plugins, module_types)}
+      end)
+
+    case Volt.JS.Transforms.Imports.rewrite_map(code, entry_path, rewrites) do
+      {:ok, rewritten} ->
+        rewritten
+
+      {:error, errors} ->
+        Logger.debug(
+          "[Volt] Vendor external import AST rewrite skipped for #{entry_path}: #{inspect(errors)}"
+        )
+
+        code
+    end
+  end
+
+  defp vendor_url_for_signature(specifier, module_dirs, plugins, module_types) do
+    specifier
+    |> vendor_url()
+    |> Volt.URL.append_query("v=#{browser_hash(module_dirs, plugins, module_types)}")
+  end
 
   defp extract_code(result) when is_binary(result), do: result
   defp extract_code(%{code: code}), do: code
@@ -443,7 +498,8 @@ defmodule Volt.JS.Vendor do
       lockfiles: lockfile_signature(module_dirs),
       module_dirs: module_dirs,
       module_types: module_types,
-      plugins: Enum.map(plugins, &base_plugin_signature/1)
+      plugins: Enum.map(plugins, &base_plugin_signature/1),
+      prebundle_externals: Volt.PluginRunner.prebundle_externals(plugins)
     }
   end
 

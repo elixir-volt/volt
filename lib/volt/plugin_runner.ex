@@ -109,6 +109,20 @@ defmodule Volt.PluginRunner do
     end)
   end
 
+  @doc "Collect plugin-provided dev prebundle externals."
+  @spec prebundle_externals([module() | {module(), keyword()}]) :: [String.t()]
+  def prebundle_externals(plugins) do
+    plugins
+    |> plugins()
+    |> Enum.flat_map(fn plugin ->
+      plugin
+      |> call_optional(:prebundle_externals, [], [])
+      |> List.wrap()
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
   @doc "Run render_chunk hooks in sequence."
   @spec render_chunk([module() | {module(), keyword()}], String.t(), map()) :: String.t()
   def render_chunk(plugins, code, chunk_info) do

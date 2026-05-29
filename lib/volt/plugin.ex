@@ -91,6 +91,20 @@ defmodule Volt.Plugin do
                  imports: [prebundle_import()], exports: [prebundle_export()]}
               | nil
 
+  @doc """
+  Return bare specifiers that should stay external while dev vendor packages are pre-bundled.
+
+  Use this advanced framework-integration hook when third-party packages must
+  share a canonical dev vendor module instead of inlining their own copy of a
+  peer dependency. Volt rewrites preserved external imports through
+  `prebundle_alias/1`, so related entrypoints can still resolve to one vendor
+  URL.
+
+  The canonical prebundle entry itself is built without its aliased externals so
+  it can aggregate the shared dependency graph without importing itself.
+  """
+  @callback prebundle_externals() :: [String.t()]
+
   @doc "Transform a final output chunk before writing."
   @callback render_chunk(code :: String.t(), chunk_info :: map()) :: {:ok, String.t()} | nil
 
@@ -105,5 +119,6 @@ defmodule Volt.Plugin do
                       define: 1,
                       prebundle_alias: 1,
                       prebundle_entry: 1,
+                      prebundle_externals: 0,
                       render_chunk: 2
 end

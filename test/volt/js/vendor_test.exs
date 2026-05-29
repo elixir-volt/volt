@@ -145,6 +145,90 @@ defmodule Volt.JS.VendorTest do
       assert code =~ "greet"
       refute code =~ "module.exports"
     end
+
+    test "keeps third-party React imports external and rewrites them to canonical vendor URL" do
+      File.mkdir_p!(Path.join(@node_modules, "react"))
+      File.mkdir_p!(Path.join(@node_modules, "react-dom"))
+      File.mkdir_p!(Path.join(@node_modules, "react-using-lib"))
+
+      File.write!(
+        Path.join(@node_modules, "react/package.json"),
+        :json.encode(%{
+          "name" => "react",
+          "main" => "index.js",
+          "exports" => %{
+            "." => "./index.js",
+            "./jsx-runtime" => "./jsx-runtime.js",
+            "./jsx-dev-runtime" => "./jsx-dev-runtime.js"
+          },
+          "type" => "module"
+        })
+      )
+
+      File.write!(
+        Path.join(@node_modules, "react/index.js"),
+        "const React = { act() {}, useState(value) { return [value, () => {}]; } }; export default React; export const act = React.act; export const useState = React.useState;"
+      )
+
+      File.write!(
+        Path.join(@node_modules, "react/jsx-runtime.js"),
+        "export function jsx() {}; export function jsxs() {};"
+      )
+
+      File.write!(
+        Path.join(@node_modules, "react/jsx-dev-runtime.js"),
+        "export function jsxDEV() {};"
+      )
+
+      File.write!(
+        Path.join(@node_modules, "react-dom/package.json"),
+        :json.encode(%{
+          "name" => "react-dom",
+          "exports" => %{"./client" => "./client.js"},
+          "type" => "module"
+        })
+      )
+
+      File.write!(
+        Path.join(@node_modules, "react-dom/client.js"),
+        "export function createRoot() {}; export function hydrateRoot() {}; export const version = '0.0.0';"
+      )
+
+      File.write!(
+        Path.join(@node_modules, "react-using-lib/package.json"),
+        :json.encode(%{"name" => "react-using-lib", "main" => "index.js", "type" => "module"})
+      )
+
+      File.write!(
+        Path.join(@node_modules, "react-using-lib/index.js"),
+        "import { act, useState } from 'react'; export function useThing() { act(() => {}); return useState(null); }"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "src/app.ts"),
+        "import { useThing } from 'react-using-lib'; console.log(useThing)"
+      )
+
+      {:ok, vendor_map} =
+        Volt.JS.Vendor.prebundle(
+          root: Path.join(@fixture_dir, "src"),
+          node_modules: @node_modules,
+          plugins: [Volt.Plugin.React]
+        )
+
+      assert Map.has_key?(vendor_map, "react-using-lib")
+
+      {:ok, code} = Volt.JS.Vendor.read("react-using-lib")
+
+      assert code =~ ~r/from "\/@vendor\/react\.js\?v=[a-f0-9]+"/
+      refute code =~ ~s(from "react")
+      refute code =~ ~s(from 'react')
+
+      {:ok, react_proxy} =
+        Volt.JS.Vendor.bundle_on_demand("react", @node_modules, plugins: [Volt.Plugin.React])
+
+      assert react_proxy =~ ~r/export \{[^}]*act/s
+    end
   end
 
   describe "CJS package bundling" do
