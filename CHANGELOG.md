@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.1
+
+### Fixed
+
+- Development vendor prebundling now uses one multi-entry OXC bundle so shared singleton dependencies, such as CodeMirror packages, are loaded only once.
+- Development vendor chunk files emitted by the optimizer are now served from the vendor cache.
+
+### Changed
+
+- Upgraded `oxc` to 0.16.0 and `quickbeam` to 0.10.16.
+
 ## 0.14.0
 
 ### Added
