@@ -50,6 +50,33 @@ defmodule Volt.JS.VendorTest do
       assert File.regular?("_build/volt/vendor/fake-lib.js")
     end
 
+    test "does not scan into node_modules under the root" do
+      # A real package referenced only from *inside* node_modules.
+      File.mkdir_p!(Path.join(@node_modules, "nested-only"))
+
+      File.write!(
+        Path.join(@node_modules, "nested-only/package.json"),
+        :json.encode(%{"name" => "nested-only", "main" => "index.js"})
+      )
+
+      File.write!(Path.join(@node_modules, "nested-only/index.js"), "export const x = 1;")
+
+      File.write!(
+        Path.join(@node_modules, "fake-lib/extra.js"),
+        "import { x } from 'nested-only'\nexport { x }\n"
+      )
+
+      # Scan the whole fixture, which contains both src/ and node_modules/.
+      {:ok, vendor_map} =
+        Volt.JS.Vendor.prebundle(root: @fixture_dir, node_modules: @node_modules)
+
+      # The app's own bare import is still detected...
+      assert Map.has_key?(vendor_map, "fake-lib")
+      # ...but an import that only appears *inside* node_modules is not, since the
+      # scan must not crawl dependency trees (thousands of files in real apps).
+      refute Map.has_key?(vendor_map, "nested-only")
+    end
+
     test "optimizes multiple packages in one shared dependency graph" do
       File.mkdir_p!(Path.join(@node_modules, "editor-a"))
       File.mkdir_p!(Path.join(@node_modules, "editor-b"))

@@ -135,11 +135,15 @@ defmodule Volt.JS.Vendor do
 
   # ── Scanning ──────────────────────────────────────────────────────
 
+  # Directories never worth scanning for app imports. node_modules is the
+  # critical one: it can hold thousands of files (e.g. React + react-dom), and
+  # this scan re-runs frequently in dev — globbing into it made every asset
+  # request take seconds. A vendor's own imports are handled when it is bundled.
+  @scan_skip_dirs ~w(node_modules _build deps .git)
+
   defp scan_bare_imports(root, plugins) do
-    source_files =
-      Volt.JS.Extensions.scannable(plugins)
-      |> Enum.flat_map(fn ext -> Path.wildcard(Path.join(root, "**/*" <> ext)) end)
-      |> Enum.uniq()
+    exts = Volt.JS.Extensions.scannable(plugins)
+    source_files = collect_source_files(root, exts)
 
     specifiers =
       Enum.flat_map(source_files, fn file ->
@@ -152,6 +156,29 @@ defmodule Volt.JS.Vendor do
       end)
 
     {:ok, specifiers}
+  end
+
+  defp collect_source_files(dir, exts) do
+    case File.ls(dir) do
+      {:ok, entries} ->
+        Enum.flat_map(entries, fn entry ->
+          path = Path.join(dir, entry)
+
+          cond do
+            File.dir?(path) ->
+              if entry in @scan_skip_dirs, do: [], else: collect_source_files(path, exts)
+
+            Path.extname(entry) in exts ->
+              [path]
+
+            true ->
+              []
+          end
+        end)
+
+      {:error, _} ->
+        []
+    end
   end
 
   defp extract_imports(source, path, plugins) do
