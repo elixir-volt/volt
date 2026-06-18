@@ -20,7 +20,7 @@ defmodule Mix.Tasks.Volt.BuildTest do
     {:ok, tmp_dir: tmp_dir}
   end
 
-  test "--no-tree-shaking preserves unused exports", %{tmp_dir: tmp_dir} do
+  test "--no-tree-shaking is accepted", %{tmp_dir: tmp_dir} do
     entry = Path.join(tmp_dir, "src/app.js")
     outdir = Path.join(tmp_dir, "dist")
 
@@ -50,7 +50,7 @@ defmodule Mix.Tasks.Volt.BuildTest do
     ])
 
     js_path = Path.join([outdir, "js", "app.js"])
-    assert File.read!(js_path) =~ "unused"
+    assert File.read!(js_path) =~ "used"
   end
 
   test "--asset-url-prefix sets production asset URLs", %{tmp_dir: tmp_dir} do

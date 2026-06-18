@@ -50,6 +50,69 @@ defmodule Volt.JS.VendorTest do
       assert File.regular?("_build/volt/vendor/fake-lib.js")
     end
 
+    test "optimizes multiple packages in one shared dependency graph" do
+      File.mkdir_p!(Path.join(@node_modules, "editor-a"))
+      File.mkdir_p!(Path.join(@node_modules, "editor-b"))
+      File.mkdir_p!(Path.join(@node_modules, "singleton-state"))
+
+      File.write!(
+        Path.join(@node_modules, "editor-a/package.json"),
+        ~s({"name":"editor-a","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@node_modules, "editor-b/package.json"),
+        ~s({"name":"editor-b","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@node_modules, "singleton-state/package.json"),
+        ~s({"name":"singleton-state","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@node_modules, "editor-a/index.js"),
+        "import { state } from 'singleton-state'; export const a = state;"
+      )
+
+      File.write!(
+        Path.join(@node_modules, "editor-b/index.js"),
+        "import { state } from 'singleton-state'; export const b = state;"
+      )
+
+      File.write!(
+        Path.join(@node_modules, "singleton-state/index.js"),
+        "export const state = { singleton: true };"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "src/app.ts"),
+        "import { a } from 'editor-a'; import { b } from 'editor-b'; console.log(a, b);"
+      )
+
+      {:ok, vendor_map} =
+        Volt.JS.Vendor.prebundle(
+          root: Path.join(@fixture_dir, "src"),
+          node_modules: @node_modules
+        )
+
+      assert Map.has_key?(vendor_map, "editor-a")
+      assert Map.has_key?(vendor_map, "editor-b")
+
+      {:ok, editor_a} = Volt.JS.Vendor.read("editor-a")
+      {:ok, editor_b} = Volt.JS.Vendor.read("editor-b")
+
+      assert [chunk] =
+               [editor_a, editor_b]
+               |> Enum.flat_map(&Regex.scan(~r{\.\/chunks\/[^"']+\.js}, &1))
+               |> List.flatten()
+               |> Enum.uniq()
+
+      chunk_specifier = chunk |> String.trim_leading("./") |> String.trim_trailing(".js")
+      {:ok, shared_chunk} = Volt.JS.Vendor.read(chunk_specifier)
+      assert shared_chunk =~ "singleton"
+    end
+
     test "skips relative imports" do
       File.write!(
         Path.join(@fixture_dir, "src/local.ts"),
@@ -282,7 +345,7 @@ defmodule Volt.JS.VendorTest do
 
       {:ok, code} = Volt.JS.Vendor.read("dep-b")
       assert code =~ "require_dep_a"
-      assert code =~ "exports.b = a.a + 1"
+      assert code =~ "exports.b = require_dep_a().a + 1"
     end
   end
 

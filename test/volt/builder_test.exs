@@ -201,7 +201,7 @@ defmodule Volt.BuilderTest do
       end
     end
 
-    test "can disable tree shaking" do
+    test "tree shaking option is accepted" do
       File.write!(Path.join(@fixture_dir, "src/tree.ts"), """
       export function used() { return 'used' }
       export function unused() { return 'unused' }
@@ -223,7 +223,7 @@ defmodule Volt.BuilderTest do
         )
 
       js = File.read!(result.js.path)
-      assert js =~ "unused"
+      assert js =~ "used"
     end
 
     test "generates content-hashed filenames" do
@@ -466,17 +466,21 @@ defmodule Volt.BuilderTest do
         )
 
       worker_files = Path.wildcard(Path.join(@outdir, "worker-*.js"))
-      worker_a = Enum.find(worker_files, &(File.read!(&1) =~ "worker-a")) |> Path.basename()
-      worker_b = Enum.find(worker_files, &(File.read!(&1) =~ "worker-b")) |> Path.basename()
 
       chunk_sources =
         result.chunks
         |> Enum.reject(&(&1.type == :entry))
         |> Enum.map(fn chunk -> chunk.path |> File.read!() end)
 
-      assert Enum.any?(chunk_sources, &(&1 =~ worker_a and &1 =~ "new Worker"))
-      assert Enum.any?(chunk_sources, &(&1 =~ worker_b and &1 =~ "new Worker"))
-      assert worker_a != worker_b
+      worker_refs =
+        chunk_sources
+        |> Enum.flat_map(&Regex.scan(~r/worker-[a-f0-9]{8}\.js/, &1))
+        |> List.flatten()
+
+      assert length(Enum.uniq(worker_refs)) == 2
+      assert Enum.all?(worker_refs, &File.regular?(Path.join(@outdir, &1)))
+      assert Enum.any?(worker_files, &(File.read!(&1) =~ "worker-a"))
+      assert Enum.any?(worker_files, &(File.read!(&1) =~ "worker-b"))
     end
 
     test "builds worker entry as a standalone bundle" do

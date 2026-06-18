@@ -68,6 +68,60 @@ defmodule Volt.DevServerTest do
   end
 
   describe "vendor modules" do
+    test "serves shared optimized dependency chunks" do
+      for package <- ["editor-a", "editor-b", "singleton-state"] do
+        File.mkdir_p!(Path.join(@fixture_dir, "node_modules/#{package}"))
+
+        File.write!(
+          Path.join(@fixture_dir, "node_modules/#{package}/package.json"),
+          Jason.encode!(%{"name" => package, "main" => "index.js"})
+        )
+      end
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/editor-a/index.js"),
+        "import { state } from 'singleton-state'; export const a = state;"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/editor-b/index.js"),
+        "import { state } from 'singleton-state'; export const b = state;"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/singleton-state/index.js"),
+        "export const state = { singleton: true };"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "src/app.ts"),
+        "import { a } from 'editor-a'; import { b } from 'editor-b'; console.log(a, b);"
+      )
+
+      app_conn =
+        call_dev_server("/assets/app.ts", node_modules: Path.join(@fixture_dir, "node_modules"))
+
+      assert app_conn.status == 200
+
+      assert [vendor_url] = Regex.run(~r(/@vendor/editor-a\.js\?v=[a-f0-9]+), app_conn.resp_body)
+
+      vendor_conn =
+        call_dev_server(vendor_url, node_modules: Path.join(@fixture_dir, "node_modules"))
+
+      assert vendor_conn.status == 200
+
+      assert [[_, chunk_path]] =
+               Regex.scan(~r{from "\./(chunks/[^"']+\.js)"}, vendor_conn.resp_body)
+
+      chunk_conn =
+        call_dev_server("/@vendor/#{chunk_path}",
+          node_modules: Path.join(@fixture_dir, "node_modules")
+        )
+
+      assert chunk_conn.status == 200
+      assert chunk_conn.resp_body =~ "singleton"
+    end
+
     test "rejects stale optimized dependency browser hashes" do
       node_modules = Path.join(@fixture_dir, "node_modules/fake-lib")
       File.mkdir_p!(node_modules)

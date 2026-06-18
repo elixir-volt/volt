@@ -15,6 +15,8 @@ defmodule Volt.JS.Vendor do
 
   require Logger
 
+  alias OXC.Bundle
+
   defp cache_dir do
     build_path = System.get_env("MIX_BUILD_PATH") || "_build"
     Path.join(build_path, "volt/vendor")
@@ -44,18 +46,12 @@ defmodule Volt.JS.Vendor do
 
     with {:ok, specifiers} <- scan_bare_imports(root, plugins),
          :ok <- ensure_cache_dir() do
-      vendor_map =
+      specifiers =
         specifiers
         |> Enum.map(&Volt.PluginRunner.prebundle_alias(plugins, &1))
         |> Enum.uniq()
-        |> Enum.reduce(%{}, fn spec, acc ->
-          case safe_bundle_vendor(spec, module_dirs, force, plugins, module_types) do
-            {:ok, path} -> Map.put(acc, spec, path)
-            {:error, _} -> acc
-          end
-        end)
 
-      {:ok, vendor_map}
+      prebundle_vendors(specifiers, module_dirs, force, plugins, module_types)
     end
   end
 
@@ -122,6 +118,8 @@ defmodule Volt.JS.Vendor do
 
   @doc "Read a pre-bundled vendor file when its cache signature matches the current options."
   @spec read(String.t(), keyword()) :: {:ok, String.t()} | {:error, :not_found}
+  def read("chunks/" <> _ = specifier, _opts), do: read_cached(specifier)
+
   def read(specifier, opts) do
     {plugins, resolve_dirs, module_types} = normalize_on_demand_opts(opts)
     node_modules = Keyword.get(opts, :node_modules)
@@ -166,15 +164,127 @@ defmodule Volt.JS.Vendor do
 
   # ── Bundling ──────────────────────────────────────────────────────
 
-  defp safe_bundle_vendor(specifier, module_dirs, force, plugins, module_types) do
-    bundle_vendor(specifier, module_dirs, force, plugins, module_types)
+  defp prebundle_vendors([], _module_dirs, _force, _plugins, _module_types), do: {:ok, %{}}
+
+  defp prebundle_vendors(specifiers, module_dirs, force, plugins, module_types) do
+    vendor_map = Map.new(specifiers, &{&1, cache_path(&1)})
+
+    if not force and Enum.all?(specifiers, &cache_fresh?(&1, module_dirs, plugins, module_types)) do
+      {:ok, vendor_map}
+    else
+      safe_bundle_vendors(specifiers, module_dirs, plugins, module_types, vendor_map)
+    end
+  end
+
+  defp safe_bundle_vendors(specifiers, module_dirs, plugins, module_types, vendor_map) do
+    bundle_vendors(specifiers, module_dirs, plugins, module_types, vendor_map)
   rescue
     exception ->
       Logger.debug(
-        "[Volt] Vendor prebundle skipped #{specifier}: #{Exception.message(exception)}"
+        "[Volt] Vendor prebundle fell back to per-package bundling: #{Exception.message(exception)}"
       )
 
-      {:error, exception}
+      fallback_bundle_vendors(specifiers, module_dirs, plugins, module_types)
+  end
+
+  defp bundle_vendors(specifiers, module_dirs, plugins, module_types, vendor_map) do
+    entries =
+      specifiers
+      |> Enum.map(&bundle_entry_for(&1, module_dirs, plugins))
+      |> Enum.flat_map(fn
+        {:ok, specifier, entry} -> [{specifier, entry}]
+        {:error, _} -> []
+      end)
+
+    case entries do
+      [] ->
+        {:ok, %{}}
+
+      entries ->
+        run_vendor_bundle(entries, specifiers, module_dirs, plugins, module_types, vendor_map)
+    end
+  end
+
+  defp run_vendor_bundle(entries, specifiers, module_dirs, plugins, module_types, vendor_map) do
+    bundled_specifiers = Enum.map(entries, fn {specifier, _entry} -> specifier end)
+    bundle_entries = Enum.map(entries, fn {_specifier, entry} -> entry end)
+
+    bundle =
+      Bundle.new()
+      |> Bundle.entries(bundle_entries)
+      |> Bundle.cwd(project_root(module_dirs))
+      |> Bundle.outdir(cache_dir())
+      |> Bundle.format(:esm)
+      |> Bundle.resolve(
+        conditions: Volt.JS.Resolution.browser_conditions(),
+        modules: module_dirs
+      )
+      |> Bundle.transform(
+        define: %{"process.env.NODE_ENV" => ~s("development")},
+        module_types: module_types
+      )
+      |> Bundle.output(
+        entry_file_names: "[name].js",
+        chunk_file_names: "chunks/[name]-[hash].js",
+        exports: :named,
+        preserve_entry_signatures: :strict
+      )
+
+    case Bundle.run(bundle) do
+      {:ok, _result} ->
+        write_vendor_cache_metadata(bundled_specifiers, module_dirs, plugins, module_types)
+        {:ok, Map.take(vendor_map, bundled_specifiers)}
+
+      {:error, errors} ->
+        Logger.debug("[Volt] Vendor multi-entry prebundle failed: #{inspect(errors)}")
+        fallback_bundle_vendors(specifiers, module_dirs, plugins, module_types)
+    end
+  end
+
+  defp write_vendor_cache_metadata(specifiers, module_dirs, plugins, module_types) do
+    Enum.each(specifiers, fn specifier ->
+      if File.regular?(cache_path(specifier)) do
+        File.write!(
+          cache_meta_path(specifier),
+          cache_signature(specifier, module_dirs, plugins, module_types)
+        )
+      end
+    end)
+  end
+
+  defp fallback_bundle_vendors(specifiers, module_dirs, plugins, module_types) do
+    specifiers
+    |> Enum.reduce(%{}, fn specifier, acc ->
+      case bundle_vendor(specifier, module_dirs, false, plugins, module_types) do
+        {:ok, path} -> Map.put(acc, specifier, path)
+        {:error, _} -> acc
+      end
+    end)
+    |> then(&{:ok, &1})
+  end
+
+  defp bundle_entry_for(specifier, module_dirs, plugins) do
+    case Volt.PluginRunner.prebundle_entry(plugins, specifier) do
+      {:source, filename, source} ->
+        {:ok, specifier, %{name: encode_specifier(specifier), import: filename, source: source}}
+
+      {:proxy, filename, _opts} = entry ->
+        {:ok, specifier,
+         %{
+           name: encode_specifier(specifier),
+           import: filename,
+           source: Volt.JS.PrebundleEntry.source(entry)
+         }}
+
+      nil ->
+        case resolve_package_entry(specifier, module_dirs) do
+          {:ok, entry_path} ->
+            {:ok, specifier, %{name: encode_specifier(specifier), import: entry_path}}
+
+          :error ->
+            {:error, {:not_found, specifier}}
+        end
+    end
   end
 
   defp bundle_vendor(specifier, module_dirs, force, plugins, module_types) do
@@ -388,6 +498,15 @@ defmodule Volt.JS.Vendor do
   defp ensure_cache_dir do
     File.mkdir_p!(cache_dir())
     :ok
+  end
+
+  defp read_cached("chunks/" <> _ = specifier) do
+    Path.join(cache_dir(), specifier <> ".js")
+    |> File.read()
+    |> case do
+      {:ok, _} = ok -> ok
+      {:error, _} -> {:error, :not_found}
+    end
   end
 
   defp read_cached(specifier) do
