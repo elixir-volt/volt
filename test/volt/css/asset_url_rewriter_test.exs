@@ -112,6 +112,21 @@ defmodule Volt.CSS.AssetURLRewriterTest do
     assert css =~ ~r/\/assets\/two-[a-f0-9]{8}\.png/
   end
 
+  test "rewrites Monaco-style CSS without AST print roundtrip" do
+    File.write!(Path.join(@fixture_dir, "src/codicon.ttf"), "font")
+    source_path = Path.join(@fixture_dir, "src/editor.main.css")
+
+    css =
+      ".x{left:calc(var(--vscode-sash-size)*-.5)}" <>
+        "@font-face{src:url(codicon.ttf)}"
+
+    {:ok, result} = Volt.CSS.AssetURLRewriter.rewrite_with_assets(css, source_path, @outdir)
+
+    assert result.code =~ "calc(var(--vscode-sash-size)*-.5)"
+    assert result.code =~ ~r/\/assets\/codicon-[a-f0-9]{8}\.ttf/
+    assert [%{src: "codicon.ttf"}] = result.assets
+  end
+
   test "leaves external, absolute, data, and unknown URLs unchanged" do
     source_path = Path.join(@fixture_dir, "src/app.css")
 

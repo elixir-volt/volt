@@ -2,8 +2,8 @@ defmodule Volt.CSS.AssetURLRewriter do
   @moduledoc """
   Parser-backed CSS asset URL rewriting for production builds.
 
-  Uses Vize/LightningCSS to parse CSS into an AST, rewrites URL nodes, and
-  prints the transformed AST back to CSS.
+  Uses Vize/LightningCSS to collect parser-backed URL ranges, then patches the
+  original source without round-tripping through the serialized CSS AST.
   """
 
   @type rewrite_result :: {:ok, String.t()} | {:error, term()}
@@ -26,11 +26,15 @@ defmodule Volt.CSS.AssetURLRewriter do
   def rewrite_with_assets(css, nil, _outdir, _opts), do: {:ok, %{code: css, assets: []}}
 
   def rewrite_with_assets(css, source_path, outdir, opts) do
-    with {:ok, %{code: code, metadata: assets}} <-
-           Volt.CSS.AST.transform(css, source_path, fn ast ->
-             rewrite_build_ast(ast, source_path, outdir, opts)
+    prefix = Keyword.get(opts, :prefix, Volt.Paths.prefix())
+
+    with {:ok, code, {assets, _emitted}} <-
+           rewrite_urls(css, [filename: source_path], {[], %{}}, fn url, state ->
+             rewrite_build_url(url, state, source_path, outdir, prefix, opts)
            end) do
-      {:ok, %{code: code, assets: assets}}
+      {:ok, %{code: code, assets: Enum.reverse(assets)}}
+    else
+      {:error, reason} -> {:error, {:css_parse_failed, reason}}
     end
   end
 
@@ -39,39 +43,28 @@ defmodule Volt.CSS.AssetURLRewriter do
   def rewrite_dev(css, nil, _root, _prefix), do: {:ok, css}
 
   def rewrite_dev(css, source_path, root, prefix) do
-    with {:ok, %{code: code}} <-
-           Volt.CSS.AST.transform(css, source_path, fn ast ->
-             {rewrite_dev_ast(ast, source_path, root, prefix), []}
+    with {:ok, css} <-
+           Vize.CSS.rewrite_urls(css, [filename: source_path], fn url ->
+             case dev_url(url, source_path, root, prefix) do
+               {:ok, ^url} -> :keep
+               {:ok, rewritten} -> {:rewrite, rewritten}
+             end
            end) do
-      {:ok, code}
+      {:ok, css}
+    else
+      {:error, reason} -> {:error, {:css_parse_failed, reason}}
     end
   end
 
-  defp rewrite_build_ast(ast, source_path, outdir, opts) do
-    prefix = Keyword.get(opts, :prefix, Volt.Paths.prefix())
+  defp rewrite_build_url(url, {assets, emitted}, source_path, outdir, prefix, opts) do
+    case build_url(url, source_path, outdir, prefix, emitted, opts) do
+      {:ok, ^url, emitted, _asset} ->
+        {:keep, {assets, emitted}}
 
-    {ast, {assets, _emitted}} =
-      Volt.CSS.AST.postwalk_urls(ast, {[], %{}}, fn url, node, {assets, emitted} ->
-        case build_url(url, source_path, outdir, prefix, emitted, opts) do
-          {:ok, ^url, emitted, _asset} ->
-            {node, {assets, emitted}}
-
-          {:ok, rewritten, emitted, asset} ->
-            assets = if asset in assets, do: assets, else: [asset | assets]
-            {Map.put(node, "url", rewritten), {assets, emitted}}
-        end
-      end)
-
-    {ast, Enum.reverse(assets)}
-  end
-
-  defp rewrite_dev_ast(ast, source_path, root, prefix) do
-    Volt.CSS.AST.postwalk_urls(ast, fn url, node ->
-      case dev_url(url, source_path, root, prefix) do
-        {:ok, ^url} -> node
-        {:ok, rewritten} -> Map.put(node, "url", rewritten)
-      end
-    end)
+      {:ok, rewritten, emitted, asset} ->
+        assets = if asset in assets, do: assets, else: [asset | assets]
+        {{:rewrite, rewritten}, {assets, emitted}}
+    end
   end
 
   defp build_url(url, source_path, outdir, prefix, emitted, opts) do
@@ -130,5 +123,23 @@ defmodule Volt.CSS.AssetURLRewriter do
     path
     |> Volt.URL.append_query(query)
     |> Volt.URL.append_fragment(fragment)
+  end
+
+  defp rewrite_urls(css, opts, state, fun) do
+    {:ok, agent} = Agent.start_link(fn -> state end)
+
+    try do
+      case Vize.CSS.rewrite_urls(css, opts, fn url ->
+             Agent.get_and_update(agent, fn state ->
+               {action, state} = fun.(url, state)
+               {action, state}
+             end)
+           end) do
+        {:ok, css} -> {:ok, css, Agent.get(agent, & &1)}
+        {:error, reason} -> {:error, reason}
+      end
+    after
+      Agent.stop(agent)
+    end
   end
 end

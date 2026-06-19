@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.3
+
+### Fixed
+
+- CSS asset URL rewriting now uses Vize's parser-backed source rewrite API, avoiding LightningCSS AST print failures on Monaco Editor CSS while preserving font asset hashing.
+
+### Changed
+
+- Upgraded `vize` to 0.12.0.
+
 ## 0.14.2
 
 ### Fixed
