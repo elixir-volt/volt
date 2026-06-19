@@ -140,7 +140,10 @@ defmodule Volt.Plugin.Solid do
   end
 
   defp extract_typed_imports(source, filename) do
-    Volt.JS.ImportExtractor.extract_typed(source, filename, ignore_type_only: true)
+    Volt.JS.ImportExtractor.extract_typed(source, filename,
+      ignore_type_only: true,
+      include_require: true
+    )
   end
 
   defp encode_sourcemap(_map, true), do: nil

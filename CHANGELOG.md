@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.6
+
+### Changed
+
+- Upgraded `oxc` to 0.17.1 and `quickbeam` to 0.10.18.
+- Dynamic import variable rewriting and CommonJS `require()` import extraction now use parser-backed OXC selectors instead of full AST parse/postwalk passes.
+
 ## 0.14.5
 
 ### Changed

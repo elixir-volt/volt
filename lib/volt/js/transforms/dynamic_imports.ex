@@ -23,9 +23,9 @@ defmodule Volt.JS.Transforms.DynamicImports do
   """
   @spec transform(String.t(), String.t()) :: String.t()
   def transform(source, filename \\ "dynamic-import-vars.ts") do
-    case OXC.parse(source, filename) do
-      {:ok, ast} ->
-        rewrites = collect_rewrites(ast, source)
+    case OXC.select(source, filename, :dynamic_import_templates) do
+      {:ok, refs} ->
+        rewrites = collect_rewrites(refs, source)
         if rewrites == [], do: source, else: apply_rewrites(source, rewrites)
 
       {:error, _} ->
@@ -33,38 +33,28 @@ defmodule Volt.JS.Transforms.DynamicImports do
     end
   end
 
-  defp collect_rewrites(ast, source) do
-    {_ast, rewrites} =
-      OXC.postwalk(ast, [], fn node, acc ->
-        case dynamic_import_rewrite(node, source, length(acc)) do
-          {:ok, rewrite} -> {node, [rewrite | acc]}
-          :skip -> {node, acc}
-        end
-      end)
-
-    rewrites
+  defp collect_rewrites(refs, source) do
+    refs
+    |> Enum.reduce([], fn ref, acc ->
+      case dynamic_import_rewrite(ref, source) do
+        {:ok, rewrite} -> [rewrite | acc]
+        :skip -> acc
+      end
+    end)
     |> Enum.reverse()
     |> Enum.with_index()
     |> Enum.map(fn {rewrite, index} -> %{rewrite | index: index} end)
   end
 
-  defp dynamic_import_rewrite(
-         %{
-           type: :import_expression,
-           options: nil,
-           source: %{type: :template_literal} = source_node
-         } = node,
-         source,
-         _index
-       ) do
-    with {:ok, pattern} <- glob_pattern(source_node),
-         {path_pattern, query} <- Volt.URL.split_query(pattern),
+  defp dynamic_import_rewrite(ref, source) do
+    with {path_pattern, query} <- Volt.URL.split_query(ref.pattern),
          true <- relative_pattern?(path_pattern) do
       {:ok,
        %Volt.JS.Transforms.DynamicImports.Replacement{
-         start: node.start,
-         end: node.end,
-         template: String.slice(source, source_node.start, source_node.end - source_node.start),
+         start: ref.start,
+         end: ref.end,
+         template:
+           String.slice(source, ref.template_start, ref.template_end - ref.template_start),
          pattern: path_pattern,
          query: query
        }}
@@ -72,22 +62,6 @@ defmodule Volt.JS.Transforms.DynamicImports do
       _ -> :skip
     end
   end
-
-  defp dynamic_import_rewrite(_node, _source, _index), do: :skip
-
-  defp glob_pattern(%{quasis: quasis, expressions: expressions}) when expressions != [] do
-    pattern =
-      quasis
-      |> Enum.map(fn quasi ->
-        get_in(quasi, [:value, :cooked]) || get_in(quasi, [:value, :raw]) || ""
-      end)
-      |> Enum.intersperse("*")
-      |> IO.iodata_to_binary()
-
-    {:ok, pattern}
-  end
-
-  defp glob_pattern(_node), do: :skip
 
   defp relative_pattern?("./" <> _), do: true
   defp relative_pattern?("../" <> _), do: true
