@@ -25,3 +25,5 @@ volt-*.tar
 
 
 
+# Git worktrees for parallel agent work
+.worktrees/
