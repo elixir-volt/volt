@@ -89,7 +89,7 @@ defmodule Volt.Builder.Writer do
 
   defp rewrite_css_part({source_path, css}, outdir, bundle_opts) do
     Volt.CSS.AssetURLRewriter.rewrite_with_assets(css, source_path, outdir,
-      prefix: Keyword.get(bundle_opts, :asset_url_prefix, "/assets"),
+      prefix: Keyword.get(bundle_opts, :asset_url_prefix, Volt.Paths.prefix()),
       root: Keyword.get(bundle_opts, :root)
     )
   end

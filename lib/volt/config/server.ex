@@ -1,5 +1,5 @@
 defmodule Volt.Config.Server do
   @moduledoc "Normalized development server configuration."
 
-  defstruct prefix: "/assets", watch_dirs: []
+  defstruct prefix: Volt.Paths.prefix(), watch_dirs: []
 end

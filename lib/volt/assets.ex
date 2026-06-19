@@ -160,7 +160,7 @@ defmodule Volt.Assets do
   end
 
   defp reference_asset(path, opts) do
-    prefix = Keyword.get(opts, :prefix, "/assets")
+    prefix = Keyword.get(opts, :prefix, Volt.Paths.prefix())
 
     case Keyword.get(opts, :outdir) do
       nil ->

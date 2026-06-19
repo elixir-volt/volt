@@ -30,7 +30,7 @@ defmodule Volt.Preload do
   end
 
   def tags(manifest, opts) when is_map(manifest) do
-    prefix = Keyword.get(opts, :prefix, "/assets")
+    prefix = Keyword.get(opts, :prefix, Volt.Paths.prefix())
 
     manifest
     |> preload_files(Keyword.get(opts, :entry))

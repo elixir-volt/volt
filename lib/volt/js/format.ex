@@ -61,7 +61,7 @@ defmodule Volt.JS.Format do
 
     search_dirs = [
       root,
-      Path.join(root, "assets")
+      Path.join(root, Volt.Paths.assets())
     ]
 
     Enum.find_value(search_dirs, fn dir ->

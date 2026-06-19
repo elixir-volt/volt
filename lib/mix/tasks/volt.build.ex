@@ -174,8 +174,8 @@ defmodule Mix.Tasks.Volt.Build do
         [] ->
           tailwind_config[:sources] ||
             [
-              %{base: "lib/", pattern: "**/*.{ex,heex}"},
-              %{base: "assets/", pattern: "**/*.{vue,ts,tsx,js,jsx}"}
+              %{base: Volt.Paths.lib(), pattern: "**/*.{ex,heex}"},
+              %{base: Volt.Paths.assets_dir(), pattern: "**/*.{vue,ts,tsx,js,jsx}"}
             ]
 
         list ->

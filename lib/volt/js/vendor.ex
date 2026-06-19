@@ -135,12 +135,6 @@ defmodule Volt.JS.Vendor do
 
   # ── Scanning ──────────────────────────────────────────────────────
 
-  # Directories never worth scanning for app imports. node_modules is the
-  # critical one: it can hold thousands of files (e.g. React + react-dom), and
-  # this scan re-runs frequently in dev — globbing into it made every asset
-  # request take seconds. A vendor's own imports are handled when it is bundled.
-  @scan_skip_dirs ~w(node_modules _build deps .git)
-
   defp scan_bare_imports(root, plugins) do
     exts = Volt.JS.Extensions.scannable(plugins)
     source_files = collect_source_files(root, exts)
@@ -166,7 +160,9 @@ defmodule Volt.JS.Vendor do
 
           cond do
             File.dir?(path) ->
-              if entry in @scan_skip_dirs, do: [], else: collect_source_files(path, exts)
+              if entry in Volt.Paths.ignored_dirs(),
+                do: [],
+                else: collect_source_files(path, exts)
 
             Path.extname(entry) in exts ->
               [path]

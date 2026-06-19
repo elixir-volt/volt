@@ -3,7 +3,7 @@ defmodule Volt.DevServer.Config do
 
   defstruct root: nil,
             public_dir: nil,
-            prefix: "/assets",
+            prefix: Volt.Paths.prefix(),
             target: "",
             import_source: nil,
             vapor: false,

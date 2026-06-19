@@ -59,7 +59,7 @@ defmodule Volt.Builder do
   @spec build(keyword()) :: {:ok, build_result()} | {:error, term()}
   def build(opts) do
     entries = opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&Path.expand/1)
-    outdir = Keyword.get(opts, :outdir, "priv/static/assets") |> Path.expand()
+    outdir = Keyword.get(opts, :outdir, Volt.Paths.static()) |> Path.expand()
     public_dir = opts |> Keyword.get(:public_dir, false) |> Volt.PublicDir.resolve()
     target = opts |> Keyword.get(:target, "") |> to_string()
     minify = Keyword.get(opts, :minify, true)
@@ -68,7 +68,7 @@ defmodule Volt.Builder do
     define = Keyword.get(opts, :define, %{})
     mode = Keyword.get(opts, :mode, "production")
     env_prefix = Keyword.get(opts, :env_prefix, "VOLT_")
-    asset_url_prefix = Keyword.get(opts, :asset_url_prefix, "/assets")
+    asset_url_prefix = Keyword.get(opts, :asset_url_prefix, Volt.Paths.prefix())
     aliases = Keyword.get(opts, :aliases, %{})
     plugins = Keyword.get(opts, :plugins, [])
     code_splitting = Keyword.get(opts, :code_splitting, true)
@@ -89,7 +89,7 @@ defmodule Volt.Builder do
     module_types = Keyword.get(opts, :module_types, %{})
     import_source = opts |> Keyword.get(:import_source) |> to_string_or_nil()
     hash = Keyword.get(opts, :hash, true)
-    asset_root = Keyword.get(opts, :root, "assets")
+    asset_root = Keyword.get(opts, :root, Volt.Paths.assets())
     name = Keyword.get(opts, :name)
 
     env_define = Volt.Env.define(mode: mode, root: File.cwd!(), env_prefix: env_prefix)

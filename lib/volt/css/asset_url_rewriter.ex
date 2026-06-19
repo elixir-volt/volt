@@ -48,7 +48,7 @@ defmodule Volt.CSS.AssetURLRewriter do
   end
 
   defp rewrite_build_ast(ast, source_path, outdir, opts) do
-    prefix = Keyword.get(opts, :prefix, "/assets")
+    prefix = Keyword.get(opts, :prefix, Volt.Paths.prefix())
 
     {ast, {assets, _emitted}} =
       Volt.CSS.AST.postwalk_urls(ast, {[], %{}}, fn url, node, {assets, emitted} ->
