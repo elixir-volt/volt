@@ -23,11 +23,9 @@ defmodule Volt.Formatter do
 
   @behaviour Mix.Tasks.Format
 
-  @extensions ~w(.js .ts .jsx .tsx .mjs .mts)
-
   @impl true
   def features(_opts) do
-    [extensions: @extensions]
+    [extensions: Volt.JS.Extensions.formattable()]
   end
 
   @impl true

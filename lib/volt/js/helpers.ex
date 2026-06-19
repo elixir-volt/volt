@@ -1,8 +1,6 @@
 defmodule Volt.JS.Helpers do
   @moduledoc "Shared JavaScript file discovery helpers for Mix tasks."
 
-  @format_extensions ~w(.js .ts .jsx .tsx)
-
   def discover_files(opts \\ []) do
     config = Volt.Config.build()
     root = config.root
@@ -35,6 +33,6 @@ defmodule Volt.JS.Helpers do
   end
 
   def discover_format_files do
-    discover_files(only: @format_extensions)
+    discover_files(only: Volt.JS.Extensions.formattable())
   end
 end
