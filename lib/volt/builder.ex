@@ -404,12 +404,9 @@ defmodule Volt.Builder do
   defp rewrite_imports_to_labels(code, label_map, from_label, global_map) do
     code = rewrite_dynamic_css_imports(code)
 
-    # `Volt.JS.Transforms.Specifiers.rewrite/4` rewrites ESM import/export AND CJS
-    # `require()` specifiers; the native `OXC.rewrite_specifiers/3` only handles the
-    # ESM forms, leaving `require()` calls untouched. CJS packages reach this step
-    # with internal `require()` calls (e.g. react-dom's `require("scheduler")`), so
-    # using the require-aware rewriter keeps those pointed at the bundled modules
-    # instead of leaking runtime `require()` calls into the browser output.
+    # Use Volt's require-aware rewriter; OXC.rewrite_specifiers/3 only handles
+    # ESM import/export forms, so CJS package internals could otherwise leak
+    # runtime require() calls into browser output.
     rewrite_fun = fn specifier, _importer, _ctx ->
       case rewrite_specifier(specifier, label_map, from_label, global_map) do
         {:rewrite, replacement} -> {:ok, replacement, specifier}

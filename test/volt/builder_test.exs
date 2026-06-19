@@ -1402,10 +1402,8 @@ defmodule Volt.BuilderTest do
         )
 
       js = File.read!(result.js.path)
-      # The dependency is bundled in, and the bare `require()` is rewritten to the
-      # bundled module rather than left as a runtime call that throws in browsers.
       assert js =~ "bundled-bare-cjs"
-      refute js =~ ~r/require\(\s*[`"']bare-cjs-dep[`"']\s*\)/
+      refute js =~ ~r/\brequire\s*\(/
     end
 
     test "resolves package subpath without exports field" do
