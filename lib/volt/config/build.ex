@@ -21,7 +21,7 @@ defmodule Volt.Config.Build do
             resolve_dirs: [],
             root: Volt.Paths.assets(),
             sources: ["**/*.{js,ts,jsx,tsx,vue}"],
-            ignore: Volt.Paths.ignored_globs() ++ ["vendor/**"],
+            ignore: ["vendor/**" | Volt.Paths.ignored_globs()],
             import_source: nil,
             vapor: false,
             custom_renderer: false,

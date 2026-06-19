@@ -33,6 +33,7 @@ if Code.ensure_loaded?(Igniter) do
     alias Igniter.Project.Config, as: ProjectConfig
     alias Igniter.Project.Deps, as: ProjectDeps
     alias Igniter.Project.Formatter, as: ProjectFormatter
+    alias Volt.Paths
     alias Igniter.Project.TaskAliases
 
     @impl Igniter.Mix.Task
@@ -130,7 +131,7 @@ if Code.ensure_loaded?(Igniter) do
 
       igniter
       |> ProjectConfig.configure("config.exs", :volt, [:entry], entry)
-      |> ProjectConfig.configure("config.exs", :volt, [:outdir], Volt.Paths.static())
+      |> ProjectConfig.configure("config.exs", :volt, [:outdir], Paths.static())
       |> ProjectConfig.configure("config.exs", :volt, [:target], :es2020)
       |> ProjectConfig.configure("config.exs", :volt, [:sourcemap], :hidden)
       |> ProjectConfig.configure(
@@ -212,7 +213,7 @@ if Code.ensure_loaded?(Igniter) do
 
       igniter
       |> ProjectConfig.configure("dev.exs", app_name, [endpoint, :watchers, :volt], watcher)
-      |> ProjectConfig.configure("dev.exs", :volt, [:server, :prefix], Volt.Paths.prefix())
+      |> ProjectConfig.configure("dev.exs", :volt, [:server, :prefix], Paths.prefix())
       |> ProjectConfig.configure(
         "dev.exs",
         :volt,
@@ -291,9 +292,9 @@ if Code.ensure_loaded?(Igniter) do
 
     defp detect_entry do
       cond do
-        File.exists?(Volt.Paths.entry()) -> Volt.Paths.entry()
+        File.exists?(Paths.entry()) -> Paths.entry()
         File.exists?("assets/js/app.js") -> "assets/js/app.js"
-        true -> Volt.Paths.entry()
+        true -> Paths.entry()
       end
     end
 

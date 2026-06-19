@@ -22,6 +22,7 @@ defmodule Mix.Tasks.Volt.Dev do
   use Mix.Task
 
   alias Volt.Config
+  alias Volt.Paths
 
   @impl true
   def run(args) do
@@ -59,7 +60,7 @@ defmodule Mix.Tasks.Volt.Dev do
         list -> list
       end
 
-    watch_dirs = if tailwind? and watch_dirs == [], do: [Volt.Paths.lib()], else: watch_dirs
+    watch_dirs = if tailwind? and watch_dirs == [], do: [Paths.lib()], else: watch_dirs
 
     tailwind_css = Keyword.get(parsed, :tailwind_css) || tailwind_config[:css]
 
@@ -72,7 +73,7 @@ defmodule Mix.Tasks.Volt.Dev do
       watch_dirs: watch_dirs,
       tailwind: tailwind?,
       tailwind_css: tailwind_css,
-      tailwind_outdir: Keyword.get(parsed, :tailwind_outdir, Volt.Paths.static_css()),
+      tailwind_outdir: Keyword.get(parsed, :tailwind_outdir, Paths.static_css()),
       target: target
     ]
 
@@ -93,8 +94,8 @@ defmodule Mix.Tasks.Volt.Dev do
     sources =
       tailwind_config[:sources] ||
         [
-          %{base: Volt.Paths.lib(), pattern: "**/*.{ex,heex,eex}"},
-          %{base: Volt.Paths.assets_dir(), pattern: "**/*.{vue,ts,tsx,js,jsx}"}
+          %{base: Paths.lib(), pattern: "**/*.{ex,heex,eex}"},
+          %{base: Paths.assets_dir(), pattern: "**/*.{vue,ts,tsx,js,jsx}"}
         ]
 
     {css_input, css_base} =
@@ -105,7 +106,7 @@ defmodule Mix.Tasks.Volt.Dev do
 
     case Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
       {:ok, css} ->
-        outdir = Keyword.get(parsed, :tailwind_outdir, Volt.Paths.static_css())
+        outdir = Keyword.get(parsed, :tailwind_outdir, Paths.static_css())
         File.mkdir_p!(outdir)
         File.write!(Path.join(outdir, "app.css"), css)
 

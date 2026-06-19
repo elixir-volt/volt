@@ -155,25 +155,21 @@ defmodule Volt.JS.Vendor do
   defp collect_source_files(dir, exts) do
     case File.ls(dir) do
       {:ok, entries} ->
-        Enum.flat_map(entries, fn entry ->
-          path = Path.join(dir, entry)
-
-          cond do
-            File.dir?(path) ->
-              if entry in Volt.Paths.ignored_dirs(),
-                do: [],
-                else: collect_source_files(path, exts)
-
-            Path.extname(entry) in exts ->
-              [path]
-
-            true ->
-              []
-          end
-        end)
+        Enum.flat_map(entries, &collect_source_entry(dir, &1, exts))
 
       {:error, _} ->
         []
+    end
+  end
+
+  defp collect_source_entry(dir, entry, exts) do
+    path = Path.join(dir, entry)
+
+    cond do
+      File.dir?(path) and entry in Volt.Paths.ignored_dirs() -> []
+      File.dir?(path) -> collect_source_files(path, exts)
+      Path.extname(entry) in exts -> [path]
+      true -> []
     end
   end
 
