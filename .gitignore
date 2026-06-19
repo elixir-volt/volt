@@ -22,6 +22,9 @@ volt-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+# Node tools used by local JS checks.
+/node_modules/
+
 
 
 

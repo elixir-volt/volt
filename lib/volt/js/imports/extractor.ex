@@ -6,23 +6,26 @@ defmodule Volt.JS.ImportExtractor do
 
   @spec extract_typed(String.t(), String.t(), keyword()) :: {:ok, result()} | {:error, term()}
   def extract_typed(source, filename, opts \\ []) do
-    if needs_postwalk?(source) do
+    if needs_postwalk?(source, opts) do
       extract_typed_slow(source, filename, opts)
     else
-      case OXC.collect_imports(source, filename) do
-        {:ok, imports} ->
-          typed = Enum.map(imports, &{&1.type, &1.specifier})
-          {:ok, %Volt.JS.ImportExtractor.Result{imports: typed, workers: []}}
-
-        {:error, _} = error ->
-          error
+      with {:ok, imports} <- OXC.select(source, filename, :import_sources),
+           {:ok, workers} <- select_workers(source, filename) do
+        typed = Enum.map(imports, &{&1.type, &1.specifier})
+        {:ok, %Volt.JS.ImportExtractor.Result{imports: typed, workers: workers}}
       end
     end
   end
 
-  defp needs_postwalk?(source) do
-    String.contains?(source, "require(") or String.contains?(source, "new Worker") or
-      String.contains?(source, "new SharedWorker")
+  defp needs_postwalk?(_source, opts) do
+    Keyword.get(opts, :ignore_type_only, false) or Keyword.get(opts, :include_require, false)
+  end
+
+  defp select_workers(source, filename) do
+    case OXC.select(source, filename, :workers) do
+      {:ok, workers} -> {:ok, Enum.map(workers, & &1.specifier)}
+      {:error, _} = error -> error
+    end
   end
 
   defp extract_typed_slow(source, filename, opts) do
@@ -60,24 +63,16 @@ defmodule Volt.JS.ImportExtractor do
               maybe_extract_require(node, acc)
           end)
 
-        {:ok,
-         %Volt.JS.ImportExtractor.Result{
-           imports: Enum.reverse(acc.imports),
-           workers: Enum.reverse(acc.workers)
-         }}
-
-      {:error, _} ->
-        case OXC.imports(source, filename) do
-          {:ok, specs} ->
-            {:ok,
-             %Volt.JS.ImportExtractor.Result{
-               imports: Enum.map(specs, &{:static, &1}),
-               workers: []
-             }}
-
-          error ->
-            error
+        with {:ok, workers} <- select_workers(source, filename) do
+          {:ok,
+           %Volt.JS.ImportExtractor.Result{
+             imports: Enum.reverse(acc.imports),
+             workers: workers
+           }}
         end
+
+      {:error, _} = error ->
+        error
     end
   end
 
@@ -87,27 +82,14 @@ defmodule Volt.JS.ImportExtractor do
         add_require_import(node, acc, Volt.JS.AST.string_literal_span(source))
 
       _ ->
-        maybe_extract_worker(node, acc)
+        {node, acc}
     end
   end
 
   defp add_require_import(node, acc, {:ok, spec, _start, _end}),
     do: {node, update_in(acc.imports, &[{:static, spec} | &1])}
 
-  defp add_require_import(node, acc, nil), do: maybe_extract_worker(node, acc)
-
-  defp maybe_extract_worker(node, acc) do
-    case Volt.JS.AST.new_arguments(node, ["Worker", "SharedWorker"]) do
-      {:ok, _worker_type, [first_arg | _]} ->
-        case Volt.JS.Transforms.Workers.extract_specifier(first_arg) do
-          {:ok, spec, _start, _end} -> {node, update_in(acc.workers, &[spec | &1])}
-          nil -> {node, acc}
-        end
-
-      _ ->
-        {node, acc}
-    end
-  end
+  defp add_require_import(node, acc, nil), do: {node, acc}
 
   defp add_import(node, acc, _import, true), do: {node, acc}
   defp add_import(node, acc, import, false), do: {node, update_in(acc.imports, &[import | &1])}

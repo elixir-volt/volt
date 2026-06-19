@@ -11,6 +11,8 @@ defmodule Volt.JS.Transforms.AssetURLs do
   rewritten. Absolute URLs, package URLs, and non-asset files are left unchanged.
   """
 
+  alias Volt.JS.Patch
+
   @doc """
   Rewrites matching asset URL constructors in `source`.
 
@@ -19,38 +21,13 @@ defmodule Volt.JS.Transforms.AssetURLs do
   """
   @spec rewrite(String.t(), String.t()) :: String.t()
   def rewrite(source, filename) do
-    case OXC.parse(source, filename) do
-      {:ok, ast} ->
-        rewrites = collect_rewrites(ast)
+    case OXC.select(source, filename, :asset_urls) do
+      {:ok, refs} ->
+        rewrites = Enum.filter(refs, &relative_asset_specifier?(&1.specifier))
         if rewrites == [], do: source, else: apply_rewrites(source, rewrites)
 
       {:error, _} ->
         source
-    end
-  end
-
-  defp collect_rewrites(ast) do
-    {_ast, rewrites} =
-      OXC.postwalk(ast, [], fn node, acc ->
-        case Volt.JS.AST.new_arguments(node, ["URL"]) do
-          {:ok, _name, [source_node, meta_url | _]} ->
-            maybe_collect_url_rewrite(node, source_node, meta_url, acc)
-
-          _ ->
-            {node, acc}
-        end
-      end)
-
-    Enum.reverse(rewrites)
-  end
-
-  defp maybe_collect_url_rewrite(node, source_node, meta_url, acc) do
-    with true <- Volt.JS.AST.import_meta_property?(meta_url, "url"),
-         {:ok, specifier, start_pos, end_pos} <- Volt.JS.AST.string_literal_span(source_node),
-         true <- relative_asset_specifier?(specifier) do
-      {node, [{specifier, start_pos, end_pos} | acc]}
-    else
-      _ -> {node, acc}
     end
   end
 
@@ -65,7 +42,8 @@ defmodule Volt.JS.Transforms.AssetURLs do
     {imports, patches} =
       rewrites
       |> Enum.with_index()
-      |> Enum.map_reduce([], fn {{specifier, start_pos, end_pos}, index}, patches ->
+      |> Enum.map_reduce([], fn {ref, index}, patches ->
+        specifier = Patch.selector_specifier(ref)
         ident = "__volt_asset_url_#{index}"
 
         import_line = [
@@ -76,10 +54,10 @@ defmodule Volt.JS.Transforms.AssetURLs do
           ";"
         ]
 
-        {import_line, [Volt.JS.Patch.new(start_pos, end_pos, ident) | patches]}
+        {import_line, [Patch.replace_selector(ref, ident) | patches]}
       end)
 
-    [Enum.intersperse(imports, "\n"), "\n", Volt.JS.Patch.apply(source, patches)]
+    [Enum.intersperse(imports, "\n"), "\n", Patch.apply(source, patches)]
     |> IO.iodata_to_binary()
   end
 end

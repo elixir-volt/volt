@@ -80,7 +80,7 @@ defmodule Volt.Plugin.Vue do
   end
 
   defp script_imports({extension, content}) do
-    case OXC.imports(content, "script#{extension}") do
+    case OXC.select(content, "script#{extension}", :import_specifiers) do
       {:ok, imports} -> imports
       {:error, _} -> []
     end

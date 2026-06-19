@@ -52,6 +52,7 @@ model = [
   "Volt.JS.PrebundleEntry.Import",
   "Volt.JS.Runtime.Installer.Metadata",
   "Volt.JS.TSConfig",
+  "Volt.Paths",
   "Volt.Pipeline.Result.Hashes"
 ]
 

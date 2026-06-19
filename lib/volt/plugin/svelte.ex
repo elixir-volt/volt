@@ -131,7 +131,7 @@ defmodule Volt.Plugin.Svelte do
         |> Volt.JS.Extensions.apply_loader(loaders)
         |> Kernel.<>(".script#{index}#{extension}")
 
-      case OXC.collect_imports(script, filename) do
+      case OXC.select(script, filename, :import_sources) do
         {:ok, imports} ->
           typed = Enum.map(imports, &{&1.type, &1.specifier})
           {:cont, {:ok, %{acc | imports: [typed | acc.imports]}}}

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.4
+
+### Changed
+
+- Upgraded `oxc` to 0.17.0, `vize` to 0.13.0, and `quickbeam` to 0.10.17.
+- Updated development and test dependencies, including Bandit, Credo, ExDNA, ExDoc, ExSlop, Floki, Igniter, Playwright, Sourceror, Spitfire, and Thousand Island.
+- JavaScript and CSS scanning now uses parser-backed selector APIs for import, asset URL, worker, glob import, and `import.meta.env` discovery.
+
 ## 0.14.3
 
 ### Fixed

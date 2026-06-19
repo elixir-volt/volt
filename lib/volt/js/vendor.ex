@@ -2,7 +2,7 @@ defmodule Volt.JS.Vendor do
   @moduledoc """
   Pre-bundle vendor (node_modules) dependencies for dev mode.
 
-  Scans source files with `OXC.imports/2`, identifies bare specifiers
+  Scans source files with `OXC.select/3`, identifies bare specifiers
   (non-relative, non-URL), resolves them through module directories, and
   bundles each into a single ESM file with `OXC.bundle/2`.
 
@@ -176,7 +176,7 @@ defmodule Volt.JS.Vendor do
   defp extract_imports(source, path, plugins) do
     case Volt.PluginRunner.extract_imports(plugins, path, source, []) do
       {:ok, %{imports: imports}} -> {:ok, Enum.map(imports, fn {_type, spec} -> spec end)}
-      nil -> OXC.imports(source, Path.basename(path))
+      nil -> OXC.select(source, Path.basename(path), :import_specifiers)
       {:error, _} = error -> error
     end
   end
@@ -208,11 +208,11 @@ defmodule Volt.JS.Vendor do
 
   defp bundle_vendors(specifiers, module_dirs, plugins, module_types, vendor_map) do
     entries =
-      specifiers
-      |> Enum.map(&bundle_entry_for(&1, module_dirs, plugins))
-      |> Enum.flat_map(fn
-        {:ok, specifier, entry} -> [{specifier, entry}]
-        {:error, _} -> []
+      Enum.flat_map(specifiers, fn specifier ->
+        case bundle_entry_for(specifier, module_dirs, plugins) do
+          {:ok, specifier, entry} -> [{specifier, entry}]
+          {:error, _} -> []
+        end
       end)
 
     case entries do

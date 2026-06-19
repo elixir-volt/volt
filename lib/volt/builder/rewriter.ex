@@ -56,7 +56,7 @@ defmodule Volt.Builder.Rewriter do
     case OXC.parse(code, "chunk.js") do
       {:ok, ast} ->
         patches = collect_import_patches(ast, chunk_import_map, chunk_url_map)
-        worker_patches = collect_worker_patches(ast, chunk_import_map, chunk_url_map)
+        worker_patches = collect_worker_patches(code, chunk_import_map, chunk_url_map)
         all_patches = patches ++ worker_patches
         if all_patches == [], do: code, else: Volt.JS.Patch.apply(code, all_patches)
 
@@ -241,9 +241,6 @@ defmodule Volt.Builder.Rewriter do
         when type in [:import_declaration, :export_named_declaration, :export_all_declaration] ->
           maybe_patch_source(node, patches, source, chunk_import_map, chunk_url_map)
 
-        %{type: :import_expression, source: source} = node, patches ->
-          maybe_patch_source(node, patches, source, chunk_import_map, chunk_url_map)
-
         %{
           type: :import_expression,
           source: %{
@@ -258,6 +255,9 @@ defmodule Volt.Builder.Rewriter do
         when is_binary(spec) ->
           maybe_patch_specifier(node, patches, spec, s, e, chunk_import_map, chunk_url_map)
 
+        %{type: :import_expression, source: source} = node, patches ->
+          maybe_patch_source(node, patches, source, chunk_import_map, chunk_url_map)
+
         node, patches ->
           {node, patches}
       end)
@@ -265,34 +265,26 @@ defmodule Volt.Builder.Rewriter do
     patches
   end
 
-  defp collect_worker_patches(ast, chunk_import_map, chunk_url_map) do
-    {_ast, patches} =
-      OXC.postwalk(ast, [], fn
-        node, patches ->
-          case Volt.JS.AST.new_arguments(node, ["Worker", "SharedWorker"]) do
-            {:ok, _worker_type, [first_arg | _]} ->
-              case Volt.JS.Transforms.Workers.extract_specifier(first_arg) do
-                {:ok, spec, s, e} ->
-                  maybe_patch_specifier(
-                    node,
-                    patches,
-                    spec,
-                    s,
-                    e,
-                    chunk_import_map,
-                    chunk_url_map
-                  )
+  defp collect_worker_patches(code, chunk_import_map, chunk_url_map) do
+    case OXC.select(code, "chunk.js", :workers) do
+      {:ok, workers} ->
+        Enum.reduce(workers, [], fn worker, patches ->
+          spec = Volt.JS.Patch.selector_specifier(worker)
+          maybe_patch_selector(worker, patches, spec, chunk_import_map, chunk_url_map)
+        end)
 
-                nil ->
-                  {node, patches}
-              end
+      {:error, _} ->
+        []
+    end
+  end
 
-            _ ->
-              {node, patches}
-          end
-      end)
-
-    patches
+  defp maybe_patch_selector(selector, patches, spec, chunk_import_map, chunk_url_map) do
+    with {:ok, chunk_id} <- Map.fetch(chunk_import_map, spec),
+         url when is_binary(url) <- chunk_url_map[chunk_id] do
+      [Volt.JS.Patch.replace_selector(selector, "'./#{url}'") | patches]
+    else
+      _ -> patches
+    end
   end
 
   defp maybe_patch_source(node, patches, source, chunk_import_map, chunk_url_map) do
@@ -306,11 +298,15 @@ defmodule Volt.Builder.Rewriter do
   end
 
   defp maybe_patch_specifier(node, patches, spec, s, e, chunk_import_map, chunk_url_map) do
+    {node, maybe_patch_specifier(patches, spec, s, e, chunk_import_map, chunk_url_map)}
+  end
+
+  defp maybe_patch_specifier(patches, spec, s, e, chunk_import_map, chunk_url_map) do
     with {:ok, chunk_id} <- Map.fetch(chunk_import_map, spec),
          url when is_binary(url) <- chunk_url_map[chunk_id] do
-      {node, [Volt.JS.Patch.new(s, e, "'./#{url}'") | patches]}
+      [Volt.JS.Patch.new(s, e, "'./#{url}'") | patches]
     else
-      _ -> {node, patches}
+      _ -> patches
     end
   end
 

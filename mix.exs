@@ -1,7 +1,7 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
-  @version "0.14.3"
+  @version "0.14.4"
   @source_url "https://github.com/elixir-volt/volt"
 
   def project do
@@ -12,7 +12,7 @@ defmodule Volt.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      dialyzer: [plt_add_apps: [:mix]],
+      dialyzer: [plt_add_apps: [:mix], flags: [:no_opaque]],
       name: "Volt",
       description:
         "Elixir-native frontend build tool — dev server, HMR, and production builds powered by OXC and Vize.",
@@ -34,10 +34,10 @@ defmodule Volt.MixProject do
     [
       {:reach, "~> 2.6.1", only: [:dev, :test], runtime: false},
       {:glob_ex, "~> 0.1"},
-      {:oxc, "~> 0.16.0"},
-      {:vize, "~> 0.12.0"},
+      {:oxc, "~> 0.17.0"},
+      {:vize, "~> 0.13.0"},
       {:oxide_ex, "~> 0.2.1"},
-      {:quickbeam, "~> 0.10.16"},
+      {:quickbeam, "~> 0.10.17"},
       {:dotenvy, "~> 1.1"},
       {:floki, "~> 0.38"},
       {:plug, "~> 1.16"},

@@ -9,6 +9,12 @@ defmodule Volt.JS.Patch do
     %__MODULE__{start: start_pos, end: end_pos, change: change}
   end
 
+  def replace_selector(selector, change) do
+    new(Map.fetch!(selector, :start), Map.fetch!(selector, :end), change)
+  end
+
+  def selector_specifier(selector), do: Map.fetch!(selector, :specifier)
+
   def apply(source, patches) do
     OXC.patch_string(source, Enum.map(patches, &Map.from_struct/1))
   end

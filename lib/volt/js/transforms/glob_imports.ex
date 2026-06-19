@@ -24,8 +24,8 @@ defmodule Volt.JS.Transforms.GlobImports do
   """
   @spec patterns(String.t(), String.t()) :: [String.t()]
   def patterns(source, filename \\ "glob.ts") do
-    case OXC.parse(source, filename) do
-      {:ok, ast} -> ast |> collect_glob_calls() |> Enum.flat_map(& &1.patterns)
+    case OXC.select(source, filename, :glob_imports) do
+      {:ok, calls} -> Enum.flat_map(calls, & &1.patterns)
       {:error, _} -> []
     end
   end
@@ -40,6 +40,19 @@ defmodule Volt.JS.Transforms.GlobImports do
   """
   @spec transform(String.t(), String.t(), String.t()) :: String.t()
   def transform(source, base_dir, filename \\ "glob.ts") do
+    case OXC.select(source, filename, :glob_imports) do
+      {:ok, []} ->
+        source
+
+      {:ok, _calls} ->
+        transform_glob_calls(source, base_dir, filename)
+
+      {:error, _} ->
+        source
+    end
+  end
+
+  defp transform_glob_calls(source, base_dir, filename) do
     case OXC.parse(source, filename) do
       {:ok, ast} ->
         calls = collect_glob_calls(ast)

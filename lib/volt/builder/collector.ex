@@ -232,7 +232,7 @@ defmodule Volt.Builder.Collector do
   end
 
   defp extract_js_typed_imports(source, filename) do
-    Volt.JS.ImportExtractor.extract_typed(source, filename)
+    Volt.JS.ImportExtractor.extract_typed(source, filename, include_require: true)
   end
 
   defp resolve_workers(worker_specs, importer, state) do

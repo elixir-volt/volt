@@ -257,7 +257,7 @@ defmodule Volt.DevServer do
 
   defp update_module_graph(mod_url, cache_key, file_path, code, source, content_type) do
     imports =
-      case OXC.imports(code, Path.basename(file_path)) do
+      case OXC.select(code, Path.basename(file_path), :import_specifiers) do
         {:ok, imports} -> Enum.map(imports, &normalize_module_graph_import(&1, mod_url))
         {:error, _} -> []
       end

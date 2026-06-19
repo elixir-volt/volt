@@ -247,9 +247,6 @@ defmodule Volt.Builder do
           {:ok, %{js: %{path: path}}} ->
             {:cont, {:ok, Map.put(acc, resolved_path, Path.basename(path))}}
 
-          {:ok, _result} ->
-            {:halt, {:error, {:worker_build_failed, resolved_path, :missing_js_output}}}
-
           {:error, reason} ->
             {:halt, {:error, {:worker_build_failed, resolved_path, reason}}}
         end

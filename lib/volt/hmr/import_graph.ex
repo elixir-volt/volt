@@ -21,7 +21,7 @@ defmodule Volt.HMR.ImportGraph do
   @spec update_from_compiled(String.t(), String.t()) :: :ok
   def update_from_compiled(path, compiled_code) do
     imports =
-      case OXC.imports(compiled_code, Path.basename(path)) do
+      case OXC.select(compiled_code, Path.basename(path), :import_specifiers) do
         {:ok, imports} -> imports
         _ -> []
       end

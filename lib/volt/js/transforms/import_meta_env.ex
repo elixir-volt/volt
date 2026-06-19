@@ -13,11 +13,11 @@ defmodule Volt.JS.Transforms.ImportMetaEnv do
     if map_size(env) == 0 do
       {:ok, source}
     else
-      with {:ok, ast} <- OXC.parse(source, filename) do
-        if references_import_meta_env?(ast) do
-          {:ok, env_assignment(env) <> source}
-        else
+      with {:ok, refs} <- OXC.select(source, filename, :import_meta_env) do
+        if refs == [] do
           {:ok, source}
+        else
+          {:ok, env_assignment(env) <> source}
         end
       end
     end
@@ -27,22 +27,6 @@ defmodule Volt.JS.Transforms.ImportMetaEnv do
     define
     |> Enum.filter(fn {key, _value} -> String.starts_with?(key, @prefix) end)
     |> Map.new(fn {key, value} -> {String.replace_prefix(key, @prefix, ""), value} end)
-  end
-
-  defp references_import_meta_env?(ast) do
-    {_ast, found?} =
-      OXC.postwalk(ast, false, fn
-        node, true ->
-          {node, true}
-
-        %{type: :member_expression} = node, false ->
-          {node, Volt.JS.AST.import_meta_property?(node, "env")}
-
-        node, false ->
-          {node, false}
-      end)
-
-    found?
   end
 
   defp env_assignment(env) do
