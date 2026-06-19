@@ -400,28 +400,9 @@ defmodule Volt.Builder do
   end
 
   defp rewrite_imports_to_labels(code, label_map, from_label, global_map) do
-    code = rewrite_dynamic_css_imports(code)
-
-    # Use Volt's require-aware rewriter; OXC.rewrite_specifiers/3 only handles
-    # ESM import/export forms, so CJS package internals could otherwise leak
-    # runtime require() calls into browser output.
-    rewrite_fun = fn specifier, _importer, _ctx ->
-      case rewrite_specifier(specifier, label_map, from_label, global_map) do
-        {:rewrite, replacement} -> {:ok, replacement, specifier}
-        :keep -> :skip
-      end
-    end
-
-    case Volt.JS.Transforms.Specifiers.rewrite(code, "module.js", nil, rewrite_fun) do
-      {:ok, rewritten, _paths} -> rewritten
-      {:error, _} -> code
-    end
-  end
-
-  defp rewrite_dynamic_css_imports(code) do
     case OXC.parse(code, "module.js") do
       {:ok, ast} ->
-        patches = collect_dynamic_css_import_patches(ast)
+        patches = collect_import_label_patches(ast, label_map, from_label, global_map)
         if patches == [], do: code, else: Volt.JS.Patch.apply(code, patches)
 
       {:error, _} ->
@@ -429,9 +410,13 @@ defmodule Volt.Builder do
     end
   end
 
-  defp collect_dynamic_css_import_patches(ast) do
+  defp collect_import_label_patches(ast, label_map, from_label, global_map) do
     {_ast, patches} =
       OXC.postwalk(ast, [], fn
+        %{type: type, source: source} = node, patches
+        when type in [:import_declaration, :export_all_declaration, :export_named_declaration] ->
+          {node, maybe_rewrite_import_source(source, patches, label_map, from_label, global_map)}
+
         %{
           type: :import_expression,
           source: %{type: :literal, value: spec},
@@ -440,17 +425,73 @@ defmodule Volt.Builder do
         } = node,
         patches
         when is_binary(spec) and is_integer(start) and is_integer(finish) ->
-          if Path.extname(spec) in @css_exts do
-            {node, [Volt.JS.Patch.new(start, finish, @dynamic_css_import_noop) | patches]}
-          else
-            {node, patches}
-          end
+          rewrite_import_expression(
+            node,
+            patches,
+            spec,
+            start,
+            finish,
+            label_map,
+            from_label,
+            global_map
+          )
+
+        %{type: :import_expression, source: source} = node, patches ->
+          {node, maybe_rewrite_import_source(source, patches, label_map, from_label, global_map)}
 
         node, patches ->
-          {node, patches}
+          case Volt.JS.AST.call_arguments(node, "require") do
+            {:ok, [source | _]} ->
+              {node,
+               maybe_rewrite_import_source(source, patches, label_map, from_label, global_map)}
+
+            _ ->
+              {node, patches}
+          end
       end)
 
     patches
+  end
+
+  defp rewrite_import_expression(
+         node,
+         patches,
+         spec,
+         start,
+         finish,
+         label_map,
+         from_label,
+         global_map
+       ) do
+    if Path.extname(spec) in @css_exts do
+      {node, [Volt.JS.Patch.new(start, finish, @dynamic_css_import_noop) | patches]}
+    else
+      {node,
+       maybe_rewrite_specifier(spec, node.source, patches, label_map, from_label, global_map)}
+    end
+  end
+
+  defp maybe_rewrite_import_source(source, patches, label_map, from_label, global_map) do
+    case Volt.JS.AST.string_literal_span(source) do
+      {:ok, specifier, _start_pos, _end_pos} ->
+        maybe_rewrite_specifier(specifier, source, patches, label_map, from_label, global_map)
+
+      nil ->
+        patches
+    end
+  end
+
+  defp maybe_rewrite_specifier(specifier, source, patches, label_map, from_label, global_map) do
+    case rewrite_specifier(specifier, label_map, from_label, global_map) do
+      {:rewrite, replacement} ->
+        [
+          Volt.JS.Patch.replace_selector(source, Volt.JS.AST.string_literal(replacement))
+          | patches
+        ]
+
+      :keep ->
+        patches
+    end
   end
 
   defp rewrite_specifier(specifier, label_map, from_label, global_map) do

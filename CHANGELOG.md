@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.5
+
+### Changed
+
+- Production bundle post-processing now rewrites CSS dynamic imports, CommonJS `require()`, and chunk import specifiers in a single parser pass, reducing repeated OXC parses for large dependency graphs.
+
 ## 0.14.4
 
 ### Changed
