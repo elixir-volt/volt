@@ -1361,6 +1361,53 @@ defmodule Volt.BuilderTest do
       assert js =~ "cjs-works"
     end
 
+    test "rewrites bare CJS require() to the bundled module (no runtime require leak)" do
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/bare-cjs-dep"))
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/cjs-consumer"))
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/bare-cjs-dep/package.json"),
+        ~s({"name":"bare-cjs-dep","main":"index.js"})
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/bare-cjs-dep/index.js"),
+        "module.exports = { token: 'bundled-bare-cjs' }\n"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/cjs-consumer/package.json"),
+        ~s({"name":"cjs-consumer","main":"index.js"})
+      )
+
+      # A CJS module that requires another package by bare name — mirrors
+      # react-dom's internal `require("scheduler")`.
+      File.write!(Path.join(@fixture_dir, "node_modules/cjs-consumer/index.js"), """
+      var dep = require('bare-cjs-dep')
+      module.exports = dep.token
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/bare_cjs_app.ts"), """
+      import token from 'cjs-consumer'
+      console.log(token)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/bare_cjs_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          node_modules: Path.join(@fixture_dir, "node_modules")
+        )
+
+      js = File.read!(result.js.path)
+      # The dependency is bundled in, and the bare `require()` is rewritten to the
+      # bundled module rather than left as a runtime call that throws in browsers.
+      assert js =~ "bundled-bare-cjs"
+      refute js =~ ~r/require\(\s*[`"']bare-cjs-dep[`"']\s*\)/
+    end
+
     test "resolves package subpath without exports field" do
       File.mkdir_p!(Path.join(@fixture_dir, "node_modules/subpath-pkg/lib"))
 
