@@ -18,82 +18,6 @@ defmodule Volt.Plugin.Solid do
 
   @runtime_name __MODULE__.Runtime
   @jsx_exts ~w(.jsx .tsx)
-  @web_imports ~w(
-    Aliases
-    Assets
-    ChildProperties
-    DOMElements
-    DelegatedEvents
-    Dynamic
-    ErrorBoundary
-    For
-    Hydration
-    HydrationScript
-    Index
-    Match
-    NoHydration
-    Portal
-    Properties
-    RequestContext
-    SVGElements
-    SVGNamespace
-    Show
-    Suspense
-    SuspenseList
-    Switch
-    addEventListener
-    assign
-    classList
-    className
-    clearDelegatedEvents
-    createComponent
-    createDynamic
-    delegateEvents
-    dynamicProperty
-    effect
-    escape
-    generateHydrationScript
-    getAssets
-    getHydrationKey
-    getNextElement
-    getNextMarker
-    getNextMatch
-    getOwner
-    getPropAlias
-    getRequestEvent
-    hydrate
-    innerHTML
-    insert
-    isDev
-    isServer
-    memo
-    mergeProps
-    render
-    renderToStream
-    renderToString
-    renderToStringAsync
-    resolveSSRNode
-    runHydrationEvents
-    setAttribute
-    setAttributeNS
-    setBoolAttribute
-    setProperty
-    setStyleProperty
-    spread
-    ssr
-    ssrAttribute
-    ssrClassList
-    ssrElement
-    ssrHydrationKey
-    ssrSpread
-    ssrStyle
-    style
-    template
-    untrack
-    use
-    useAssets
-  )
-
   @impl true
   def name, do: "solid"
 
@@ -127,12 +51,10 @@ defmodule Volt.Plugin.Solid do
 
   @impl true
   def prebundle_entry("solid-js") do
-    web_exports = Enum.map(@web_imports, &{&1, &1})
-
     {:proxy, "solid-js.js",
      exports: [
        Volt.JS.PrebundleEntry.Export.all_from("solid-js"),
-       Volt.JS.PrebundleEntry.Export.named_from("solid-js/web", web_exports)
+       Volt.JS.PrebundleEntry.Export.all_from("solid-js/web")
      ]}
   end
 
