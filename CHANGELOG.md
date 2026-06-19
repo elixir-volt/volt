@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14.2
+
+### Fixed
+
+- Production builds now rewrite CommonJS `require()` specifiers so bundled browser output does not leak runtime `require()` calls.
+- Development vendor prebundle scanning now skips dependency/build directories such as `node_modules`, avoiding slow dev asset requests in apps with local npm installs.
+- React, React DOM, and Solid framework proxy modules now derive public exports from the installed packages instead of hardcoded export lists.
+
+### Changed
+
+- Centralized common JavaScript extension and Volt path defaults.
+
 ## 0.14.1
 
 ### Fixed
