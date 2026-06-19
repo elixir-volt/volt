@@ -7,44 +7,6 @@ defmodule Volt.Plugin.React do
 
   alias Volt.JS.PrebundleEntry.{Export, Import}
 
-  @react_exports ~w(
-    Children
-    Component
-    Fragment
-    Profiler
-    PureComponent
-    StrictMode
-    Suspense
-    cloneElement
-    createContext
-    createElement
-    createRef
-    forwardRef
-    isValidElement
-    lazy
-    memo
-    startTransition
-    use
-    useActionState
-    useCallback
-    useContext
-    useDebugValue
-    useDeferredValue
-    useEffect
-    useId
-    useImperativeHandle
-    useInsertionEffect
-    useLayoutEffect
-    useMemo
-    useOptimistic
-    useReducer
-    useRef
-    useState
-    useSyncExternalStore
-    useTransition
-    version
-  )
-
   @impl true
   def name, do: "react"
 
@@ -60,15 +22,15 @@ defmodule Volt.Plugin.React do
      imports: [Import.default("React", from: "react")],
      exports: [
        Export.default("React"),
-       Export.members(Enum.map(@react_exports, &{&1, "React.#{&1}"})),
-       Export.named_from("react-dom/client", [
-         "createRoot",
-         "hydrateRoot",
-         {"version", "reactDomVersion"}
-       ]),
-       Export.named_from("react/jsx-runtime", ["jsx", "jsxs"]),
-       Export.named_from("react/jsx-dev-runtime", ["jsxDEV"])
+       Export.all_from("react"),
+       Export.all_from("react-dom/client"),
+       Export.all_from("react/jsx-runtime"),
+       Export.all_from("react/jsx-dev-runtime")
      ]}
+  end
+
+  def prebundle_entry("react-dom") do
+    {:proxy, "react-dom.js", exports: [Export.all_from("react-dom")]}
   end
 
   def prebundle_entry(_specifier), do: nil

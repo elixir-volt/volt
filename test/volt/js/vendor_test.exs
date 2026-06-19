@@ -208,6 +208,93 @@ defmodule Volt.JS.VendorTest do
       assert code =~ "greet"
       refute code =~ "module.exports"
     end
+
+    test "React proxy exposes newer public React exports" do
+      setup_fake_react_packages()
+
+      File.write!(
+        Path.join(@fixture_dir, "src/app.ts"),
+        "import { act } from 'react'; console.log(act);"
+      )
+
+      {:ok, vendor_map} =
+        Volt.JS.Vendor.prebundle(
+          root: Path.join(@fixture_dir, "src"),
+          node_modules: @node_modules,
+          plugins: [Volt.Plugin.React]
+        )
+
+      assert Map.has_key?(vendor_map, "react")
+      {:ok, react_proxy} = Volt.JS.Vendor.read("react")
+      assert react_proxy =~ ~r/export \{[^}]*act/s
+    end
+
+    test "shares full react-dom imports used by third-party vendors" do
+      setup_fake_react_packages()
+      File.mkdir_p!(Path.join(@node_modules, "react-using-dom"))
+
+      File.write!(
+        Path.join(@node_modules, "react-using-dom/package.json"),
+        ~s({"name":"react-using-dom","main":"index.js","type":"module"})
+      )
+
+      File.write!(
+        Path.join(@node_modules, "react-using-dom/index.js"),
+        "import { flushSync } from 'react-dom'; export const value = flushSync();"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "src/app.ts"),
+        "import React from 'react'; import { createRoot } from 'react-dom/client'; import { value } from 'react-using-dom'; console.log(React, createRoot, value);"
+      )
+
+      {:ok, vendor_map} =
+        Volt.JS.Vendor.prebundle(
+          root: Path.join(@fixture_dir, "src"),
+          node_modules: @node_modules,
+          plugins: [Volt.Plugin.React]
+        )
+
+      assert Map.has_key?(vendor_map, "react")
+      assert Map.has_key?(vendor_map, "react-using-dom")
+
+      {:ok, react_proxy} = Volt.JS.Vendor.read("react")
+      {:ok, react_using_dom} = Volt.JS.Vendor.read("react-using-dom")
+
+      assert [shared_chunk] =
+               [react_proxy, react_using_dom]
+               |> Enum.flat_map(&Regex.scan(~r{\.\/chunks\/[^"']+\.js}, &1))
+               |> List.flatten()
+               |> Enum.uniq()
+
+      chunk_specifier = shared_chunk |> String.trim_leading("./") |> String.trim_trailing(".js")
+      {:ok, shared_code} = Volt.JS.Vendor.read(chunk_specifier)
+
+      assert react_using_dom =~ "flushSync"
+      assert shared_code =~ "domSingleton"
+      refute react_proxy =~ "domSingleton ="
+      refute react_using_dom =~ "domSingleton ="
+    end
+
+    test "React DOM proxy exposes full react-dom package exports" do
+      setup_fake_react_packages()
+
+      File.write!(
+        Path.join(@fixture_dir, "src/app.ts"),
+        "import { flushSync } from 'react-dom'; console.log(flushSync);"
+      )
+
+      {:ok, vendor_map} =
+        Volt.JS.Vendor.prebundle(
+          root: Path.join(@fixture_dir, "src"),
+          node_modules: @node_modules,
+          plugins: [Volt.Plugin.React]
+        )
+
+      assert Map.has_key?(vendor_map, "react-dom")
+      {:ok, react_dom_proxy} = Volt.JS.Vendor.read("react-dom")
+      assert react_dom_proxy =~ ~r/export \{[^}]*flushSync/s
+    end
   end
 
   describe "CJS package bundling" do
@@ -476,6 +563,51 @@ defmodule Volt.JS.VendorTest do
     test "returns error for missing vendor" do
       assert {:error, :not_found} = Volt.JS.Vendor.read("nonexistent")
     end
+  end
+
+  defp setup_fake_react_packages do
+    File.mkdir_p!(Path.join(@node_modules, "react"))
+    File.mkdir_p!(Path.join(@node_modules, "react-dom"))
+
+    File.write!(
+      Path.join(@node_modules, "react/package.json"),
+      ~s({"name":"react","main":"index.js","type":"module","exports":{".":"./index.js","./jsx-runtime":"./jsx-runtime.js","./jsx-dev-runtime":"./jsx-dev-runtime.js"}})
+    )
+
+    File.write!(
+      Path.join(@node_modules, "react/index.js"),
+      "export default { version: '19.0.0', act() {}, useState(value) { return [value, () => {}]; } }; export const version = '19.0.0'; export function act() {}; export function useState(value) { return [value, () => {}]; }"
+    )
+
+    File.write!(
+      Path.join(@node_modules, "react/jsx-runtime.js"),
+      "export function jsx() {}; export function jsxs() {};"
+    )
+
+    File.write!(
+      Path.join(@node_modules, "react/jsx-dev-runtime.js"),
+      "export function jsxDEV() {};"
+    )
+
+    File.write!(
+      Path.join(@node_modules, "react-dom/package.json"),
+      ~s({"name":"react-dom","type":"module","exports":{".":"./index.js","./client":"./client.js"}})
+    )
+
+    File.write!(
+      Path.join(@node_modules, "react-dom/shared.js"),
+      "export const domSingleton = { id: Math.random() };"
+    )
+
+    File.write!(
+      Path.join(@node_modules, "react-dom/index.js"),
+      "import { domSingleton } from './shared.js'; export function flushSync() { return domSingleton; }; export function createPortal() { return domSingleton; }; export const version = '19.0.0';"
+    )
+
+    File.write!(
+      Path.join(@node_modules, "react-dom/client.js"),
+      "import { domSingleton } from './shared.js'; export function createRoot() { return domSingleton; }; export function hydrateRoot() { return domSingleton; }; export const version = '19.0.0';"
+    )
   end
 
   describe "vendor_url/1" do
