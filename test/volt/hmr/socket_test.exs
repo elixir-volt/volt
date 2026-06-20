@@ -32,9 +32,29 @@ defmodule Volt.HMR.SocketTest do
   end
 
   describe "handle_in/2" do
-    test "ignores incoming text frames" do
+    test "replies to heartbeat pings with a JSON pong" do
       {:ok, state} = Volt.HMR.Socket.init(nil)
-      assert {:ok, ^state} = Volt.HMR.Socket.handle_in({"ping", opcode: :text}, state)
+
+      {:push, {:text, json}, _state} =
+        Volt.HMR.Socket.handle_in({~s({"type":"ping"}), opcode: :text}, state)
+
+      decoded = Jason.decode!(json)
+      assert decoded["type"] == "pong"
+    end
+
+    test "ignores unknown incoming message types" do
+      {:ok, state} = Volt.HMR.Socket.init(nil)
+
+      assert {:ok, ^state} =
+               Volt.HMR.Socket.handle_in(
+                 {~s({"type":"something-else"}), opcode: :text},
+                 state
+               )
+    end
+
+    test "ignores malformed JSON frames" do
+      {:ok, state} = Volt.HMR.Socket.init(nil)
+      assert {:ok, ^state} = Volt.HMR.Socket.handle_in({"not-json", opcode: :text}, state)
     end
   end
 end

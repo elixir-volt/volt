@@ -14,28 +14,52 @@ defmodule Volt.HMR.Socket do
     {:ok, %{}}
   end
 
+  # Heartbeat: the browser client sends a `{"type":"ping"}` JSON message
+  # every few seconds to keep Bandit's websocket `read_timeout` from closing
+  # an otherwise idle connection. We reply with `{"type":"pong"}` so the
+  # client can also detect a dead link and reconnect. Both messages flow
+  # through the `Volt.HMR.Message` JSONCodec.
   @impl true
   def handle_in({text, opcode: :text}, state) do
-    Logger.debug("[Volt.HMR] Received: #{text}")
-    {:ok, state}
-  end
+    case Volt.HMR.Message.decode(text) do
+      {:ok, %Volt.HMR.Message{type: :ping}} ->
+        push(%Volt.HMR.Message{type: :pong}, state)
 
-  @impl true
-  def handle_info({:volt_hmr, type, payload}, state) do
-    message = %Volt.HMR.Message{type: type, payload: payload}
-
-    case Jason.encode(message) do
-      {:ok, msg} ->
-        {:push, {:text, msg}, state}
+      {:ok, %Volt.HMR.Message{type: type} = message} ->
+        Logger.debug("[Volt.HMR] Received: #{inspect(type)} #{inspect(message.payload)}")
+        {:ok, state}
 
       {:error, reason} ->
-        Logger.warning("[Volt.HMR] Failed to encode #{inspect(type)} payload: #{inspect(reason)}")
+        Logger.debug("[Volt.HMR] Ignoring malformed frame: #{inspect(reason)}")
         {:ok, state}
     end
   end
 
+  @impl true
+  def handle_info({:volt_hmr, type, payload}, state) do
+    push(%Volt.HMR.Message{type: type, payload: payload}, state)
+  end
+
   def handle_info(_msg, state) do
     {:ok, state}
+  end
+
+  defp push(%Volt.HMR.Message{} = message, state) do
+    case encode(message) do
+      {:ok, frame} -> {:push, frame, state}
+      :error -> {:ok, state}
+    end
+  end
+
+  defp encode(%Volt.HMR.Message{} = message) do
+    {:ok, {:text, message |> Volt.HMR.Message.dump() |> Jason.encode!()}}
+  rescue
+    error ->
+      Logger.warning(
+        "[Volt.HMR] Failed to encode #{inspect(message.type)} payload: #{inspect(error)}"
+      )
+
+      :error
   end
 
   @impl true

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `:hmr_timeout` option on `Volt.DevServer` (and the `:server` config profile) controls the HMR websocket idle timeout. Defaults to `60_000`ms.
+
+### Changed
+- HMR websocket messages (`ping`, `pong`, `update`, `error`) now flow through `Volt.HMR.Message`, which uses `JSONCodec` for struct<->JSON (de)serialization with `Jason` performing the final binary encoding.
+- Added `json_codec` as a runtime dependency.
+
+### Fixed
+- HMR websocket no longer drops idle connections after 60 seconds. The browser client now sends a periodic `{"type":"ping"}` heartbeat, and the server replies with `{"type":"pong"}`, preventing Bandit's websocket `read_timeout` from closing an otherwise idle socket. The client also tracks pongs and force-reconnects if the link goes half-open. This eliminates the spurious `[Volt] Disconnected. Reconnecting...` console noise observed on long-lived demo/dev pages with no file changes.
+
 ## 0.14.6
 
 ### Changed

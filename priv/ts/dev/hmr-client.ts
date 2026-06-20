@@ -82,6 +82,21 @@ const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
 
 let ws: WebSocket | undefined
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+let heartbeatTimer: ReturnType<typeof setInterval> | undefined
+let lastPongAt = 0
+let reconnectAttempts = 0
+
+// Bound at serve time from the server's `hmr_timeout` (half of it) so the
+// heartbeat always lands inside Bandit's websocket `read_timeout` window.
+// The value is injected by the dev server when serving this module.
+const configuredHeartbeat = (globalThis as Record<string, unknown>).__VOLT_HEARTBEAT__
+const HEARTBEAT_INTERVAL = typeof configuredHeartbeat === 'number' ? configuredHeartbeat : 25_000
+const PONG_GRACE = HEARTBEAT_INTERVAL * 2
+
+// Exponential reconnect backoff with jitter to avoid a thundering herd of
+// browser tabs reconnecting at the same instant when the dev server restarts.
+const RECONNECT_BASE = 1_000
+const RECONNECT_MAX = 30_000
 
 function connect() {
   ws = new WebSocket(`${proto}//${location.host}/@volt/ws`)
@@ -93,6 +108,29 @@ function connect() {
       clearTimeout(reconnectTimer)
       reconnectTimer = undefined
     }
+
+    // Successful (re)connection resets the backoff.
+    reconnectAttempts = 0
+    lastPongAt = Date.now()
+
+    // Send periodic pings so the server's websocket read_timeout does not
+    // close an otherwise idle connection between file changes. The server
+    // replies with a `pong`; if we stop receiving pongs we assume the link
+    // is half-open and force a reconnect.
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+    }
+
+    heartbeatTimer = setInterval(() => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return
+
+      if (Date.now() - lastPongAt > PONG_GRACE) {
+        ws.close()
+        return
+      }
+
+      ws.send(JSON.stringify({ type: 'ping' }))
+    }, HEARTBEAT_INTERVAL)
   }
 
   ws.onmessage = (event) => {
@@ -102,6 +140,9 @@ function connect() {
     }
 
     switch (type) {
+      case 'pong':
+        lastPongAt = Date.now()
+        break
       case 'update':
         handleUpdate(
           payload as { path: string; changes: string[]; boundary?: string; timestamp?: number }
@@ -121,8 +162,24 @@ function connect() {
 
   ws.onclose = () => {
     console.log('[Volt] Disconnected. Reconnecting...')
-    reconnectTimer = setTimeout(connect, 1000)
+
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = undefined
+    }
+
+    reconnectTimer = setTimeout(connect, nextReconnectDelay())
   }
+}
+
+// Full-jitter exponential backoff: delay = min(MAX, BASE * 2^attempt) * rand().
+// Caps out at RECONNECT_MAX and is randomized across [0, cap] so concurrent
+// tabs don't retry in lockstep after a dev-server restart.
+function nextReconnectDelay() {
+  const exponent = Math.min(reconnectAttempts, 16)
+  const cap = Math.min(RECONNECT_MAX, RECONNECT_BASE * 2 ** exponent)
+  reconnectAttempts += 1
+  return Math.floor(Math.random() * cap)
 }
 
 // ── Update handling ────────────────────────────────────────────

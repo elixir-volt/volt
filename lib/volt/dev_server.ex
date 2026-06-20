@@ -66,21 +66,27 @@ defmodule Volt.DevServer do
       resolve_dirs: config.resolve_dirs,
       module_types: module_types,
       define:
-        Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix)
+        Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix),
+      hmr_timeout: server_config.hmr_timeout
     }
   end
 
   @impl true
-  def call(%Conn{request_path: "/@volt/ws"} = conn, _config) do
+  def call(%Conn{request_path: "/@volt/ws"} = conn, config) do
     conn
-    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [], timeout: 60_000)
+    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [], timeout: config.hmr_timeout)
     |> Conn.halt()
   end
 
-  def call(%Conn{request_path: "/@volt/client.js"} = conn, _config) do
+  def call(%Conn{request_path: "/@volt/client.js"} = conn, config) do
+    heartbeat_interval = max(div(config.hmr_timeout, 2), 1_000)
+    client = Volt.JS.Asset.compiled!("dev/hmr-client.ts")
+    bootstrap = "globalThis.__VOLT_HEARTBEAT__ = #{heartbeat_interval};\n"
+
     conn
     |> Conn.put_resp_content_type("application/javascript")
-    |> Conn.send_resp(200, Volt.JS.Asset.compiled!("dev/hmr-client.ts"))
+    |> Conn.put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
+    |> Conn.send_resp(200, bootstrap <> client)
     |> Conn.halt()
   end
 

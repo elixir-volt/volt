@@ -13,5 +13,6 @@ defmodule Volt.DevServer.Config do
             node_modules: nil,
             resolve_dirs: [],
             module_types: %{},
-            define: %{}
+            define: %{},
+            hmr_timeout: 60_000
 end
