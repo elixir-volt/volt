@@ -16,7 +16,7 @@ defmodule Volt.DevServerTest do
     """)
 
     Volt.Cache.clear()
-    Volt.HMR.CSSImportGraph.clear()
+    Volt.HMR.StyleGraph.clear()
     Volt.HMR.ModuleGraph.clear()
 
     on_exit(fn -> File.rm_rf!(@fixture_dir) end)

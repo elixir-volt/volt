@@ -1,29 +1,18 @@
-defmodule Volt.HMR.CSSImportGraph do
+defmodule Volt.HMR.StyleGraph do
   @moduledoc """
-  Tracks stylesheet `@import` file dependencies for CSS HMR invalidation.
+  ETS-backed stylesheet dependency graph for HMR invalidation.
 
-  The graph is populated from `Vize.CSS.select/3` using the public `:imports`
-  selector. It stores resolved local stylesheet paths so a change to an imported
-  stylesheet can invalidate and hot-update served importer stylesheets.
+  The graph stores resolved stylesheet dependencies and reverse importer links.
+  Dependency discovery belongs to `Volt.CSS.Imports`; this module only owns the
+  dev-server state needed to invalidate and hot-update importer stylesheets when
+  an imported stylesheet changes.
   """
 
-  @table :volt_hmr_css_import_graph
+  @table :volt_hmr_style_graph
 
-  @doc "Create the CSS import graph ETS table. Called once from Application.start/2."
+  @doc "Create the stylesheet graph ETS table. Called once from Application.start/2."
   @spec create_table :: :ok
   def create_table, do: Volt.ETS.create_named_set(@table)
-
-  @doc "Update CSS imports for a stylesheet source file."
-  @spec update_from_source(String.t(), String.t()) :: :ok
-  def update_from_source(path, source) do
-    imports =
-      case Vize.CSS.select(source, :imports, filename: path) do
-        {:ok, imports} -> resolve_imports(imports, path)
-        {:error, _} -> []
-      end
-
-    update(path, imports)
-  end
 
   @doc "Update resolved imports for a stylesheet source file."
   @spec update(String.t(), [String.t()]) :: :ok
@@ -75,27 +64,6 @@ defmodule Volt.HMR.CSSImportGraph do
       [importer | dependents(importer, MapSet.put(seen, importer))]
     end)
     |> Enum.uniq()
-  end
-
-  defp resolve_imports(imports, path) do
-    imports
-    |> Enum.map(&Map.fetch!(&1, :url))
-    |> Enum.flat_map(&resolve_import(&1, path))
-  end
-
-  defp resolve_import(url, path) do
-    uri = URI.parse(url)
-
-    cond do
-      not is_binary(uri.path) or uri.path == "" ->
-        []
-
-      uri.scheme || uri.host || String.starts_with?(url, ["/", "#", "//"]) ->
-        []
-
-      true ->
-        [Path.expand(uri.path, Path.dirname(path))]
-    end
   end
 
   defp importers_of(path), do: lookup_set({:importers, path})

@@ -7,7 +7,7 @@ defmodule Volt.Application do
     Volt.Cache.create_table()
     Volt.HMR.ImportGraph.create_table()
     Volt.HMR.GlobGraph.create_table()
-    Volt.HMR.CSSImportGraph.create_table()
+    Volt.HMR.StyleGraph.create_table()
     Volt.HMR.ModuleGraph.create_table()
 
     children = [

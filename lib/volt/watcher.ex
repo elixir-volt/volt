@@ -190,7 +190,7 @@ defmodule Volt.Watcher do
   defp handle_js_change(path, state) do
     relative = Path.relative_to(path, state.root)
     css? = css_file?(path)
-    css_dependents = if css?, do: Volt.HMR.CSSImportGraph.dependents(path), else: []
+    css_dependents = if css?, do: Volt.HMR.StyleGraph.dependents(path), else: []
 
     old_entry = Volt.Cache.get_file(path)
     Volt.Cache.evict_file(path)
@@ -202,7 +202,7 @@ defmodule Volt.Watcher do
           {:ok, result} ->
             Volt.HMR.GlobGraph.update_from_source(path, source)
             Volt.HMR.ImportGraph.update_from_compiled(path, result.code)
-            if css?, do: Volt.HMR.CSSImportGraph.update_from_source(path, source)
+            if css?, do: Volt.HMR.StyleGraph.update(path, Volt.CSS.Imports.resolve(source, path))
 
             changes = if css?, do: [:style], else: detect_changes(old_entry, result)
             broadcast_change(path, relative, changes, state.root)
@@ -216,7 +216,7 @@ defmodule Volt.Watcher do
       {:error, reason} when reason in [:enoent, :eacces, :eperm] ->
         Volt.HMR.ImportGraph.remove(path)
         Volt.HMR.GlobGraph.remove(path)
-        if css?, do: Volt.HMR.CSSImportGraph.remove(path)
+        if css?, do: Volt.HMR.StyleGraph.remove(path)
         Volt.HMR.ModuleGraph.remove_file(path)
         broadcast(:remove, %{path: relative})
         broadcast_glob_dependents(path, state.root)
@@ -230,17 +230,16 @@ defmodule Volt.Watcher do
 
   defp handle_css_change(path, state) do
     relative = Path.relative_to(path, state.root)
-    css_dependents = Volt.HMR.CSSImportGraph.dependents(path)
+    css_dependents = Volt.HMR.StyleGraph.dependents(path)
 
     Volt.Cache.evict_file(path)
     Volt.HMR.ModuleGraph.invalidate_file(path)
 
     if File.regular?(path) do
-      path
-      |> File.read!()
-      |> then(&Volt.HMR.CSSImportGraph.update_from_source(path, &1))
+      source = File.read!(path)
+      Volt.HMR.StyleGraph.update(path, Volt.CSS.Imports.resolve(source, path))
     else
-      Volt.HMR.CSSImportGraph.remove(path)
+      Volt.HMR.StyleGraph.remove(path)
     end
 
     broadcast(:update, %{path: relative, changes: [:style]})

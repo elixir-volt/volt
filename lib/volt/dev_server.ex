@@ -264,7 +264,8 @@ defmodule Volt.DevServer do
 
   defp update_css_import_graph(file_path, source) do
     if Path.extname(file_path) == ".css" do
-      Volt.HMR.CSSImportGraph.update_from_source(file_path, source)
+      imports = Volt.CSS.Imports.resolve(source, file_path)
+      Volt.HMR.StyleGraph.update(file_path, imports)
     end
   end
 
