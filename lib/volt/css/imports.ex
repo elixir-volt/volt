@@ -37,7 +37,15 @@ defmodule Volt.CSS.Imports do
         []
 
       true ->
-        [Path.expand(uri.path, Path.dirname(path))]
+        uri.path
+        |> Path.expand(Path.dirname(path))
+        |> resolve_stylesheet_path()
+        |> List.wrap()
     end
+  end
+
+  defp resolve_stylesheet_path(path) do
+    [path, path <> ".css", Path.join(path, "index.css")]
+    |> Enum.find(&File.regular?/1)
   end
 end
