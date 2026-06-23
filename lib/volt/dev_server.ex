@@ -235,7 +235,7 @@ defmodule Volt.DevServer do
       {:ok, result} ->
         Volt.HMR.GlobGraph.update_from_source(file_path, source)
         Volt.HMR.ImportGraph.update_from_compiled(file_path, result.code)
-        update_css_import_graph(file_path, source)
+        update_css_dependency_graph(file_path, source)
 
         result = rewrite_dev_css_urls(result, file_path, config)
         mod_url = Volt.URL.join(config.prefix, relative)
@@ -262,10 +262,10 @@ defmodule Volt.DevServer do
     end
   end
 
-  defp update_css_import_graph(file_path, source) do
+  defp update_css_dependency_graph(file_path, source) do
     if Path.extname(file_path) == ".css" do
-      imports = Volt.CSS.Imports.resolve(source, file_path)
-      Volt.HMR.StyleGraph.update(file_path, imports)
+      dependencies = Volt.CSS.Dependencies.resolve(source, file_path)
+      Volt.HMR.StyleGraph.update(file_path, dependencies)
     end
   end
 

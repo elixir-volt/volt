@@ -6,7 +6,7 @@ defmodule Volt.HMR.StyleGraphTest do
     :ok
   end
 
-  test "tracks direct imports and transitive dependents" do
+  test "tracks direct dependencies and transitive dependents" do
     app = "/app/app.css"
     theme = "/app/theme.css"
     tokens = "/app/tokens.css"
@@ -14,11 +14,11 @@ defmodule Volt.HMR.StyleGraphTest do
     Volt.HMR.StyleGraph.update(app, [theme])
     Volt.HMR.StyleGraph.update(theme, [tokens])
 
-    assert Volt.HMR.StyleGraph.imports_of(app) == [theme]
+    assert Volt.HMR.StyleGraph.dependencies_of(app) == [theme]
     assert Volt.HMR.StyleGraph.dependents(tokens) |> Enum.sort() == [app, theme]
   end
 
-  test "updates importer links when imports change" do
+  test "updates dependent links when dependencies change" do
     app = "/app/app.css"
     old_tokens = "/app/old.css"
     new_tokens = "/app/new.css"
@@ -51,7 +51,7 @@ defmodule Volt.HMR.StyleGraphTest do
     Volt.HMR.StyleGraph.update(app, [tokens])
     Volt.HMR.StyleGraph.remove(app)
 
-    assert Volt.HMR.StyleGraph.imports_of(app) == []
+    assert Volt.HMR.StyleGraph.dependencies_of(app) == []
     assert Volt.HMR.StyleGraph.dependents(tokens) == []
   end
 end

@@ -202,7 +202,9 @@ defmodule Volt.Watcher do
           {:ok, result} ->
             Volt.HMR.GlobGraph.update_from_source(path, source)
             Volt.HMR.ImportGraph.update_from_compiled(path, result.code)
-            if css?, do: Volt.HMR.StyleGraph.update(path, Volt.CSS.Imports.resolve(source, path))
+
+            if css?,
+              do: Volt.HMR.StyleGraph.update(path, Volt.CSS.Dependencies.resolve(source, path))
 
             changes = if css?, do: [:style], else: detect_changes(old_entry, result)
             broadcast_change(path, relative, changes, state.root)
@@ -237,7 +239,7 @@ defmodule Volt.Watcher do
 
     if File.regular?(path) do
       source = File.read!(path)
-      Volt.HMR.StyleGraph.update(path, Volt.CSS.Imports.resolve(source, path))
+      Volt.HMR.StyleGraph.update(path, Volt.CSS.Dependencies.resolve(source, path))
     else
       Volt.HMR.StyleGraph.remove(path)
     end
@@ -260,9 +262,12 @@ defmodule Volt.Watcher do
 
   defp handle_asset_change(path, state) do
     relative = Path.relative_to(path, state.root)
+    css_dependents = Volt.HMR.StyleGraph.dependents(path)
+
     Volt.Cache.evict_file(path)
     Volt.HMR.ModuleGraph.invalidate_file(path)
     broadcast(:update, %{path: relative, changes: [:full]})
+    broadcast_css_dependents(css_dependents, state.root)
     broadcast_glob_dependents(path, state.root)
   end
 

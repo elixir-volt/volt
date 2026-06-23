@@ -480,6 +480,35 @@ defmodule Volt.DevServerTest do
       refute conn.resp_body =~ "--brand: red"
     end
 
+    test "watcher invalidates CSS files when referenced assets change" do
+      source_dir = Path.join(@fixture_dir, "src")
+      app_css_path = Path.join(source_dir, "style.css")
+      logo_path = Path.join(source_dir, "images/logo.svg")
+      Registry.register(Volt.HMR.Registry, :clients, nil)
+
+      File.mkdir_p!(Path.dirname(logo_path))
+      File.write!(logo_path, "<svg>red</svg>")
+      File.write!(app_css_path, ".logo { background: url('./images/logo.svg') }")
+      File.touch!(app_css_path, {{2026, 1, 1}, {0, 0, 0}})
+      File.touch!(logo_path, {{2026, 1, 1}, {0, 0, 0}})
+
+      conn = call_dev_server("/assets/style.css?import")
+      assert conn.status == 200
+      assert conn.resp_body =~ "/assets/images/logo.svg"
+
+      File.write!(logo_path, "<svg>green</svg>")
+      File.touch!(logo_path, {{2026, 1, 1}, {0, 0, 1}})
+
+      watcher =
+        start_supervised!({Volt.Watcher, root: source_dir, name: :test_css_asset_dependents})
+
+      send(watcher, {:file_event, self(), {logo_path, [:modified]}})
+      _ = :sys.get_state(watcher)
+
+      assert_receive {:volt_hmr, :update, %{path: "images/logo.svg", changes: [:full]}}, 1000
+      assert_receive {:volt_hmr, :update, %{path: "style.css", changes: [:style]}}, 1000
+    end
+
     test "watcher invalidation evicts cache even for never-served files" do
       source_dir = Path.join(@fixture_dir, "src")
       app_path = Path.join(source_dir, "app.ts")
