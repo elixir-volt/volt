@@ -6,6 +6,7 @@
 - `:hmr_timeout` option on `Volt.DevServer` (and the `:server` config profile) controls the HMR websocket idle timeout. Defaults to `60_000`ms.
 - CSS `@import` and `url()` relationships are now tracked through Vize's parser-backed CSS selectors so HMR can invalidate and hot-swap stylesheets, CSS modules, and framework-emitted styles when an imported stylesheet or referenced asset changes.
 - CSS dependency tracking now resolves extensionless local imports to `.css` files and directory imports to `index.css` files.
+- Svelte-emitted styles participate in CSS asset dependency tracking for HMR.
 
 ### Changed
 - HMR websocket messages (`ping`, `pong`, `update`, `error`) now flow through `Volt.HMR.Message`, which uses `JSONCodec` for struct<->JSON (de)serialization with `Jason` performing the final binary encoding.
@@ -13,6 +14,7 @@
 
 ### Fixed
 - Cyclic CSS import graphs no longer report the changed stylesheet as its own HMR dependent.
+- CSS module and framework-emitted style dependency links are removed when styles stop referencing an asset.
 - HMR websocket no longer drops idle connections after 60 seconds. The browser client now sends a periodic `{"type":"ping"}` heartbeat, and the server replies with `{"type":"pong"}`, preventing Bandit's websocket `read_timeout` from closing an otherwise idle socket. The client also tracks pongs and force-reconnects if the link goes half-open. This eliminates the spurious `[Volt] Disconnected. Reconnecting...` console noise observed on long-lived demo/dev pages with no file changes.
 
 ## 0.14.6

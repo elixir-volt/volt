@@ -209,6 +209,33 @@ defmodule Volt.DevServerTest do
       assert Volt.HMR.StyleGraph.dependents(logo_path) == [vue_path]
     end
 
+    test "removes stale Vue style asset dependencies" do
+      logo_path = Path.join(@fixture_dir, "src/logo.svg")
+      vue_path = Path.join(@fixture_dir, "src/App.vue")
+
+      File.write!(logo_path, "<svg></svg>")
+
+      File.write!(vue_path, """
+      <template><div class="logo">{{ msg }}</div></template>
+      <script setup>const msg = 'hi'</script>
+      <style>.logo { background: url('./logo.svg') }</style>
+      """)
+
+      File.touch!(vue_path, {{2026, 1, 1}, {0, 0, 0}})
+      assert call_dev_server("/assets/App.vue").status == 200
+      assert Volt.HMR.StyleGraph.dependents(logo_path) == [vue_path]
+
+      File.write!(vue_path, """
+      <template><div>{{ msg }}</div></template>
+      <script setup>const msg = 'hi'</script>
+      """)
+
+      File.touch!(vue_path, {{2026, 1, 1}, {0, 0, 1}})
+      assert call_dev_server("/assets/App.vue").status == 200
+      assert Volt.HMR.StyleGraph.dependents(logo_path) == []
+      assert Volt.HMR.StyleGraph.dependencies_of(vue_path) == []
+    end
+
     test "serves Vue SFCs with JavaScript postprocess transforms applied" do
       File.mkdir_p!(Path.join(@fixture_dir, "src/pages"))
       File.write!(Path.join(@fixture_dir, "src/pages/home.ts"), "export const page = 'home'")
@@ -227,6 +254,26 @@ defmodule Volt.DevServerTest do
       assert conn.resp_body =~ "/assets/pages/home.ts"
       assert conn.resp_body =~ ~s("MODE": "development")
       assert conn.resp_body =~ "import.meta.env.MODE"
+    end
+  end
+
+  describe "Svelte components" do
+    test "tracks Svelte style asset dependencies" do
+      logo_path = Path.join(@fixture_dir, "src/logo.svg")
+      svelte_path = Path.join(@fixture_dir, "src/App.svelte")
+
+      File.write!(logo_path, "<svg></svg>")
+
+      File.write!(svelte_path, """
+      <script>const msg = 'hi'</script>
+      <div class="logo">{msg}</div>
+      <style>.logo { background: url('./logo.svg') }</style>
+      """)
+
+      conn = call_dev_server("/assets/App.svelte")
+
+      assert conn.status == 200
+      assert Volt.HMR.StyleGraph.dependents(logo_path) == [svelte_path]
     end
   end
 
@@ -326,6 +373,25 @@ defmodule Volt.DevServerTest do
 
       assert conn.status == 200
       assert Volt.HMR.StyleGraph.dependents(logo_path) == [module_path]
+    end
+
+    test "removes stale CSS module asset dependencies" do
+      logo_path = Path.join(@fixture_dir, "src/logo.svg")
+      module_path = Path.join(@fixture_dir, "src/button.module.css")
+
+      File.write!(logo_path, "<svg></svg>")
+      File.write!(module_path, ".btn { background: url('./logo.svg') }")
+      File.touch!(module_path, {{2026, 1, 1}, {0, 0, 0}})
+
+      assert call_dev_server("/assets/button.module.css?import").status == 200
+      assert Volt.HMR.StyleGraph.dependents(logo_path) == [module_path]
+
+      File.write!(module_path, ".btn { color: red }")
+      File.touch!(module_path, {{2026, 1, 1}, {0, 0, 1}})
+
+      assert call_dev_server("/assets/button.module.css?import").status == 200
+      assert Volt.HMR.StyleGraph.dependents(logo_path) == []
+      assert Volt.HMR.StyleGraph.dependencies_of(module_path) == []
     end
 
     test "serves CSS modules as JavaScript even without import query" do
@@ -450,6 +516,50 @@ defmodule Volt.DevServerTest do
       send(watcher, {:rebuild, vue_path})
 
       assert_receive {:volt_hmr, :update, %{path: "App.vue", changes: [:style]}}, 1000
+    end
+
+    test "watcher removes stale Vue style asset dependencies" do
+      source_dir = Path.join(@fixture_dir, "src")
+      vue_path = Path.join(source_dir, "App.vue")
+      logo_path = Path.join(source_dir, "logo.svg")
+      Registry.register(Volt.HMR.Registry, :clients, nil)
+
+      File.write!(logo_path, "<svg>red</svg>")
+
+      File.write!(vue_path, """
+      <template><div class="logo">{{ msg }}</div></template>
+      <script setup>const msg = 'hi'</script>
+      <style>.logo { background: url('./logo.svg') }</style>
+      """)
+
+      File.touch!(vue_path, {{2026, 1, 1}, {0, 0, 0}})
+      File.touch!(logo_path, {{2026, 1, 1}, {0, 0, 0}})
+
+      assert call_dev_server("/assets/App.vue").status == 200
+      assert Volt.HMR.StyleGraph.dependents(logo_path) == [vue_path]
+
+      File.write!(vue_path, """
+      <template><div>{{ msg }}</div></template>
+      <script setup>const msg = 'hi'</script>
+      """)
+
+      File.touch!(vue_path, {{2026, 1, 1}, {0, 0, 1}})
+
+      watcher =
+        start_supervised!({Volt.Watcher, root: source_dir, name: :test_vue_style_stale_asset})
+
+      send(watcher, {:rebuild, vue_path})
+      _ = :sys.get_state(watcher)
+      assert Volt.HMR.StyleGraph.dependents(logo_path) == []
+      flush_hmr_messages()
+
+      File.write!(logo_path, "<svg>green</svg>")
+      File.touch!(logo_path, {{2026, 1, 1}, {0, 0, 1}})
+      send(watcher, {:file_event, self(), {logo_path, [:modified]}})
+      _ = :sys.get_state(watcher)
+
+      assert_receive {:volt_hmr, :update, %{path: "logo.svg", changes: [:full]}}, 1000
+      refute_receive {:volt_hmr, :update, %{path: "App.vue", changes: [:style]}}, 100
     end
 
     test "watcher invalidates Vue style owners when referenced assets change" do
@@ -778,6 +888,14 @@ defmodule Volt.DevServerTest do
       assert conn.status == 200
       assert conn.resp_body =~ "/@vendor/vue.js"
       refute conn.resp_body =~ "'vue'"
+    end
+  end
+
+  defp flush_hmr_messages do
+    receive do
+      {:volt_hmr, _type, _payload} -> flush_hmr_messages()
+    after
+      0 -> :ok
     end
   end
 
