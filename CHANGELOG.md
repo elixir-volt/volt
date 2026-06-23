@@ -12,6 +12,7 @@
 - Added `json_codec` as a runtime dependency.
 
 ### Fixed
+- Cyclic CSS import graphs no longer report the changed stylesheet as its own HMR dependent.
 - HMR websocket no longer drops idle connections after 60 seconds. The browser client now sends a periodic `{"type":"ping"}` heartbeat, and the server replies with `{"type":"pong"}`, preventing Bandit's websocket `read_timeout` from closing an otherwise idle socket. The client also tracks pongs and force-reconnects if the link goes half-open. This eliminates the spurious `[Volt] Disconnected. Reconnecting...` console noise observed on long-lived demo/dev pages with no file changes.
 
 ## 0.14.6

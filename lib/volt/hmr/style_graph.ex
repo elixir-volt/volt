@@ -41,7 +41,7 @@ defmodule Volt.HMR.StyleGraph do
 
   @doc "Return all transitive stylesheet importers for a stylesheet source file."
   @spec dependents(String.t()) :: [String.t()]
-  def dependents(path), do: dependents(path, MapSet.new())
+  def dependents(path), do: dependents(path, MapSet.new([path]))
 
   @doc "Remove a stylesheet from the graph."
   @spec remove(String.t()) :: :ok

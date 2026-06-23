@@ -268,7 +268,7 @@ defmodule Volt.PipelineTest do
     end
 
     test "inlines @import from disk" do
-      dir = Path.expand("fixtures/css_import", __DIR__)
+      dir = Path.join(System.tmp_dir!(), "volt-css-import-#{System.unique_integer([:positive])}")
       File.mkdir_p!(dir)
       File.write!(Path.join(dir, "reset.css"), "* { margin: 0 }")
       File.write!(Path.join(dir, "app.css"), "@import \"./reset.css\";\n.app { color: red }")
@@ -279,6 +279,35 @@ defmodule Volt.PipelineTest do
       {:ok, result} = Volt.Pipeline.compile(path, File.read!(path))
       assert result.code =~ "margin"
       assert result.code =~ "color"
+      refute result.code =~ "@import"
+    end
+
+    test "inlines nested @import dependencies from disk" do
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "volt-css-nested-import-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "tokens.css"), ":root { --brand: rebeccapurple }")
+
+      File.write!(
+        Path.join(dir, "theme.css"),
+        "@import \"./tokens.css\";\n.button { color: var(--brand) }"
+      )
+
+      File.write!(Path.join(dir, "app.css"), "@import \"./theme.css\";\n.app { display: grid }")
+
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      path = Path.join(dir, "app.css")
+      {:ok, result} = Volt.Pipeline.compile(path, File.read!(path), minify: false)
+
+      assert result.code =~ "--brand"
+      assert result.code =~ "rebeccapurple"
+      assert result.code =~ "button"
+      assert result.code =~ "display: grid"
       refute result.code =~ "@import"
     end
   end

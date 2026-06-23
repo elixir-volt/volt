@@ -63,6 +63,42 @@ defmodule Volt.BuilderTest do
       assert js =~ "Hello"
     end
 
+    test "style entry bundles nested CSS imports" do
+      File.write!(Path.join(@fixture_dir, "src/tokens.css"), ":root { --brand: #639 }")
+
+      File.write!(
+        Path.join(@fixture_dir, "src/theme.css"),
+        "@import './tokens.css';\n.button { color: var(--brand) }"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "src/styles.css"),
+        "@import './theme.css';\n.app { display: grid }"
+      )
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/styles.css"),
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert result.js == []
+      assert Path.basename(result.css.path) == "styles.css"
+
+      css = File.read!(result.css.path)
+      assert css =~ "--brand"
+      assert css =~ "button"
+      assert css =~ "display: grid"
+      refute css =~ "@import"
+
+      manifest = @outdir |> Path.join("manifest.json") |> File.read!() |> :json.decode()
+      assert manifest["styles.css"]["file"] == "styles.css"
+      assert manifest["styles.css"]["assets"] == ["styles.css"]
+    end
+
     test "single bundle emits JS asset imports and records them in manifest" do
       File.write!(Path.join(@fixture_dir, "src/logo.svg"), "<svg><path /></svg>")
 

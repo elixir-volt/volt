@@ -32,6 +32,18 @@ defmodule Volt.HMR.StyleGraphTest do
     assert Volt.HMR.StyleGraph.dependents(new_tokens) == [app]
   end
 
+  test "handles import cycles without returning the changed stylesheet as its own dependent" do
+    app = "/app/app.css"
+    theme = "/app/theme.css"
+    tokens = "/app/tokens.css"
+
+    Volt.HMR.StyleGraph.update(app, [theme])
+    Volt.HMR.StyleGraph.update(theme, [tokens])
+    Volt.HMR.StyleGraph.update(tokens, [app])
+
+    assert Volt.HMR.StyleGraph.dependents(tokens) |> Enum.sort() == [app, theme]
+  end
+
   test "removes stylesheet from graph" do
     app = "/app/app.css"
     tokens = "/app/tokens.css"
