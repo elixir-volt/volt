@@ -235,6 +235,7 @@ defmodule Volt.DevServer do
       {:ok, result} ->
         Volt.HMR.GlobGraph.update_from_source(file_path, source)
         Volt.HMR.ImportGraph.update_from_compiled(file_path, result.code)
+        update_css_import_graph(file_path, source)
 
         result = rewrite_dev_css_urls(result, file_path, config)
         mod_url = Volt.URL.join(config.prefix, relative)
@@ -258,6 +259,12 @@ defmodule Volt.DevServer do
         |> Conn.put_resp_content_type("application/javascript")
         |> Conn.send_resp(500, error_overlay(errors))
         |> Conn.halt()
+    end
+  end
+
+  defp update_css_import_graph(file_path, source) do
+    if Path.extname(file_path) == ".css" do
+      Volt.HMR.CSSImportGraph.update_from_source(file_path, source)
     end
   end
 

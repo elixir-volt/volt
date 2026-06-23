@@ -16,6 +16,7 @@ defmodule Volt.DevServerTest do
     """)
 
     Volt.Cache.clear()
+    Volt.HMR.CSSImportGraph.clear()
     Volt.HMR.ModuleGraph.clear()
 
     on_exit(fn -> File.rm_rf!(@fixture_dir) end)
@@ -445,6 +446,38 @@ defmodule Volt.DevServerTest do
       assert conn.status == 200
       assert conn.resp_body =~ "green"
       refute conn.resp_body =~ "red"
+    end
+
+    test "watcher invalidates CSS importers when imported CSS changes" do
+      source_dir = Path.join(@fixture_dir, "src")
+      app_css_path = Path.join(source_dir, "style.css")
+      tokens_css_path = Path.join(source_dir, "tokens.css")
+      Registry.register(Volt.HMR.Registry, :clients, nil)
+
+      File.write!(tokens_css_path, ":root { --brand: red }")
+      File.write!(app_css_path, "@import './tokens.css';\n.foo { color: var(--brand) }")
+      File.touch!(app_css_path, {{2026, 1, 1}, {0, 0, 0}})
+      File.touch!(tokens_css_path, {{2026, 1, 1}, {0, 0, 0}})
+
+      conn = call_dev_server("/assets/style.css?import")
+      assert conn.status == 200
+      assert conn.resp_body =~ "--brand: red"
+
+      File.write!(tokens_css_path, ":root { --brand: green }")
+      File.touch!(tokens_css_path, {{2026, 1, 1}, {0, 0, 1}})
+
+      watcher =
+        start_supervised!({Volt.Watcher, root: source_dir, name: :test_css_import_dependents})
+
+      send(watcher, {:file_event, self(), {tokens_css_path, [:modified]}})
+      _ = :sys.get_state(watcher)
+
+      assert_receive {:volt_hmr, :update, %{path: "style.css", changes: [:style]}}, 1000
+
+      conn = call_dev_server("/assets/style.css?import")
+      assert conn.status == 200
+      assert conn.resp_body =~ "--brand: green"
+      refute conn.resp_body =~ "--brand: red"
     end
 
     test "watcher invalidation evicts cache even for never-served files" do
