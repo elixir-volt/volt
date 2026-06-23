@@ -203,7 +203,7 @@ defmodule Volt.Watcher do
             Volt.HMR.GlobGraph.update_from_source(path, source)
             Volt.HMR.ImportGraph.update_from_compiled(path, result.code)
 
-            update_css_dependency_graph(path, source, result)
+            Volt.HMR.StyleDependencies.update_from_compile(path, source, result)
 
             changes = if css?, do: [:style], else: detect_changes(old_entry, result)
             broadcast_change(path, relative, changes, state.root)
@@ -228,24 +228,6 @@ defmodule Volt.Watcher do
   end
 
   defp css_file?(path), do: Path.extname(path) == ".css"
-
-  defp update_css_dependency_graph(path, source, result) do
-    case css_dependency_source(path, source, result) do
-      nil ->
-        Volt.HMR.StyleGraph.remove(path)
-
-      css ->
-        Volt.HMR.StyleGraph.update(path, Volt.CSS.Dependencies.resolve(css, path))
-    end
-  end
-
-  defp css_dependency_source(path, source, %{css: css}) when is_binary(css) do
-    if css_file?(path), do: source, else: css
-  end
-
-  defp css_dependency_source(path, source, _result) do
-    if css_file?(path), do: source
-  end
 
   defp handle_css_change(path, state) do
     relative = Path.relative_to(path, state.root)

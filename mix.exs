@@ -179,6 +179,8 @@ defmodule Volt.MixProject do
           Volt.HMR.GlobGraph,
           Volt.HMR.ImportGraph,
           Volt.HMR.Message,
+          Volt.HMR.StyleDependencies,
+          Volt.HMR.StyleGraph,
           Volt.HMR.ModuleGraph,
           Volt.HMR.ModuleGraph.Node,
           Volt.HMR.Socket

@@ -235,7 +235,7 @@ defmodule Volt.DevServer do
       {:ok, result} ->
         Volt.HMR.GlobGraph.update_from_source(file_path, source)
         Volt.HMR.ImportGraph.update_from_compiled(file_path, result.code)
-        update_css_dependency_graph(file_path, source, result)
+        Volt.HMR.StyleDependencies.update_from_compile(file_path, source, result)
 
         result = rewrite_dev_css_urls(result, file_path, config)
         mod_url = Volt.URL.join(config.prefix, relative)
@@ -260,25 +260,6 @@ defmodule Volt.DevServer do
         |> Conn.send_resp(500, error_overlay(errors))
         |> Conn.halt()
     end
-  end
-
-  defp update_css_dependency_graph(file_path, source, result) do
-    case css_dependency_source(file_path, source, result) do
-      nil ->
-        Volt.HMR.StyleGraph.remove(file_path)
-
-      css ->
-        dependencies = Volt.CSS.Dependencies.resolve(css, file_path)
-        Volt.HMR.StyleGraph.update(file_path, dependencies)
-    end
-  end
-
-  defp css_dependency_source(file_path, source, %{css: css}) when is_binary(css) do
-    if Path.extname(file_path) == ".css", do: source, else: css
-  end
-
-  defp css_dependency_source(file_path, source, _result) do
-    if Path.extname(file_path) == ".css", do: source
   end
 
   defp update_module_graph(mod_url, cache_key, file_path, code, source, content_type) do

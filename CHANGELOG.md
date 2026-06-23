@@ -9,6 +9,7 @@
 - Svelte-emitted styles participate in CSS asset dependency tracking for HMR.
 
 ### Changed
+- CSS dependency graph updates for physical CSS, CSS modules, and framework-emitted styles now flow through one HMR path.
 - HMR websocket messages (`ping`, `pong`, `update`, `error`) now flow through `Volt.HMR.Message`, which uses `JSONCodec` for struct<->JSON (de)serialization with `Jason` performing the final binary encoding.
 - Added `json_codec` as a runtime dependency.
 
