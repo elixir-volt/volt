@@ -4,7 +4,7 @@
 
 ### Added
 - `:hmr_timeout` option on `Volt.DevServer` (and the `:server` config profile) controls the HMR websocket idle timeout. Defaults to `60_000`ms.
-- CSS `@import` and `url()` relationships are now tracked through Vize's parser-backed CSS selectors so HMR can invalidate and hot-swap stylesheets when an imported stylesheet or referenced asset changes.
+- CSS `@import` and `url()` relationships are now tracked through Vize's parser-backed CSS selectors so HMR can invalidate and hot-swap stylesheets, CSS modules, and framework-emitted styles when an imported stylesheet or referenced asset changes.
 - CSS dependency tracking now resolves extensionless local imports to `.css` files and directory imports to `index.css` files.
 
 ### Changed
