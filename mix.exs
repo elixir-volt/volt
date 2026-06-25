@@ -115,7 +115,7 @@ defmodule Volt.MixProject do
       ],
       groups_for_modules: [
         Core: [Volt, Volt.Preload, Volt.Config, Volt.Plugin],
-        "Dev Server": [Volt.DevServer, Volt.Watcher, Volt.Dev.ConsoleForwarder],
+        "Dev Server": [Volt.DevServer, Volt.Watcher, Volt.HMR, Volt.Dev.ConsoleForwarder],
         "Production Build": [Volt.Builder, Volt.ChunkGraph, Volt.PublicDir],
         "Tailwind CSS": [Volt.Tailwind],
         CSS: [Volt.CSS.Modules],
@@ -178,7 +178,6 @@ defmodule Volt.MixProject do
           Volt.HMR.Boundary,
           Volt.HMR.GlobGraph,
           Volt.HMR.ImportGraph,
-          Volt.HMR,
           Volt.HMR.Message,
           Volt.HMR.StyleDependencies,
           Volt.HMR.StyleGraph,

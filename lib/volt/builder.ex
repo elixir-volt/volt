@@ -31,7 +31,7 @@ defmodule Volt.Builder do
 
   ## Options
 
-    * `:entry` — entry file path or list of paths (required)
+    * `:entry` — entry file path, plugin-resolved virtual entry specifier, or list of entries (required)
     * `:outdir` — output directory (default: `"priv/static/assets"`)
     * `:public_dir` — optional Vite-style public directory copied to the static root as-is
     * `:target` — JS target (e.g. `:es2020`)
@@ -42,7 +42,7 @@ defmodule Volt.Builder do
     * `:resolve_dirs` — additional directories to resolve bare specifiers (e.g. `["deps"]`)
     * `:name` — output base name (default: derived from entry filename)
     * `:aliases` — import alias map (e.g. `%{"@" => "assets/src"}`)
-    * `:plugins` — list of `Volt.Plugin` modules
+    * `:plugins` — list of `Volt.Plugin` modules. Plugin `resolve/2` and `load/1` hooks can provide virtual modules and virtual build entries.
     * `:mode` — build mode for env variables (default: `"production"`)
     * `:env_prefix` — env variable prefix or prefixes exposed to client code (default: `"VOLT_"`)
     * `:asset_url_prefix` — public URL prefix for emitted asset references (default: `"/assets"`)

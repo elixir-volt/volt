@@ -71,6 +71,45 @@ import readme from './README.md'
 document.getElementById('content').innerHTML = readme
 ```
 
+### Example: Virtual modules and virtual entries
+
+Plugins can resolve generated module ids and load their source without a file on disk. This is useful for framework and site-generator integrations that generate route manifests, island registries, or client boot entries.
+
+```elixir
+defmodule MySite.VoltPlugin do
+  @behaviour Volt.Plugin
+
+  @impl true
+  def name, do: "my-site"
+
+  @impl true
+  def resolve("virtual:my-site/client", _importer), do: {:ok, "virtual:my-site/client"}
+  def resolve("virtual:my-site/routes", _importer), do: {:ok, "virtual:my-site/routes"}
+  def resolve(_specifier, _importer), do: nil
+
+  @impl true
+  def load("virtual:my-site/client") do
+    {:ok, "import routes from 'virtual:my-site/routes'; console.log(routes);\n"}
+  end
+
+  def load("virtual:my-site/routes") do
+    {:ok, "export default [{ path: '/', component: 'Home' }];\n"}
+  end
+
+  def load(_id), do: nil
+end
+```
+
+Virtual modules can be imported by normal source files. They can also be production build entries when the same plugin is passed to `Volt.Builder.build/1`:
+
+```elixir
+Volt.Builder.build(
+  entry: "virtual:my-site/client",
+  outdir: "priv/static/assets",
+  plugins: [MySite.VoltPlugin]
+)
+```
+
 ### Example: Banner injection
 
 Use `render_chunk/2` to prepend a license banner to production output:

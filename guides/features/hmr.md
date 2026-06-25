@@ -12,6 +12,26 @@ The file watcher monitors your asset and template directories and pushes updates
 
 The browser client auto-reconnects on disconnect and shows compilation errors as an overlay.
 
+## Server-side broadcasts
+
+Packages that compose Volt's dev server can use `Volt.HMR` to notify connected browsers without depending on Volt's internal registry messages:
+
+```elixir
+# Re-import a stylesheet without a full reload
+Volt.HMR.style_update("css/app.css")
+
+# Ask the browser to reload the current page
+Volt.HMR.full_reload("content/posts/hello.md")
+
+# Send a custom update payload, optionally with an HMR boundary
+Volt.HMR.update("src/counter.ts", [:hmr], boundary: "/assets/counter.ts")
+
+# Show the browser error overlay
+Volt.HMR.error("content/posts/hello.md", "Invalid frontmatter")
+```
+
+Use this when an external package owns additional dependency graphs, such as pages, layouts, or content collections, while Volt serves the asset graph.
+
 ## `import.meta.hot`
 
 Each module served in dev mode includes an `import.meta.hot` object for granular HMR:

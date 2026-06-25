@@ -25,7 +25,7 @@ defmodule Volt.Plugin do
   @doc "Return extensions owned by this plugin for `:compile`, `:resolve`, `:watch`, or `:scan`."
   @callback extensions(kind :: atom()) :: [String.t()]
 
-  @doc "Resolve an import specifier to a file path, `:skip`, or pass with `nil`."
+  @doc "Resolve an import or build-entry specifier to a file path, virtual module id, `:skip`, or pass with `nil`."
   @callback resolve(specifier :: String.t(), importer :: String.t() | nil) ::
               {:ok, String.t()} | :skip | nil
 
