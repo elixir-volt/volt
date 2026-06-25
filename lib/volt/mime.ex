@@ -11,11 +11,9 @@ defmodule Volt.MIME do
   @css "text/css"
   @octet_stream "application/octet-stream"
 
-  @asset_exts MapSet.new(~w[
-    .svg .png .jpg .jpeg .gif .webp .avif .ico
-    .woff .woff2 .ttf .eot .otf
-    .mp4 .webm .ogg .mp3 .wav
-    .pdf .wasm .txt
+  @non_asset_exts MapSet.new(~w[
+    .css .js .mjs .cjs .ts .mts .cts .jsx .tsx
+    .json .vue .svelte .html .htm .md
   ])
 
   @overrides %{
@@ -42,9 +40,15 @@ defmodule Volt.MIME do
     Map.get(@overrides, ext) || MIME.from_path(path)
   end
 
-  @doc "Return whether a path is one of Volt's static asset file types."
+  @doc "Return whether a path is a MIME-known, non-source static asset."
   @spec asset?(String.t()) :: boolean()
-  def asset?(path), do: MapSet.member?(@asset_exts, path |> Path.extname() |> String.downcase())
+  def asset?(path) do
+    ext = path |> Path.extname() |> String.downcase()
+    mime_ext = String.trim_leading(ext, ".")
+
+    ext != "" and not MapSet.member?(@non_asset_exts, ext) and
+      (Map.has_key?(@overrides, ext) or MIME.has_type?(mime_ext))
+  end
 
   @doc "Return whether a content type should be treated as JavaScript."
   @spec javascript?(String.t() | nil) :: boolean()
