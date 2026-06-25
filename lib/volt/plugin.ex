@@ -29,7 +29,7 @@ defmodule Volt.Plugin do
   @callback resolve(specifier :: String.t(), importer :: String.t() | nil) ::
               {:ok, String.t()} | :skip | nil
 
-  @doc "Load content for a resolved module path."
+  @doc "Load content for a resolved module path. A two-tuple return is treated as JavaScript."
   @callback load(path :: String.t()) ::
               {:ok, String.t(), String.t()} | {:ok, String.t()} | nil
 

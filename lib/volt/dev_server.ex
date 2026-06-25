@@ -90,6 +90,11 @@ defmodule Volt.DevServer do
     |> Conn.halt()
   end
 
+  def call(%Conn{request_path: "/@volt/virtual/" <> encoded_id} = conn, config) do
+    id = Volt.JS.Vendor.decode_specifier(encoded_id)
+    serve_virtual(conn, id, config)
+  end
+
   def call(%Conn{method: "POST", request_path: "/@volt/console"} = conn, _config) do
     {:ok, body, conn} = Conn.read_body(conn)
     Volt.Dev.ConsoleForwarder.log(body)
@@ -139,6 +144,58 @@ defmodule Volt.DevServer do
           :no_match ->
             conn
         end
+    end
+  end
+
+  defp serve_virtual(conn, id, config) do
+    case Volt.PluginRunner.load(config.plugins, id) do
+      {:ok, source, content_type} ->
+        compile_and_serve_virtual(conn, id, source, content_type, config)
+
+      {:ok, source} ->
+        compile_and_serve_virtual(conn, id, source, nil, config)
+
+      nil ->
+        conn
+        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.send_resp(404, "// virtual module not found: #{id}")
+        |> Conn.halt()
+    end
+  end
+
+  defp compile_and_serve_virtual(conn, id, source, content_type, config) do
+    pipeline_opts = [
+      target: config.target,
+      import_source: config.import_source,
+      vapor: config.vapor,
+      custom_renderer: config.custom_renderer,
+      sourcemap: true,
+      plugins: config.plugins,
+      define: config.define,
+      rewrite_import: &rewrite_dev_specifier(&1, id, config)
+    ]
+
+    case Volt.Pipeline.compile(id, source, pipeline_opts) do
+      {:ok, result} ->
+        mod_url = virtual_url(id)
+        code = code_for_request(result, mod_url, content_type || "application/javascript", false)
+
+        update_module_graph(
+          mod_url,
+          id,
+          id,
+          code,
+          source,
+          content_type || "application/javascript"
+        )
+
+        send_compiled(conn, code, result.sourcemap, content_type || "application/javascript")
+
+      {:error, errors} ->
+        conn
+        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.send_resp(500, error_overlay(errors))
+        |> Conn.halt()
     end
   end
 
@@ -435,6 +492,23 @@ defmodule Volt.DevServer do
   # ── Import rewriting ──────────────────────────────────────────────
 
   defp rewrite_dev_specifier(specifier, importer, config) do
+    {path_specifier, query} = URL.split_query(specifier)
+
+    case Volt.PluginRunner.resolve(config.plugins, path_specifier, importer) do
+      {:ok, resolved} ->
+        rewrite_plugin_resolved(resolved, query, config)
+
+      :skip ->
+        :keep
+
+      nil ->
+        rewrite_dev_specifier_by_type(path_specifier, query, importer, config)
+    end
+  end
+
+  defp rewrite_dev_specifier_by_type(specifier, query, importer, config) do
+    specifier = URL.append_query(specifier, query)
+
     cond do
       NPM.Resolution.PackageResolver.node_builtin?(specifier) ->
         :keep
@@ -450,6 +524,17 @@ defmodule Volt.DevServer do
           {:ok, resolved} -> rewrite_resolved_path(resolved, config)
           :pass -> rewrite_bare(specifier, config)
         end
+    end
+  end
+
+  defp rewrite_plugin_resolved(resolved, query, config) do
+    {resolved_path, resolved_query} = URL.split_query(resolved)
+    query = join_queries(resolved_query, query)
+
+    if Path.type(resolved_path) == :absolute do
+      rewrite_root_path(resolved_path, query, config)
+    else
+      {:rewrite, virtual_url(resolved_path, query)}
     end
   end
 
@@ -501,6 +586,15 @@ defmodule Volt.DevServer do
       true -> url
     end
   end
+
+  defp virtual_url(id, query \\ "") do
+    "/@volt/virtual/#{Volt.JS.Vendor.encode_specifier(id)}"
+    |> URL.append_query(query)
+  end
+
+  defp join_queries("", query), do: query
+  defp join_queries(query, ""), do: query
+  defp join_queries(left, right), do: left <> "&" <> right
 
   defp resolve_with_extension(path, plugins) do
     if Path.extname(path) != "" and File.regular?(path) do

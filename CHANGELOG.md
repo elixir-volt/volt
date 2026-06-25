@@ -5,6 +5,8 @@
 ### Added
 - `Volt.HMR` exposes public helpers for external dev servers to broadcast HMR updates, style updates, full reloads, and errors.
 - `Volt.Builder` can now use plugin-resolved virtual modules as production build entries.
+- `Volt.DevServer` can now rewrite and serve plugin-loaded virtual modules in development.
+- Plugin `load/1` two-tuple returns (`{:ok, code}`) are treated as JavaScript, making extensionless virtual modules work consistently in dev and production.
 
 ### Changed
 - `Volt.DevServer` pass-through behavior is covered for composition with downstream HTML/site plugs.

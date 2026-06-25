@@ -37,7 +37,7 @@ defmodule Volt.Pipeline do
     {source, content_type} =
       case Volt.PluginRunner.load(plugins, path) do
         {:ok, code, ct} -> {code, ct}
-        {:ok, code} -> {code, nil}
+        {:ok, code} -> {code, "application/javascript"}
         nil -> {source, nil}
       end
 

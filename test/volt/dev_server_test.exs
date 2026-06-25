@@ -3,6 +3,29 @@ defmodule Volt.DevServerTest do
   import Plug.Test
   import Plug.Conn
 
+  defmodule VirtualPlugin do
+    @behaviour Volt.Plugin
+
+    def name, do: "virtual"
+
+    def resolve("virtual:routes", _importer), do: {:ok, "virtual:routes"}
+    def resolve("virtual:client", _importer), do: {:ok, "virtual:client"}
+    def resolve("virtual:plain", _importer), do: {:ok, "virtual:plain"}
+    def resolve(_specifier, _importer), do: nil
+
+    def load("virtual:routes"),
+      do: {:ok, "export default [{ path: '/' }];", "application/javascript"}
+
+    def load("virtual:client") do
+      {:ok, "import routes from 'virtual:routes'; export default routes;",
+       "application/javascript"}
+    end
+
+    def load("virtual:plain"), do: {:ok, "export default 123;"}
+
+    def load(_id), do: nil
+  end
+
   @fixture_dir Path.expand("fixtures", __DIR__)
 
   setup do
@@ -861,6 +884,44 @@ defmodule Volt.DevServerTest do
       assert conn.status == 200
       assert conn.resp_body =~ "/assets/style.css?import"
       refute conn.resp_body =~ "'./style.css'"
+    end
+
+    test "rewrites virtual module imports to virtual dev URLs" do
+      File.write!(
+        Path.join(@fixture_dir, "src/entry.ts"),
+        "import routes from 'virtual:routes'; console.log(routes)"
+      )
+
+      conn = call_dev_server("/assets/entry.ts", plugins: [VirtualPlugin])
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "/@volt/virtual/virtual:routes"
+      refute conn.resp_body =~ "'virtual:routes'"
+    end
+
+    test "serves plugin-loaded virtual modules" do
+      conn = call_dev_server("/@volt/virtual/virtual:routes", plugins: [VirtualPlugin])
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "path"
+      assert conn.resp_body =~ "import.meta.hot"
+      assert get_resp_header(conn, "content-type") |> hd() =~ "javascript"
+    end
+
+    test "extensionless virtual modules without content type default to JavaScript" do
+      conn = call_dev_server("/@volt/virtual/virtual:plain", plugins: [VirtualPlugin])
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "123"
+      assert get_resp_header(conn, "content-type") |> hd() =~ "javascript"
+    end
+
+    test "virtual modules can import other virtual modules" do
+      conn = call_dev_server("/@volt/virtual/virtual:client", plugins: [VirtualPlugin])
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "/@volt/virtual/virtual:routes"
+      refute conn.resp_body =~ "'virtual:routes'"
     end
 
     test "rewrites asset imports to import-mode URLs" do

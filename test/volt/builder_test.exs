@@ -18,11 +18,30 @@ defmodule Volt.BuilderTest do
     def name, do: "virtual-mod"
     def resolve("my-virtual", _), do: {:ok, "virtual:my-virtual"}
     def resolve("virtual-entry", _), do: {:ok, "virtual:entry"}
+    def resolve("virtual:site/entry-a", _), do: {:ok, "virtual:site/entry-a"}
+    def resolve("virtual:site/entry-b", _), do: {:ok, "virtual:site/entry-b"}
+    def resolve("virtual:site/style-entry", _), do: {:ok, "virtual:site/style-entry"}
+    def resolve("virtual:plain", _), do: {:ok, "virtual:plain"}
+
+    def resolve("./style.css", "virtual:site/style-entry"),
+      do: {:ok, Path.expand("fixtures/builder/src/style.css", __DIR__)}
+
     def resolve(_, _), do: nil
     def load("virtual:my-virtual"), do: {:ok, "export default 99;", "application/javascript"}
 
     def load("virtual:entry"),
       do: {:ok, "import val from 'my-virtual'; console.log(val);", "application/javascript"}
+
+    def load("virtual:site/entry-a"),
+      do: {:ok, "console.log('entry a');", "application/javascript"}
+
+    def load("virtual:site/entry-b"),
+      do: {:ok, "console.log('entry b');", "application/javascript"}
+
+    def load("virtual:site/style-entry"),
+      do: {:ok, "import './style.css'; console.log('with css');", "application/javascript"}
+
+    def load("virtual:plain"), do: {:ok, "export default 123;"}
 
     def load(_), do: nil
   end
@@ -1281,6 +1300,55 @@ defmodule Volt.BuilderTest do
       js = File.read!(result.js.path)
       assert Path.basename(result.js.path) == "virtual-entry.js"
       assert js =~ "99"
+    end
+
+    test "extensionless virtual modules default to JavaScript" do
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: "virtual:plain",
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          plugins: [VirtualModPlugin]
+        )
+
+      assert result.manifest["virtual:plain.js"].file == "virtual:plain.js"
+      assert File.read!(Path.join(@outdir, "virtual:plain.js")) =~ "123"
+    end
+
+    test "multiple virtual build entries get stable manifest keys" do
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: ["virtual:site/entry-a", "virtual:site/entry-b"],
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          plugins: [VirtualModPlugin]
+        )
+
+      assert Map.has_key?(result.manifest, "entry-a.js")
+      assert Map.has_key?(result.manifest, "entry-b.js")
+      assert result.manifest["entry-a.js"].file == "entry-a.js"
+      assert result.manifest["entry-b.js"].file == "entry-b.js"
+    end
+
+    test "virtual build entries can import stylesheet dependencies" do
+      File.write!(Path.join(@fixture_dir, "src/style.css"), ".foo { color: red }")
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: "virtual:site/style-entry",
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          plugins: [VirtualModPlugin]
+        )
+
+      assert result.manifest["style-entry.js"].css == ["style-entry.css"]
+      assert File.read!(Path.join(@outdir, "style-entry.css")) =~ ".foo"
     end
 
     test "same-name files in different directories get unique labels" do
