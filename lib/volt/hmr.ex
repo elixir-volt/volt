@@ -46,6 +46,14 @@ defmodule Volt.HMR do
   @spec error(String.t(), term()) :: :ok
   def error(path, reason), do: broadcast(:error, %{path: path, reason: reason})
 
+  @doc "Invalidate Volt's dev compilation state for a source file without broadcasting."
+  @spec invalidate_file(String.t()) :: :ok
+  def invalidate_file(path) do
+    Volt.Cache.evict_file(path)
+    Volt.HMR.ModuleGraph.invalidate_file(path)
+    :ok
+  end
+
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

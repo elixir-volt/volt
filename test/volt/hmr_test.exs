@@ -36,4 +36,16 @@ defmodule Volt.HMRTest do
     assert :ok = Volt.HMR.error("index.html", "boom")
     assert_receive {:volt_hmr, :error, %{path: "index.html", reason: "boom"}}
   end
+
+  test "invalidate_file evicts dev compilation state" do
+    path = Path.expand("fixtures/hmr/app.ts", __DIR__)
+    Volt.Cache.put(path, 1, %{code: "old", sourcemap: nil, content_type: "text/javascript"})
+    Volt.HMR.ModuleGraph.update_module("/assets/app.ts", "/assets/app.ts", path, [])
+
+    assert :ok = Volt.HMR.invalidate_file(path)
+
+    assert Volt.Cache.get(path, 1) == nil
+    [%{last_invalidated_at: timestamp}] = Volt.HMR.ModuleGraph.get_by_file(path)
+    assert is_integer(timestamp)
+  end
 end

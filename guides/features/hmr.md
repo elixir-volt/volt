@@ -32,6 +32,32 @@ Volt.HMR.error("content/posts/hello.md", "Invalid frontmatter")
 
 Use this when an external package owns additional dependency graphs, such as pages, layouts, or content collections, while Volt serves the asset graph.
 
+`Volt.HMR.invalidate_file/1` evicts Volt's dev compilation state for a source file and marks its module-graph nodes invalidated without broadcasting. Use it before sending your own update when an external package knows a file's compiled output is stale.
+
+## Watching extra reload directories
+
+`Volt.Watcher` can watch directories outside the asset root and request a full browser reload when files there change:
+
+```elixir
+Volt.Watcher.start_link(
+  root: "assets",
+  reload_dirs: ["content", "layouts"]
+)
+```
+
+The same option is available from config/CLI:
+
+```elixir
+config :volt, :server,
+  reload_dirs: ["content", "layouts"]
+```
+
+```bash
+mix volt.dev --reload-dir content --reload-dir layouts
+```
+
+This is intentionally generic: Volt does not parse those files or assign site semantics to them.
+
 ## `import.meta.hot`
 
 Each module served in dev mode includes an `import.meta.hot` object for granular HMR:

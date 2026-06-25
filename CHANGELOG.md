@@ -7,6 +7,8 @@
 - `Volt.Builder` can now use plugin-resolved virtual modules as production build entries.
 - `Volt.DevServer` can now rewrite and serve plugin-loaded virtual modules in development.
 - Plugin `load/1` two-tuple returns (`{:ok, code}`) are treated as JavaScript, making extensionless virtual modules work consistently in dev and production.
+- `Volt.Watcher` supports generic `:reload_dirs` for external source directories that should trigger a full browser reload.
+- `Volt.HMR.invalidate_file/1` lets external integrations evict Volt dev compilation state without broadcasting.
 
 ### Changed
 - `Volt.DevServer` pass-through behavior is covered for composition with downstream HTML/site plugs.

@@ -13,7 +13,8 @@ defmodule Mix.Tasks.Volt.Dev do
   ## Options
 
     * `--root` — asset source directory (default from config or `"assets"`)
-    * `--watch-dir` — additional directory to watch (repeatable)
+    * `--watch-dir` — additional directory to watch for Tailwind scanning (repeatable)
+    * `--reload-dir` — additional directory whose changes trigger a full browser reload (repeatable)
     * `--tailwind` — enable Tailwind CSS rebuilds
     * `--tailwind-css` — custom Tailwind input CSS file
     * `--tailwind-outdir` — directory to write rebuilt CSS (default: `"priv/static/assets/css"`)
@@ -33,6 +34,7 @@ defmodule Mix.Tasks.Volt.Dev do
         strict: [
           root: :string,
           watch_dir: [:string, :keep],
+          reload_dir: [:string, :keep],
           tailwind: :boolean,
           tailwind_css: :string,
           tailwind_outdir: :string,
@@ -53,10 +55,17 @@ defmodule Mix.Tasks.Volt.Dev do
         (tailwind_config != [] and Keyword.get(parsed, :tailwind, true))
 
     cli_watch_dirs = Keyword.get_values(parsed, :watch_dir)
+    cli_reload_dirs = Keyword.get_values(parsed, :reload_dir)
 
     watch_dirs =
       case cli_watch_dirs do
         [] -> server_config.watch_dirs
+        list -> list
+      end
+
+    reload_dirs =
+      case cli_reload_dirs do
+        [] -> server_config.reload_dirs
         list -> list
       end
 
@@ -71,6 +80,7 @@ defmodule Mix.Tasks.Volt.Dev do
     opts = [
       root: root,
       watch_dirs: watch_dirs,
+      reload_dirs: reload_dirs,
       tailwind: tailwind?,
       tailwind_css: tailwind_css,
       tailwind_outdir: Keyword.get(parsed, :tailwind_outdir, Paths.static_css()),
@@ -83,6 +93,10 @@ defmodule Mix.Tasks.Volt.Dev do
 
     if tailwind? do
       Mix.shell().info("[Volt] Tailwind CSS enabled (watching #{Enum.join(watch_dirs, ", ")})")
+    end
+
+    if reload_dirs != [] do
+      Mix.shell().info("[Volt] Full reload dirs: #{Enum.join(reload_dirs, ", ")}")
     end
 
     unless iex_running?() do

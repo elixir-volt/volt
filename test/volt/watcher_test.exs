@@ -86,6 +86,34 @@ defmodule Volt.WatcherTest do
     GenServer.stop(pid)
   end
 
+  test "reload_dirs trigger full browser reloads for non-asset source files", %{
+    watch_dir: watch_dir
+  } do
+    Registry.register(Volt.HMR.Registry, :clients, nil)
+
+    asset_dir = Path.join(watch_dir, "assets")
+    content_dir = Path.join(watch_dir, "content")
+    File.mkdir_p!(asset_dir)
+    File.mkdir_p!(content_dir)
+    page = Path.join(content_dir, "hello.md")
+    File.write!(page, "# Hello")
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: asset_dir,
+        reload_dirs: [content_dir],
+        name: :test_watcher_reload_dirs
+      )
+
+    Process.sleep(100)
+    File.write!(page, "# Updated")
+
+    assert_receive {:volt_hmr, :update, %{path: path, changes: ["full"]}}, 2000
+    assert path == Path.relative_to_cwd(page)
+
+    GenServer.stop(pid)
+  end
+
   test "triggers tailwind rebuild on template changes", %{watch_dir: watch_dir} do
     Registry.register(Volt.HMR.Registry, :clients, nil)
 

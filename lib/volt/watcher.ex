@@ -17,6 +17,8 @@ defmodule Volt.Watcher do
     * `:root` — asset source directory (required, e.g. `"assets"`)
     * `:watch_dirs` — additional directories to watch for Tailwind scanning
       (e.g. `["lib/"]` for `.ex`/`.heex` templates)
+    * `:reload_dirs` — additional directories whose changes trigger a full
+      browser reload without being compiled by Volt
     * `:tailwind` — enable Tailwind CSS rebuilds (default: `false`)
     * `:tailwind_css` — custom Tailwind input CSS (default: Tailwind base)
     * `:target` — JS downlevel target
@@ -42,7 +44,8 @@ defmodule Volt.Watcher do
     pending: %{},
     tailwind_timer: nil,
     tailwind_changed: [],
-    tailwind_outdir: nil
+    tailwind_outdir: nil,
+    reload_dirs: []
   ]
 
   def start_link(opts) do
@@ -53,14 +56,15 @@ defmodule Volt.Watcher do
   def init(opts) do
     root = Keyword.fetch!(opts, :root) |> Path.expand()
     watch_dirs = Keyword.get(opts, :watch_dirs, []) |> Enum.map(&Path.expand/1)
+    reload_dirs = Keyword.get(opts, :reload_dirs, []) |> Enum.map(&Path.expand/1)
     tailwind_outdir = Keyword.get(opts, :tailwind_outdir) |> maybe_expand()
 
     config =
       opts
-      |> Keyword.drop([:root, :name, :watch_dirs, :tailwind_outdir])
+      |> Keyword.drop([:root, :name, :watch_dirs, :reload_dirs, :tailwind_outdir])
       |> Map.new()
 
-    all_dirs = Enum.uniq([root | watch_dirs])
+    all_dirs = Enum.uniq([root | watch_dirs ++ reload_dirs])
 
     fs_pids =
       Enum.map(all_dirs, fn dir ->
@@ -73,7 +77,8 @@ defmodule Volt.Watcher do
       root: root,
       fs_pids: fs_pids,
       config: config,
-      tailwind_outdir: tailwind_outdir
+      tailwind_outdir: tailwind_outdir,
+      reload_dirs: reload_dirs
     }
 
     if config[:tailwind] do
@@ -131,6 +136,10 @@ defmodule Volt.Watcher do
 
         ext in Extensions.template() and state.config[:tailwind] ->
           state = maybe_schedule_tailwind(state, path)
+          {:noreply, state}
+
+        reload_path?(path, state) ->
+          handle_reload_change(path)
           {:noreply, state}
 
         true ->
@@ -259,6 +268,11 @@ defmodule Volt.Watcher do
     end)
   end
 
+  defp handle_reload_change(path) do
+    path = Path.relative_to_cwd(path)
+    Volt.HMR.full_reload(path)
+  end
+
   defp handle_asset_change(path, state) do
     relative = Path.relative_to(path, state.root)
     css_dependents = Volt.HMR.StyleGraph.dependents(path)
@@ -362,12 +376,11 @@ defmodule Volt.Watcher do
     end
   end
 
-  defp broadcast(type, payload) do
-    Registry.dispatch(Volt.HMR.Registry, :clients, fn entries ->
-      msg = {:volt_hmr, type, payload}
-      for {pid, _} <- entries, do: send(pid, msg)
-    end)
+  defp reload_path?(path, state) do
+    Enum.any?(state.reload_dirs, &Volt.Path.inside?(path, &1))
   end
+
+  defp broadcast(type, payload), do: Volt.HMR.broadcast(type, payload)
 
   @impl true
   def terminate(_reason, state) do
