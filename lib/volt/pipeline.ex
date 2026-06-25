@@ -37,7 +37,7 @@ defmodule Volt.Pipeline do
     {source, content_type} =
       case Volt.PluginRunner.load(plugins, path) do
         {:ok, code, ct} -> {code, ct}
-        {:ok, code} -> {code, "application/javascript"}
+        {:ok, code} -> {code, Volt.MIME.javascript()}
         nil -> {source, nil}
       end
 
@@ -48,7 +48,7 @@ defmodule Volt.Pipeline do
         plugin_result = Volt.PluginRunner.compile(plugins, path, source, opts) ->
           plugin_result
 
-        content_type in ~w(application/javascript text/javascript) ->
+        Volt.MIME.javascript?(content_type) ->
           compile_js(path, source, opts)
 
         ext in Volt.JS.Extensions.js() ->

@@ -27,19 +27,16 @@ defmodule Volt.BuilderTest do
       do: {:ok, Path.expand("fixtures/builder/src/style.css", __DIR__)}
 
     def resolve(_, _), do: nil
-    def load("virtual:my-virtual"), do: {:ok, "export default 99;", "application/javascript"}
+    def load("virtual:my-virtual"), do: {:ok, "export default 99;"}
 
-    def load("virtual:entry"),
-      do: {:ok, "import val from 'my-virtual'; console.log(val);", "application/javascript"}
+    def load("virtual:entry"), do: {:ok, "import val from 'my-virtual'; console.log(val);"}
 
-    def load("virtual:site/entry-a"),
-      do: {:ok, "console.log('entry a');", "application/javascript"}
+    def load("virtual:site/entry-a"), do: {:ok, "console.log('entry a');"}
 
-    def load("virtual:site/entry-b"),
-      do: {:ok, "console.log('entry b');", "application/javascript"}
+    def load("virtual:site/entry-b"), do: {:ok, "console.log('entry b');"}
 
     def load("virtual:site/style-entry"),
-      do: {:ok, "import './style.css'; console.log('with css');", "application/javascript"}
+      do: {:ok, "import './style.css'; console.log('with css');"}
 
     def load("virtual:plain"), do: {:ok, "export default 123;"}
 

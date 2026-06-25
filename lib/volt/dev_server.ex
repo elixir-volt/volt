@@ -84,7 +84,7 @@ defmodule Volt.DevServer do
     bootstrap = "globalThis.__VOLT_HEARTBEAT__ = #{heartbeat_interval};\n"
 
     conn
-    |> Conn.put_resp_content_type("application/javascript")
+    |> Conn.put_resp_content_type(Volt.MIME.javascript())
     |> Conn.put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
     |> Conn.send_resp(200, bootstrap <> client)
     |> Conn.halt()
@@ -111,14 +111,14 @@ defmodule Volt.DevServer do
     case serve_vendor(specifier, config, conn.query_params["v"]) do
       {:ok, code} ->
         conn
-        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.put_resp_content_type(Volt.MIME.javascript())
         |> Conn.put_resp_header("cache-control", "max-age=31536000, immutable")
         |> Conn.send_resp(200, code)
         |> Conn.halt()
 
       {:error, :outdated} ->
         conn
-        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.put_resp_content_type(Volt.MIME.javascript())
         |> Conn.send_resp(504, "// outdated optimized dependency: #{specifier}")
         |> Conn.halt()
 
@@ -157,7 +157,7 @@ defmodule Volt.DevServer do
 
       nil ->
         conn
-        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.put_resp_content_type(Volt.MIME.javascript())
         |> Conn.send_resp(404, "// virtual module not found: #{id}")
         |> Conn.halt()
     end
@@ -177,23 +177,17 @@ defmodule Volt.DevServer do
 
     case Volt.Pipeline.compile(id, source, pipeline_opts) do
       {:ok, result} ->
+        content_type = content_type || Volt.MIME.javascript()
         mod_url = virtual_url(id)
-        code = code_for_request(result, mod_url, content_type || "application/javascript", false)
+        code = code_for_request(result, mod_url, content_type, false)
 
-        update_module_graph(
-          mod_url,
-          id,
-          id,
-          code,
-          source,
-          content_type || "application/javascript"
-        )
+        update_module_graph(mod_url, id, id, code, source, content_type)
 
-        send_compiled(conn, code, result.sourcemap, content_type || "application/javascript")
+        send_compiled(conn, code, result.sourcemap, content_type)
 
       {:error, errors} ->
         conn
-        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.put_resp_content_type(Volt.MIME.javascript())
         |> Conn.send_resp(500, error_overlay(errors))
         |> Conn.halt()
     end
@@ -313,7 +307,7 @@ defmodule Volt.DevServer do
 
       {:error, errors} ->
         conn
-        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.put_resp_content_type(Volt.MIME.javascript())
         |> Conn.send_resp(500, error_overlay(errors))
         |> Conn.halt()
     end
@@ -358,8 +352,9 @@ defmodule Volt.DevServer do
     |> URI.to_string()
   end
 
-  defp module_graph_type("text/css"), do: :css
-  defp module_graph_type(_content_type), do: :js
+  defp module_graph_type(content_type) do
+    if Volt.MIME.css?(content_type), do: :css, else: :js
+  end
 
   defp send_compiled(conn, code, sourcemap, content_type) do
     body =
@@ -404,14 +399,14 @@ defmodule Volt.DevServer do
     case Volt.Assets.to_js_module(file_path, opts) do
       {:ok, code} ->
         conn
-        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.put_resp_content_type(Volt.MIME.javascript())
         |> Conn.put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
         |> Conn.send_resp(200, code)
         |> Conn.halt()
 
       {:error, reason} ->
         conn
-        |> Conn.put_resp_content_type("application/javascript")
+        |> Conn.put_resp_content_type(Volt.MIME.javascript())
         |> Conn.send_resp(500, "// asset module error: #{inspect(reason)}")
         |> Conn.halt()
     end
@@ -419,8 +414,8 @@ defmodule Volt.DevServer do
 
   defp content_type_for(path, css_import?) do
     case {Path.extname(path), css_import?} do
-      {".css", false} -> "text/css"
-      _ -> "application/javascript"
+      {".css", false} -> Volt.MIME.css()
+      _ -> Volt.MIME.javascript()
     end
   end
 
@@ -611,11 +606,9 @@ defmodule Volt.DevServer do
 
   # ── HMR preamble ──────────────────────────────────────────────────
 
-  defp maybe_inject_hmr_preamble(code, mod_url, "application/javascript") do
-    hmr_preamble(mod_url) <> code
+  defp maybe_inject_hmr_preamble(code, mod_url, content_type) do
+    if Volt.MIME.javascript?(content_type), do: hmr_preamble(mod_url) <> code, else: code
   end
-
-  defp maybe_inject_hmr_preamble(code, _relative, _content_type), do: code
 
   defp hmr_preamble(mod_url) do
     Volt.JS.Asset.compiled_template!("dev/hmr-preamble.ts", mod_url: mod_url)
@@ -671,11 +664,9 @@ defmodule Volt.DevServer do
 
   # ── Helpers ───────────────────────────────────────────────────────
 
-  defp maybe_inject_dev_console_forwarder(code, "application/javascript") do
-    Volt.Dev.ConsoleForwarder.inject(code)
+  defp maybe_inject_dev_console_forwarder(code, content_type) do
+    if Volt.MIME.javascript?(content_type), do: Volt.Dev.ConsoleForwarder.inject(code), else: code
   end
-
-  defp maybe_inject_dev_console_forwarder(code, _content_type), do: code
 
   defp error_overlay(errors) do
     msg =

@@ -216,7 +216,7 @@ defmodule Volt.Builder.Collector do
          ) do
       nil ->
         cond do
-          content_type in ~w(application/javascript text/javascript) ->
+          Volt.MIME.javascript?(content_type) ->
             extract_js_typed_imports(source, filename)
 
           ext == ".json" or ext in Volt.JS.Extensions.css() ->

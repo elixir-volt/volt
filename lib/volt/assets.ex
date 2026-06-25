@@ -25,35 +25,9 @@ defmodule Volt.Assets do
 
   @default_inline_limit 4096
 
-  @mime_types %{
-    ".svg" => "image/svg+xml",
-    ".png" => "image/png",
-    ".jpg" => "image/jpeg",
-    ".jpeg" => "image/jpeg",
-    ".gif" => "image/gif",
-    ".webp" => "image/webp",
-    ".avif" => "image/avif",
-    ".ico" => "image/x-icon",
-    ".woff" => "font/woff",
-    ".woff2" => "font/woff2",
-    ".ttf" => "font/ttf",
-    ".eot" => "application/vnd.ms-fontobject",
-    ".otf" => "font/otf",
-    ".mp4" => "video/mp4",
-    ".webm" => "video/webm",
-    ".ogg" => "audio/ogg",
-    ".mp3" => "audio/mpeg",
-    ".wav" => "audio/wav",
-    ".pdf" => "application/pdf",
-    ".wasm" => "application/wasm",
-    ".txt" => "text/plain"
-  }
-
   @doc "Check if a path is a known asset type."
   @spec asset?(String.t()) :: boolean()
-  def asset?(path) do
-    Map.has_key?(@mime_types, Path.extname(path))
-  end
+  def asset?(path), do: Volt.MIME.asset?(path)
 
   @doc """
   Generate a JS module that exports asset content or a URL.
@@ -141,9 +115,7 @@ defmodule Volt.Assets do
 
   @doc "Get MIME type for a file extension."
   @spec mime_type(String.t()) :: String.t()
-  def mime_type(path) do
-    Map.get(@mime_types, Path.extname(path), "application/octet-stream")
-  end
+  def mime_type(path), do: Volt.MIME.type(path)
 
   defp raw_asset(path) do
     case File.read(path) do

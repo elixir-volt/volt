@@ -15,6 +15,7 @@ defmodule Volt.AssetsTest do
       assert Volt.Assets.asset?("icon.svg")
       assert Volt.Assets.asset?("logo.png")
       assert Volt.Assets.asset?("banner.webp")
+      assert Volt.Assets.asset?("sound.ogg")
     end
 
     test "recognizes font types" do
@@ -81,6 +82,7 @@ defmodule Volt.AssetsTest do
     test "returns correct MIME types" do
       assert Volt.Assets.mime_type("file.svg") == "image/svg+xml"
       assert Volt.Assets.mime_type("file.woff2") == "font/woff2"
+      assert Volt.Assets.mime_type("file.ogg") == "audio/ogg"
       assert Volt.Assets.mime_type("file.unknown") == "application/octet-stream"
     end
   end

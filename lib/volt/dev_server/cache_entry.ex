@@ -5,7 +5,7 @@ defmodule Volt.DevServer.CacheEntry do
             sourcemap: nil,
             css: nil,
             hashes: nil,
-            content_type: "application/javascript"
+            content_type: Volt.MIME.javascript()
 
   @type t :: %__MODULE__{
           code: String.t(),

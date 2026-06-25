@@ -10,6 +10,7 @@
 
 ### Changed
 - `Volt.DevServer` pass-through behavior is covered for composition with downstream HTML/site plugs.
+- MIME/content-type lookup is centralized through `Volt.MIME`, backed by the `mime` package.
 
 ## 0.14.7 - 2026-06-23
 

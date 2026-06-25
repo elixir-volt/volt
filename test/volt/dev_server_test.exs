@@ -13,12 +13,10 @@ defmodule Volt.DevServerTest do
     def resolve("virtual:plain", _importer), do: {:ok, "virtual:plain"}
     def resolve(_specifier, _importer), do: nil
 
-    def load("virtual:routes"),
-      do: {:ok, "export default [{ path: '/' }];", "application/javascript"}
+    def load("virtual:routes"), do: {:ok, "export default [{ path: '/' }];"}
 
     def load("virtual:client") do
-      {:ok, "import routes from 'virtual:routes'; export default routes;",
-       "application/javascript"}
+      {:ok, "import routes from 'virtual:routes'; export default routes;"}
     end
 
     def load("virtual:plain"), do: {:ok, "export default 123;"}

@@ -41,6 +41,7 @@ defmodule Volt.MixProject do
       {:dotenvy, "~> 1.1"},
       {:floki, "~> 0.38"},
       {:plug, "~> 1.16"},
+      {:mime, "~> 2.0"},
       {:websock_adapter, "~> 0.5"},
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
@@ -166,6 +167,7 @@ defmodule Volt.MixProject do
           Volt.Config.Server
         ],
         "Internals: CSS": [
+          Volt.MIME,
           Volt.CSS.AST,
           Volt.CSS.AssetURLRewriter
         ],
