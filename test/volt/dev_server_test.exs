@@ -44,6 +44,34 @@ defmodule Volt.DevServerTest do
     end
   end
 
+  describe "dev server composition" do
+    test "passes through non-asset requests for downstream HTML plugs" do
+      opts = Volt.DevServer.init(root: Path.join(@fixture_dir, "src"), prefix: "/assets")
+
+      conn = conn(:get, "/") |> Volt.DevServer.call(opts)
+
+      refute conn.halted
+
+      conn =
+        conn
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, "<h1>site shell</h1>")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "site shell"
+    end
+
+    test "halts asset requests before downstream plugs" do
+      opts = Volt.DevServer.init(root: Path.join(@fixture_dir, "src"), prefix: "/assets")
+
+      conn = conn(:get, "/assets/style.css") |> Volt.DevServer.call(opts)
+
+      assert conn.halted
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/css"
+    end
+  end
+
   describe "public directory" do
     test "serves public files from the root" do
       public_dir = Path.join(@fixture_dir, "public")

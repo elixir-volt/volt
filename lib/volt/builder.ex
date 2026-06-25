@@ -59,7 +59,11 @@ defmodule Volt.Builder do
   """
   @spec build(keyword()) :: {:ok, build_result()} | {:error, term()}
   def build(opts) do
-    entries = opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&Path.expand/1)
+    plugins = Keyword.get(opts, :plugins, [])
+
+    entries =
+      opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&resolve_entry(&1, plugins))
+
     outdir = Keyword.get(opts, :outdir, Paths.static()) |> Path.expand()
     public_dir = opts |> Keyword.get(:public_dir, false) |> Volt.PublicDir.resolve()
     target = opts |> Keyword.get(:target, "") |> to_string()
@@ -71,7 +75,6 @@ defmodule Volt.Builder do
     env_prefix = Keyword.get(opts, :env_prefix, "VOLT_")
     asset_url_prefix = Keyword.get(opts, :asset_url_prefix, Paths.prefix())
     aliases = Keyword.get(opts, :aliases, %{})
-    plugins = Keyword.get(opts, :plugins, [])
     code_splitting = Keyword.get(opts, :code_splitting, true)
     tree_shaking = Keyword.get(opts, :tree_shaking, true)
     chunks = Keyword.get(opts, :chunks, %{})
@@ -83,7 +86,7 @@ defmodule Volt.Builder do
 
     node_modules =
       Keyword.get(opts, :node_modules) ||
-        NPM.Resolution.PackageResolver.find_node_modules(Path.dirname(first_entry))
+        NPM.Resolution.PackageResolver.find_node_modules(entry_base(first_entry))
 
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
     loaders = Keyword.get(opts, :loaders, %{})
@@ -216,6 +219,24 @@ defmodule Volt.Builder do
         entry,
         Keyword.put(bundle_opts, :asset_url_prefix, asset_url_prefix)
       )
+    end
+  end
+
+  defp resolve_entry(entry, plugins) do
+    entry = to_string(entry)
+
+    case Volt.PluginRunner.resolve(plugins, entry, nil) do
+      {:ok, resolved} -> resolved
+      :skip -> entry
+      nil -> Path.expand(entry)
+    end
+  end
+
+  defp entry_base(entry) do
+    if Path.type(entry) == :absolute do
+      Path.dirname(entry)
+    else
+      File.cwd!()
     end
   end
 

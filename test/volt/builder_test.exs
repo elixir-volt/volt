@@ -17,8 +17,13 @@ defmodule Volt.BuilderTest do
     @behaviour Volt.Plugin
     def name, do: "virtual-mod"
     def resolve("my-virtual", _), do: {:ok, "virtual:my-virtual"}
+    def resolve("virtual-entry", _), do: {:ok, "virtual:entry"}
     def resolve(_, _), do: nil
     def load("virtual:my-virtual"), do: {:ok, "export default 99;", "application/javascript"}
+
+    def load("virtual:entry"),
+      do: {:ok, "import val from 'my-virtual'; console.log(val);", "application/javascript"}
+
     def load(_), do: nil
   end
 
@@ -1258,6 +1263,23 @@ defmodule Volt.BuilderTest do
         )
 
       js = File.read!(result.js.path)
+      assert js =~ "99"
+    end
+
+    test "virtual modules can be used as build entries" do
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: "virtual-entry",
+          outdir: @outdir,
+          name: "virtual-entry",
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          plugins: [VirtualModPlugin]
+        )
+
+      js = File.read!(result.js.path)
+      assert Path.basename(result.js.path) == "virtual-entry.js"
       assert js =~ "99"
     end
 
