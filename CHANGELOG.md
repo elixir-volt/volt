@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.14.8 - 2026-06-25
+
 ### Added
 - `Volt.HMR` exposes public helpers for external dev servers to broadcast HMR updates, style updates, full reloads, and errors.
 - `Volt.Builder` can now use plugin-resolved virtual modules as production build entries.
