@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.14.9 - 2026-06-26
+
+### Added
+- Plugins can expose real-file-derived embedded modules through `Volt.Plugin.EmbeddedModule` query ids for custom file formats.
+- Embedded script and style modules participate in production builds, dev serving, CSS handling, JavaScript checks, and HMR invalidation.
+
 ## 0.14.8 - 2026-06-25
 
 ### Added
