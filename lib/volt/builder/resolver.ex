@@ -49,6 +49,9 @@ defmodule Volt.Builder.Resolver do
       NPM.Resolution.PackageResolver.node_builtin?(specifier) ->
         :skip
 
+      absolute?(specifier) ->
+        resolve_absolute(specifier)
+
       String.starts_with?(specifier, "#") ->
         resolve_package_import(specifier, importer, ctx)
 
@@ -57,6 +60,14 @@ defmodule Volt.Builder.Resolver do
 
       true ->
         resolve_bare(specifier, ctx.node_modules, ctx.resolve_dirs, ctx.plugins)
+    end
+  end
+
+  defp resolve_absolute(specifier) do
+    if File.exists?(specifier) do
+      {:ok, specifier}
+    else
+      {:error, {:not_found, specifier}}
     end
   end
 

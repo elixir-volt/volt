@@ -1,6 +1,8 @@
 defmodule Volt.Integration.HMRWebSocketTest do
   use ExUnit.Case, async: false
 
+  alias Mint.WebSocket
+
   @moduletag :integration
 
   # Short server-side websocket idle timeout so we can exercise the
@@ -89,10 +91,10 @@ defmodule Volt.Integration.HMRWebSocketTest do
 
   defp connect!(port) do
     {:ok, conn} = Mint.HTTP.connect(:http, "localhost", port, mode: :passive)
-    {:ok, conn, ref} = Mint.WebSocket.upgrade(:ws, conn, "/@volt/ws", [])
+    {:ok, conn, ref} = WebSocket.upgrade(:ws, conn, "/@volt/ws", [])
 
     # Drain the upgrade response.
-    {:ok, conn, responses} = Mint.WebSocket.recv(conn, 0, 1_000)
+    {:ok, conn, responses} = WebSocket.recv(conn, 0, 1_000)
     {:status, ^ref, 101} = Enum.find(responses, &match?({:status, _, _}, &1))
 
     headers =
@@ -101,13 +103,13 @@ defmodule Volt.Integration.HMRWebSocketTest do
         _ -> nil
       end)
 
-    {:ok, conn, ws} = Mint.WebSocket.new(conn, ref, 101, headers, mode: :passive)
+    {:ok, conn, ws} = WebSocket.new(conn, ref, 101, headers, mode: :passive)
 
     {:ok, conn, ws, ref}
   end
 
   defp send_text(conn, ref, ws, text) do
-    {:ok, ws, data} = Mint.WebSocket.encode(ws, {:text, text})
+    {:ok, ws, data} = WebSocket.encode(ws, {:text, text})
 
     case Mint.WebSocket.stream_request_body(conn, ref, data) do
       {:ok, _conn} -> {:ok, ws}
@@ -123,11 +125,11 @@ defmodule Volt.Integration.HMRWebSocketTest do
   defp recv_frame_loop(conn, ws, deadline) do
     remaining = max(deadline - System.monotonic_time(:millisecond), 0)
 
-    case Mint.WebSocket.recv(conn, 0, remaining) do
+    case WebSocket.recv(conn, 0, remaining) do
       {:ok, conn, responses} ->
         case extract_data(responses) do
           {:data, data} ->
-            case Mint.WebSocket.decode(ws, data) do
+            case WebSocket.decode(ws, data) do
               {:ok, ws, [frame | _]} -> {frame, ws}
               {:ok, _ws, []} -> recv_frame_loop(conn, ws, deadline)
               {:error, _ws, reason} -> {{:error, reason}, ws}

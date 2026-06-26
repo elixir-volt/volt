@@ -42,7 +42,7 @@ defmodule Volt.Builder.Collector do
         collect_asset(abs_path, label, state)
 
       true ->
-        case read_module(path, state.ctx.plugins) do
+        case read_module(abs_path, state.ctx.plugins) do
           {:ok, source, content_type} ->
             process_source(abs_path, label, source, content_type, state)
 
@@ -66,25 +66,41 @@ defmodule Volt.Builder.Collector do
      }}
   end
 
-  defp read_module(path, plugins) do
-    case Volt.PluginRunner.load(plugins, path) do
-      {:ok, code, content_type} ->
-        {:ok, code, content_type}
+  defp read_module(module_id, plugins) do
+    with nil <- read_embedded_module(module_id, plugins),
+         nil <- read_plugin_module(module_id, plugins) do
+      path = module_path(module_id)
 
-      {:ok, code} ->
-        {:ok, code, nil}
+      case File.read(path) do
+        {:ok, source} -> {:ok, source, nil}
+        error -> error
+      end
+    end
+  end
+
+  defp read_embedded_module(module_id, plugins) do
+    case Volt.PluginRunner.embedded_module(plugins, module_id) do
+      {:ok, module, _parent} ->
+        {:ok, module.source, Volt.Plugin.EmbeddedModule.content_type(module)}
+
+      {:error, _} = error ->
+        error
 
       nil ->
-        case File.read(path) do
-          {:ok, source} -> {:ok, source, nil}
-          error -> error
-        end
+        nil
+    end
+  end
+
+  defp read_plugin_module(module_id, plugins) do
+    case Volt.PluginRunner.load(plugins, module_id) do
+      {:ok, code, content_type} -> {:ok, code, content_type}
+      {:ok, code} -> {:ok, code, nil}
+      nil -> nil
     end
   end
 
   defp process_source(abs_path, label, source, content_type, state) do
-    path = module_path(abs_path)
-    graph_source = graph_source(path, source, content_type, state.ctx)
+    graph_source = graph_source(abs_path, source, content_type, state.ctx)
 
     state = %{
       state
@@ -207,8 +223,9 @@ defmodule Volt.Builder.Collector do
   end
 
   defp extract_typed_imports(source, path, content_type, loaders, plugins, compiled?) do
-    ext = Path.extname(path)
-    filename = Volt.JS.Extensions.apply_loader(Path.basename(path), loaders)
+    base_path = module_path(path)
+    ext = Path.extname(base_path)
+    filename = Volt.JS.Extensions.apply_loader(Path.basename(base_path), loaders)
 
     case if(compiled?,
            do: nil,
@@ -218,6 +235,9 @@ defmodule Volt.Builder.Collector do
         cond do
           Volt.MIME.javascript?(content_type) ->
             extract_js_typed_imports(source, filename)
+
+          Volt.MIME.css?(content_type) ->
+            {:ok, %Volt.JS.ImportExtractor.Result{imports: [], workers: []}}
 
           ext == ".json" or ext in Volt.JS.Extensions.css() ->
             {:ok, %Volt.JS.ImportExtractor.Result{imports: [], workers: []}}

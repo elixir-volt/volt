@@ -48,6 +48,23 @@ defmodule Volt.PluginRunnerTest do
     def load(_), do: nil
   end
 
+  defmodule EmbeddedPlugin do
+    @behaviour Volt.Plugin
+
+    @impl true
+    def name, do: "embedded"
+
+    @impl true
+    def embedded_modules(path, source, _opts) do
+      if Path.extname(path) == ".box" do
+        [
+          %Volt.Plugin.EmbeddedModule{type: :script, extension: ".ts", source: source},
+          {".css", ".box { color: red }"}
+        ]
+      end
+    end
+  end
+
   describe "transform/3" do
     test "pipes code through transform hooks" do
       result = Volt.PluginRunner.transform([UppercasePlugin], "hello", "test.js")
@@ -131,6 +148,34 @@ defmodule Volt.PluginRunnerTest do
 
     test "returns nil for unhandled paths" do
       assert nil == Volt.PluginRunner.load([VirtualPlugin], "other.js")
+    end
+  end
+
+  describe "embedded_modules/4" do
+    test "normalizes plugin-returned embedded modules" do
+      [script, style] =
+        Volt.PluginRunner.embedded_modules([EmbeddedPlugin], "card.box", "export {}", [])
+
+      assert %Volt.Plugin.EmbeddedModule{type: :script, index: 0, extension: ".ts"} = script
+      assert %Volt.Plugin.EmbeddedModule{type: :style, index: 1, extension: ".css"} = style
+    end
+
+    test "loads embedded modules by query id" do
+      path = Path.join(System.tmp_dir!(), "volt-plugin-runner-card.box")
+      File.write!(path, "export const value: number = 1")
+
+      id =
+        Volt.Plugin.EmbeddedModule.id(path, %Volt.Plugin.EmbeddedModule{
+          type: :script,
+          index: 0,
+          extension: ".ts",
+          source: ""
+        })
+
+      assert {:ok, module, ^path} = Volt.PluginRunner.embedded_module([EmbeddedPlugin], id)
+      assert module.source =~ "value: number"
+
+      File.rm(path)
     end
   end
 

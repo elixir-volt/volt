@@ -62,15 +62,39 @@ defmodule Volt.PluginRunner do
     end)
   end
 
-  @doc "Return virtual JavaScript-like modules embedded in a plugin-owned source file."
+  @doc "Return modules embedded in a plugin-owned source file."
   @spec embedded_modules([module() | {module(), keyword()}], String.t(), String.t(), keyword()) ::
-          [{String.t(), String.t()}]
+          [Volt.Plugin.EmbeddedModule.t()]
   def embedded_modules(plugins, path, source, opts) do
     plugins
     |> plugins()
     |> Enum.flat_map(fn plugin ->
       call_optional(plugin, :embedded_modules, [path, source, opts], []) || []
     end)
+    |> Volt.Plugin.EmbeddedModule.normalize_all()
+  end
+
+  @doc "Load one embedded query module by id."
+  @spec embedded_module([module() | {module(), keyword()}], String.t(), keyword()) ::
+          {:ok, Volt.Plugin.EmbeddedModule.t(), String.t()} | {:error, term()} | nil
+  def embedded_module(plugins, id, opts \\ []) do
+    with {:ok, %Volt.Plugin.EmbeddedModule.ID{parent: parent, type: type, index: index}} <-
+           Volt.Plugin.EmbeddedModule.parse_id(id) do
+      case File.read(parent) do
+        {:ok, source} ->
+          module =
+            plugins
+            |> embedded_modules(parent, source, opts)
+            |> Enum.find(&(&1.type == type and &1.index == index))
+
+          if module, do: {:ok, module, parent}, else: nil
+
+        {:error, reason} ->
+          {:error, {:embedded_parent_read_failed, parent, reason}}
+      end
+    else
+      :error -> nil
+    end
   end
 
   @doc "Run transform hooks in sequence, piping code through each."

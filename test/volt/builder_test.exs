@@ -13,6 +13,59 @@ defmodule Volt.BuilderTest do
     end
   end
 
+  defmodule EmbeddedBoxPlugin do
+    @behaviour Volt.Plugin
+
+    @impl true
+    def name, do: "embedded-box"
+
+    @impl true
+    def extensions(kind) when kind in [:compile, :resolve, :watch, :scan], do: [".box"]
+    def extensions(_kind), do: []
+
+    @impl true
+    def compile(path, source, _opts) do
+      if Path.extname(path) == ".box" do
+        modules =
+          path |> embedded_modules(source, []) |> Volt.Plugin.EmbeddedModule.normalize_all()
+
+        imports =
+          modules
+          |> Enum.map(&Volt.Plugin.EmbeddedModule.specifier(path, &1))
+          |> Enum.map_join("\n", &~s(import #{inspect(&1)};))
+
+        {:ok, %Volt.Pipeline.Result{code: imports <> "\nexport const box = true;"}}
+      end
+    end
+
+    @impl true
+    def embedded_modules(path, source, _opts) do
+      if Path.extname(path) == ".box" do
+        [
+          %Volt.Plugin.EmbeddedModule{
+            type: :style,
+            extension: ".css",
+            source: between(source, "<style>", "</style>")
+          },
+          %Volt.Plugin.EmbeddedModule{
+            type: :script,
+            extension: ".ts",
+            source: between(source, "<script>", "</script>")
+          }
+        ]
+      end
+    end
+
+    defp between(source, open, close) do
+      with [_before, rest] <- String.split(source, open, parts: 2),
+           [content, _after] <- String.split(rest, close, parts: 2) do
+        content
+      else
+        _ -> ""
+      end
+    end
+  end
+
   defmodule VirtualModPlugin do
     @behaviour Volt.Plugin
     def name, do: "virtual-mod"
@@ -82,6 +135,29 @@ defmodule Volt.BuilderTest do
       js = File.read!(result.js.path)
       assert js =~ "greet"
       assert js =~ "Hello"
+    end
+
+    test "embedded modules participate in the production graph" do
+      File.write!(Path.join(@fixture_dir, "src/Card.box"), """
+      <style>.card { color: red }</style>
+      <script>const answer: number = 42; console.log(answer)</script>
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/Card.box"),
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          plugins: [EmbeddedBoxPlugin]
+        )
+
+      js = File.read!(result.js.path)
+      css = File.read!(result.css.path)
+
+      assert js =~ "console.log(42)"
+      assert css =~ "color: red"
     end
 
     test "style entry bundles nested CSS imports" do

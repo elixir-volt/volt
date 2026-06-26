@@ -34,14 +34,9 @@ defmodule Volt.Pipeline do
   def compile(path, source, opts \\ []) do
     plugins = Keyword.get(opts, :plugins, [])
 
-    {source, content_type} =
-      case Volt.PluginRunner.load(plugins, path) do
-        {:ok, code, ct} -> {code, ct}
-        {:ok, code} -> {code, Volt.MIME.javascript()}
-        nil -> {source, nil}
-      end
-
-    ext = Path.extname(path)
+    {source, content_type, compile_path} = source_context(path, source, plugins)
+    {base_path, _query} = Volt.URL.split_query(compile_path)
+    ext = Path.extname(base_path)
 
     result =
       cond do
@@ -49,16 +44,19 @@ defmodule Volt.Pipeline do
           plugin_result
 
         Volt.MIME.javascript?(content_type) ->
-          compile_js(path, source, opts)
+          compile_js(compile_path, source, opts)
+
+        Volt.MIME.css?(content_type) ->
+          compile_css(compile_path, source, opts)
 
         ext in Volt.JS.Extensions.js() ->
-          compile_js(path, source, opts)
+          compile_js(compile_path, source, opts)
 
-        Volt.CSS.Modules.css_module?(path) ->
-          compile_css_module(path, source, opts)
+        Volt.CSS.Modules.css_module?(base_path) ->
+          compile_css_module(compile_path, source, opts)
 
         ext in @css_exts ->
-          compile_css(path, source, opts)
+          compile_css(compile_path, source, opts)
 
         ext == @json_ext ->
           compile_json(source)
@@ -78,6 +76,26 @@ defmodule Volt.Pipeline do
         nil ->
           {:ok, compiled}
       end
+    end
+  end
+
+  defp source_context(path, source, plugins) do
+    case Volt.PluginRunner.embedded_module(plugins, path) do
+      {:ok, module, parent} ->
+        compile_path = parent <> ".#{module.type}#{module.index}#{module.extension}"
+        {module.source, Volt.Plugin.EmbeddedModule.content_type(module), compile_path}
+
+      {:error, _} ->
+        {source, nil, path}
+
+      nil ->
+        {base_path, _query} = Volt.URL.split_query(path)
+
+        case Volt.PluginRunner.load(plugins, path) do
+          {:ok, code, content_type} -> {code, content_type, path}
+          {:ok, code} -> {code, Volt.MIME.javascript(), path}
+          nil -> {source, nil, base_path}
+        end
     end
   end
 

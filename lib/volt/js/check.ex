@@ -105,9 +105,8 @@ defmodule Volt.JS.Check do
       else
         file
         |> embedded_modules(plugins)
-        |> Stream.with_index()
-        |> Enum.reduce({files, overrides, source_files}, fn {{extension, source}, index}, acc ->
-          add_embedded_module(acc, file, source, extension, index)
+        |> Enum.reduce({files, overrides, source_files}, fn module, acc ->
+          add_embedded_module(acc, file, module)
         end)
       end
     end)
@@ -122,13 +121,13 @@ defmodule Volt.JS.Check do
     Volt.PluginRunner.embedded_modules(plugins, file, File.read!(file), [])
   end
 
-  defp add_embedded_module({files, overrides, source_files}, file, source, extension, index) do
-    virtual_file = "#{file}.script#{index}#{extension}"
+  defp add_embedded_module({files, overrides, source_files}, file, module) do
+    virtual_file = "#{file}.#{module.type}#{module.index}#{module.extension}"
     expanded = Path.expand(virtual_file)
 
     {
       [virtual_file | files],
-      Map.put(overrides, expanded, source),
+      Map.put(overrides, expanded, module.source),
       Map.put(source_files, expanded, file)
     }
   end

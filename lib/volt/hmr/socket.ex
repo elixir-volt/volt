@@ -52,14 +52,17 @@ defmodule Volt.HMR.Socket do
   end
 
   defp encode(%Volt.HMR.Message{} = message) do
-    {:ok, {:text, message |> Volt.HMR.Message.dump() |> Jason.encode!()}}
-  rescue
-    error ->
-      Logger.warning(
-        "[Volt.HMR] Failed to encode #{inspect(message.type)} payload: #{inspect(error)}"
-      )
+    case message |> Volt.HMR.Message.dump() |> Jason.encode() do
+      {:ok, json} ->
+        {:ok, {:text, json}}
 
-      :error
+      {:error, error} ->
+        Logger.warning(
+          "[Volt.HMR] Failed to encode #{inspect(message.type)} payload: #{inspect(error)}"
+        )
+
+        :error
+    end
   end
 
   @impl true

@@ -201,6 +201,49 @@ import './theme.scss'
 
 If the generated CSS contains relative asset URLs such as `url('./logo.svg')`, Volt rewrites them through the same asset pipeline as normal CSS files.
 
+### Embedded modules for single-file formats
+
+Plugins that own single-file formats can expose child script/style modules with `embedded_modules/3`. Volt addresses them as query modules derived from the parent file, for example `Card.box?volt-embedded=1&type=style&index=0`, so dev serving, HMR, production collection, type-aware checks, and sourcemaps keep the real source file as the anchor.
+
+```elixir
+defmodule MyApp.BoxPlugin do
+  @behaviour Volt.Plugin
+
+  alias Volt.Plugin.EmbeddedModule
+
+  def name, do: "box"
+
+  def extensions(kind) when kind in [:compile, :resolve, :watch, :scan], do: [".box"]
+  def extensions(_kind), do: []
+
+  def compile(path, source, _opts) do
+    if Path.extname(path) == ".box" do
+      modules = source |> blocks() |> EmbeddedModule.normalize_all()
+
+      imports =
+        modules
+        |> Enum.map(&EmbeddedModule.specifier(path, &1))
+        |> Enum.map_join("\n", &"import #{inspect(&1)};")
+
+      {:ok, %Volt.Pipeline.Result{code: imports <> "\nexport default {};\n"}}
+    end
+  end
+
+  def embedded_modules(path, source, _opts) do
+    if Path.extname(path) == ".box", do: blocks(source)
+  end
+
+  defp blocks(source) do
+    [
+      %EmbeddedModule{type: :style, extension: ".css", source: extract_style(source)},
+      %EmbeddedModule{type: :script, extension: ".ts", source: extract_script(source)}
+    ]
+  end
+end
+```
+
+The parent compile output imports `EmbeddedModule.specifier/2`; Volt resolves those imports back to the parent file's embedded modules and compiles each child according to its extension/content type.
+
 ### Example: Custom file compilation with OXC templates
 
 Use `compile/3` to handle a custom file format. OXC templates let you generate JavaScript from real JavaScript syntax instead of string concatenation:

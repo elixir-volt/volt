@@ -164,18 +164,7 @@ defmodule Volt.DevServer do
   end
 
   defp compile_and_serve_virtual(conn, id, source, content_type, config) do
-    pipeline_opts = [
-      target: config.target,
-      import_source: config.import_source,
-      vapor: config.vapor,
-      custom_renderer: config.custom_renderer,
-      sourcemap: true,
-      plugins: config.plugins,
-      define: config.define,
-      rewrite_import: &rewrite_dev_specifier(&1, id, config)
-    ]
-
-    case Volt.Pipeline.compile(id, source, pipeline_opts) do
+    case Volt.Pipeline.compile(id, source, pipeline_opts(config, id)) do
       {:ok, result} ->
         content_type = content_type || Volt.MIME.javascript()
         mod_url = virtual_url(id)
@@ -236,10 +225,12 @@ defmodule Volt.DevServer do
     do: Path.extname(path) in Volt.JS.Extensions.compilable(config.plugins)
 
   defp serve_compiled(conn, file_path, relative, config) do
+    module_id = module_id_for_request(file_path, conn.query_string)
+    request_relative = relative_for_module(relative, module_id)
     mtime = Volt.Format.file_mtime(file_path)
-    css_import? = css_import_request?(conn, file_path)
-    content_type = content_type_for(file_path, css_import?)
-    cache_key = cache_key_for(file_path, css_import?)
+    css_import? = css_import_request?(conn, module_id)
+    content_type = content_type_for(module_id, css_import?)
+    cache_key = cache_key_for(module_id, css_import?)
 
     case Volt.Cache.get(cache_key, mtime) do
       %{code: code, sourcemap: sourcemap} ->
@@ -248,8 +239,8 @@ defmodule Volt.DevServer do
       nil ->
         compile_and_serve(
           conn,
-          file_path,
-          relative,
+          module_id,
+          request_relative,
           mtime,
           content_type,
           cache_key,
@@ -261,7 +252,7 @@ defmodule Volt.DevServer do
 
   defp compile_and_serve(
          conn,
-         file_path,
+         module_id,
          relative,
          mtime,
          content_type,
@@ -269,20 +260,10 @@ defmodule Volt.DevServer do
          css_import?,
          config
        ) do
+    file_path = Volt.Plugin.EmbeddedModule.parent_path(module_id)
     source = File.read!(file_path)
 
-    pipeline_opts = [
-      target: config.target,
-      import_source: config.import_source,
-      vapor: config.vapor,
-      custom_renderer: config.custom_renderer,
-      sourcemap: true,
-      plugins: config.plugins,
-      define: config.define,
-      rewrite_import: &rewrite_dev_specifier(&1, file_path, config)
-    ]
-
-    case Volt.Pipeline.compile(file_path, source, pipeline_opts) do
+    case Volt.Pipeline.compile(module_id, source, pipeline_opts(config, module_id)) do
       {:ok, result} ->
         Volt.HMR.GlobGraph.update_from_source(file_path, source)
         Volt.HMR.ImportGraph.update_from_compiled(file_path, result.code)
@@ -311,6 +292,19 @@ defmodule Volt.DevServer do
         |> Conn.send_resp(500, error_overlay(errors))
         |> Conn.halt()
     end
+  end
+
+  defp pipeline_opts(config, importer) do
+    [
+      target: config.target,
+      import_source: config.import_source,
+      vapor: config.vapor,
+      custom_renderer: config.custom_renderer,
+      sourcemap: true,
+      plugins: config.plugins,
+      define: config.define,
+      rewrite_import: &rewrite_dev_specifier(&1, importer, config)
+    ]
   end
 
   defp update_module_graph(mod_url, cache_key, file_path, code, source, content_type) do
@@ -412,16 +406,42 @@ defmodule Volt.DevServer do
     end
   end
 
+  defp module_id_for_request(file_path, ""), do: file_path
+  defp module_id_for_request(file_path, query), do: Volt.URL.append_query(file_path, query)
+
+  defp relative_for_module(relative, module_id) do
+    case Volt.Plugin.EmbeddedModule.parse_id(module_id) do
+      {:ok, _embedded} ->
+        {_path, query} = URL.split_query(module_id)
+        URL.append_query(relative, query)
+
+      :error ->
+        relative
+    end
+  end
+
   defp content_type_for(path, css_import?) do
-    case {Path.extname(path), css_import?} do
+    {base_path, _query} = URL.split_query(path)
+
+    case {Path.extname(base_path), css_import?} do
       {".css", false} -> Volt.MIME.css()
       _ -> Volt.MIME.javascript()
     end
   end
 
-  defp css_import_request?(conn, file_path) do
-    Path.extname(file_path) == ".css" and
-      (Volt.CSS.Modules.css_module?(file_path) or import_query?(conn.query_string))
+  defp css_import_request?(conn, module_id) do
+    {file_path, _query} = URL.split_query(module_id)
+
+    embedded_style_request?(module_id) or
+      (Path.extname(file_path) == ".css" and
+         (Volt.CSS.Modules.css_module?(file_path) or import_query?(conn.query_string)))
+  end
+
+  defp embedded_style_request?(module_id) do
+    match?(
+      {:ok, %Volt.Plugin.EmbeddedModule.ID{type: :style}},
+      Volt.Plugin.EmbeddedModule.parse_id(module_id)
+    )
   end
 
   defp asset_import_request?(conn) do
@@ -435,7 +455,13 @@ defmodule Volt.DevServer do
     |> Map.has_key?("import")
   end
 
-  defp cache_key_for(file_path, true), do: URL.append_query(file_path, "import")
+  defp cache_key_for(file_path, true) do
+    case URL.split_query(file_path) do
+      {_path, ""} -> URL.append_query(file_path, "import")
+      {_path, _query} -> file_path
+    end
+  end
+
   defp cache_key_for(file_path, false), do: file_path
 
   defp rewrite_dev_css_urls(%{type: :css, code: code} = result, file_path, config) do

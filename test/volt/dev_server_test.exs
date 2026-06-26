@@ -3,6 +3,59 @@ defmodule Volt.DevServerTest do
   import Plug.Test
   import Plug.Conn
 
+  defmodule EmbeddedBoxPlugin do
+    @behaviour Volt.Plugin
+
+    @impl true
+    def name, do: "embedded-box"
+
+    @impl true
+    def extensions(kind) when kind in [:compile, :resolve, :watch, :scan], do: [".box"]
+    def extensions(_kind), do: []
+
+    @impl true
+    def compile(path, source, _opts) do
+      if Path.extname(path) == ".box" do
+        modules =
+          path |> embedded_modules(source, []) |> Volt.Plugin.EmbeddedModule.normalize_all()
+
+        imports =
+          modules
+          |> Enum.map(&Volt.Plugin.EmbeddedModule.specifier(path, &1))
+          |> Enum.map_join("\n", &~s(import #{inspect(&1)};))
+
+        {:ok, %Volt.Pipeline.Result{code: imports <> "\nexport const box = true;"}}
+      end
+    end
+
+    @impl true
+    def embedded_modules(path, source, _opts) do
+      if Path.extname(path) == ".box" do
+        [
+          %Volt.Plugin.EmbeddedModule{
+            type: :style,
+            extension: ".css",
+            source: between(source, "<style>", "</style>")
+          },
+          %Volt.Plugin.EmbeddedModule{
+            type: :script,
+            extension: ".ts",
+            source: between(source, "<script>", "</script>")
+          }
+        ]
+      end
+    end
+
+    defp between(source, open, close) do
+      with [_before, rest] <- String.split(source, open, parts: 2),
+           [content, _after] <- String.split(rest, close, parts: 2) do
+        content
+      else
+        _ -> ""
+      end
+    end
+  end
+
   defmodule VirtualPlugin do
     @behaviour Volt.Plugin
 
@@ -230,6 +283,33 @@ defmodule Volt.DevServerTest do
     test "includes inline sourcemap" do
       conn = call_dev_server("/assets/app.ts")
       assert conn.resp_body =~ "sourceMappingURL=data:application/json;base64,"
+    end
+  end
+
+  describe "embedded plugin modules" do
+    test "serves embedded scripts and styles as graph modules" do
+      File.write!(Path.join(@fixture_dir, "src/Card.box"), """
+      <style>.card { color: red }</style>
+      <script>const answer: number = 42; console.log(answer)</script>
+      """)
+
+      conn = call_dev_server("/assets/Card.box", plugins: [EmbeddedBoxPlugin])
+      assert conn.status == 200
+
+      assert [style_url] =
+               Regex.run(~r{/assets/Card\.box\?[^"']*type=style[^"']*}, conn.resp_body)
+
+      assert [script_url] =
+               Regex.run(~r{/assets/Card\.box\?[^"']*type=script[^"']*}, conn.resp_body)
+
+      style_conn = call_dev_server(style_url, plugins: [EmbeddedBoxPlugin])
+      assert style_conn.status == 200
+      assert style_conn.resp_body =~ "color: red"
+      assert style_conn.resp_body =~ "__volt_updateStyle"
+
+      script_conn = call_dev_server(script_url, plugins: [EmbeddedBoxPlugin])
+      assert script_conn.status == 200
+      assert script_conn.resp_body =~ "const answer = 42"
     end
   end
 

@@ -27,7 +27,12 @@ defmodule Volt.Assets do
 
   @doc "Check if a path is a known asset type."
   @spec asset?(String.t()) :: boolean()
-  def asset?(path), do: Volt.MIME.asset?(path)
+  def asset?(path) when is_binary(path) do
+    path
+    |> Volt.URL.split_query()
+    |> elem(0)
+    |> Volt.MIME.asset?()
+  end
 
   @doc """
   Generate a JS module that exports asset content or a URL.

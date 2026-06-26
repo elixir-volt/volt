@@ -125,6 +125,7 @@ defmodule Volt.MixProject do
           Volt.Plugin.Svelte,
           Volt.Plugin.React,
           Volt.Plugin.Solid,
+          Volt.Plugin.EmbeddedModule,
           Volt.Plugin.Helpers,
           Volt.PluginRunner
         ],

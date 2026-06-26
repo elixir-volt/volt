@@ -313,7 +313,17 @@ defmodule Volt.Builder do
   end
 
   defp css_part(_path, nil), do: nil
-  defp css_part(path, css), do: {path, css}
+  defp css_part(path, css), do: {css_source_path(path), css}
+
+  defp css_source_path(path) do
+    case Volt.Plugin.EmbeddedModule.parse_id(path) do
+      {:ok, %Volt.Plugin.EmbeddedModule.ID{parent: parent, type: :style, index: index}} ->
+        parent <> ".style#{index}.css"
+
+      _ ->
+        path
+    end
+  end
 
   defp merge_compiled(compiled) do
     {js_files, css_parts, assets} =
@@ -332,6 +342,9 @@ defmodule Volt.Builder do
     {path, query} = Volt.URL.split_query(module_id)
 
     cond do
+      embedded_style?(module_id, ctx.plugins) ->
+        compile_css_import(module_id, source, ctx)
+
       Path.extname(path) in @css_exts and not Volt.CSS.Modules.css_module?(path) ->
         compile_css_import(path, source, ctx)
 
@@ -354,7 +367,7 @@ defmodule Volt.Builder do
         end
 
       true ->
-        case Volt.Pipeline.compile(path, source,
+        case Volt.Pipeline.compile(module_id, source,
                target: ctx.target,
                import_source: ctx.import_source,
                define: ctx.define,
@@ -365,6 +378,10 @@ defmodule Volt.Builder do
           {:error, _} = error -> error
         end
     end
+  end
+
+  defp embedded_style?(module_id, plugins) do
+    match?({:ok, %{type: :style}, _parent}, Volt.PluginRunner.embedded_module(plugins, module_id))
   end
 
   defp compile_css_import(path, source, ctx) do
