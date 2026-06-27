@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.14.11 - 2026-06-27
+
+### Added
+- `Volt.Priv` reads OTP `priv` files and emits browser JavaScript from bundled JavaScript or TypeScript support modules.
+
+### Changed
+- Volt's internal browser support assets now use `Volt.Priv`.
+
 ## 0.14.10 - 2026-06-27
 
 ### Added
