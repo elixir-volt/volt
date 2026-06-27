@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.14.10 - 2026-06-27
+
+### Added
+- `Volt.Path.relative_import/2` builds normalized relative JavaScript import specifiers between files.
+
 ## 0.14.9 - 2026-06-26
 
 ### Added

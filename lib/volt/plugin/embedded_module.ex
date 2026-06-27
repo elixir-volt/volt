@@ -48,7 +48,7 @@ defmodule Volt.Plugin.EmbeddedModule do
   @doc "Build an import specifier for an embedded module from its parent module."
   @spec specifier(String.t(), t()) :: String.t()
   def specifier(parent, %__MODULE__{} = module) do
-    Volt.URL.append_query("./" <> Path.basename(parent), query(module))
+    Volt.URL.append_query(Volt.Path.relative_import(parent, parent), query(module))
   end
 
   @doc "Parse an embedded query-module id."
