@@ -3,6 +3,8 @@ defmodule Volt.Builder.Rewriter do
 
   alias Volt.Builder.Externals
 
+  @support_modules {:volt, "ts"}
+
   @dynamic_import_keyword "import"
   @dynamic_import_placeholder_prefix "__volt_dynamic_import__"
 
@@ -147,7 +149,7 @@ defmodule Volt.Builder.Rewriter do
   end
 
   defp preload_helper do
-    Volt.JS.Asset.compiled!("runtime/preload.ts") <> "\n"
+    Volt.Priv.js!(@support_modules, "runtime/preload.ts") <> "\n"
   end
 
   defp worker_filename_map(worker_specs, ctx) do

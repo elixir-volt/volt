@@ -4,13 +4,14 @@ defmodule Volt.Dev.ConsoleForwarder do
   require Logger
 
   @endpoint "/@volt/console"
+  @support_modules {:volt, "ts"}
 
   @spec endpoint() :: String.t()
   def endpoint, do: @endpoint
 
   @spec inject(String.t()) :: String.t()
   def inject(code) when is_binary(code) do
-    Volt.JS.Asset.compiled!("dev/console-forwarder.ts") <> "\n" <> code
+    Volt.Priv.js!(@support_modules, "dev/console-forwarder.ts") <> "\n" <> code
   end
 
   @spec log(binary() | map()) :: :ok

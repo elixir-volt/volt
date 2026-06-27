@@ -33,6 +33,9 @@ defmodule Volt.DevServer do
   alias Plug.Conn
   alias Volt.URL
 
+  @support_modules {:volt, "ts"}
+  @runtime_rewrites %{"./hmr-client" => "/@volt/client.js"}
+
   @behaviour Plug
 
   @impl true
@@ -80,7 +83,7 @@ defmodule Volt.DevServer do
 
   def call(%Conn{request_path: "/@volt/client.js"} = conn, config) do
     heartbeat_interval = max(div(config.hmr_timeout, 2), 1_000)
-    client = Volt.JS.Asset.compiled!("dev/hmr-client.ts")
+    client = support_module!("dev/hmr-client.ts")
     bootstrap = "globalThis.__VOLT_HEARTBEAT__ = #{heartbeat_interval};\n"
 
     conn
@@ -503,7 +506,7 @@ defmodule Volt.DevServer do
 
   defp css_update_module(mod_url, css, exports) do
     [
-      Volt.JS.Asset.compiled_template!("dev/css-update.ts", id: mod_url, css: css),
+      support_module!("dev/css-update.ts", id: mod_url, css: css),
       "\n",
       exports
     ]
@@ -637,7 +640,7 @@ defmodule Volt.DevServer do
   end
 
   defp hmr_preamble(mod_url) do
-    Volt.JS.Asset.compiled_template!("dev/hmr-preamble.ts", mod_url: mod_url)
+    support_module!("dev/hmr-preamble.ts", mod_url: mod_url)
   end
 
   # ── Vendor pre-bundling ───────────────────────────────────────────
@@ -704,11 +707,15 @@ defmodule Volt.DevServer do
         e -> inspect(e)
       end)
 
-    overlay = Volt.JS.Asset.compiled!("dev/error-overlay.ts")
-
-    invocation =
-      Volt.JS.Asset.compiled_template!("dev/error-overlay-invocation.ts", message: msg)
+    overlay = support_module!("dev/error-overlay.ts")
+    invocation = support_module!("dev/error-overlay-invocation.ts", message: msg)
 
     overlay <> "\n" <> invocation
+  end
+
+  defp support_module!(relative), do: Volt.Priv.js!(@support_modules, relative)
+
+  defp support_module!(relative, bindings) do
+    Volt.Priv.js!(@support_modules, relative, bindings, rewrite_specifiers: @runtime_rewrites)
   end
 end

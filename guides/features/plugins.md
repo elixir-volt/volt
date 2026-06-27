@@ -292,31 +292,33 @@ import data from './prices.csv'
 // data = [["name", "price"], ["Widget", "9.99"], ...]
 ```
 
-For larger generated modules, keep the template in a `.js` file so editors and formatters understand it:
+For larger generated modules, keep the template in `priv` so editors and formatters understand it:
 
 ```javascript
 // priv/templates/api-client.js
-export const $name = {
+export default {
+  name: $name,
   endpoint: $endpoint,
   columns: $columns,
 }
 ```
 
 ```elixir
-template = File.read!("priv/templates/api-client.js")
+@templates {:my_app, "templates"}
 
 js =
-  template
-  |> OXC.parse!("api-client-template.js")
-  |> OXC.bind(
+  Volt.Priv.js!(@templates, "api-client.js",
     name: "prices",
-    endpoint: {:literal, "/api/prices"},
-    columns: {:literal, ["name", "price"]}
+    endpoint: "/api/prices",
+    columns: ["name", "price"]
   )
-  |> OXC.codegen!()
 ```
 
-Use `OXC.splice/3` when a placeholder represents multiple syntax nodes, such as object entries or function arguments. Volt uses this pattern internally for `import.meta.glob()` output generation.
+`Volt.Priv.js!/3` reads from the OTP application's `priv` directory, binds
+`$placeholder` JavaScript literals with OXC, and emits browser JavaScript. Use `OXC.splice/3`
+directly when a placeholder represents multiple syntax nodes, such as object
+entries or function arguments. Volt uses this pattern internally for
+`import.meta.glob()` output generation.
 
 ### Example: AST transform with OXC
 

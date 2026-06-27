@@ -116,6 +116,7 @@ infrastructure = [
   "Volt.HMR.StyleDependencies",
   "Volt.HMR.StyleGraph",
   "Volt.JS.Asset",
+  "Volt.Priv",
   "Volt.JS.Runtime",
   "Volt.JS.Runtime.Bundler",
   "Volt.JS.Runtime.Entry",

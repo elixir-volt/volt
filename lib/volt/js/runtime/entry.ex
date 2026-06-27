@@ -3,8 +3,8 @@ defmodule Volt.JS.Runtime.Entry do
 
   @spec materialize(term(), String.t()) :: String.t()
   def materialize({:volt_asset, filename}, install_dir) do
-    filename
-    |> Volt.JS.Asset.path_for()
+    :volt
+    |> Volt.Priv.path(Path.join("ts", filename))
     |> copy_to_runtime_dir(install_dir)
   end
 

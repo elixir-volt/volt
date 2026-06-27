@@ -133,7 +133,8 @@ defmodule Volt.MixProject do
           Volt.Assets,
           Volt.Env,
           Volt.JS.Runtime,
-          Volt.JS.Format
+          Volt.JS.Format,
+          Volt.Priv
         ],
         Formatting: [Volt.Formatter, Volt.Format],
         "Mix Tasks": [
