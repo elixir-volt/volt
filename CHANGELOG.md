@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.14.12 - 2026-06-28
+
+### Added
+- `Volt.Assets.resolve/2` and `Volt.Assets.resolve!/2` resolve asset source specifiers through Volt aliases, root-relative paths, relative importers, and extension probing.
+
 ## 0.14.11 - 2026-06-27
 
 ### Added

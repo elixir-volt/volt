@@ -72,6 +72,21 @@ The referenced file is copied to the output directory and the final CSS points a
 
 Root-absolute URLs (`/images/logo.svg`), external URLs, data URLs, missing files, and unknown extensions are left unchanged. Use those forms for assets that should stay at Phoenix/static or public-directory paths.
 
+## Source asset resolution
+
+Use `Volt.Assets.resolve/2` when another Elixir layer needs to resolve an asset source file with Volt's alias semantics, without importing it into the JavaScript build graph:
+
+```elixir
+Volt.Assets.resolve!("@/icons/logo.svg",
+  importer: "/app/pages/index.astral",
+  root: "/app/assets",
+  aliases: Volt.Config.build().aliases,
+  extensions: [".svg"]
+)
+```
+
+The resolver supports explicit aliases, `tsconfig.json` paths merged by `Volt.Config`, relative specifiers from `:importer`, root-relative specifiers such as `/icons/logo.svg`, and plain paths under `:root`. It intentionally resolves only files; package imports, externals, and plugin virtual modules remain build/dev-server concerns.
+
 ## Asset URL prefix
 
 Production JavaScript and CSS asset references use `/assets` by default, matching Phoenix's conventional `priv/static/assets` mount. Configure `asset_url_prefix` when assets are served from a subpath or CDN:

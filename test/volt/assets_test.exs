@@ -30,6 +30,54 @@ defmodule Volt.AssetsTest do
     end
   end
 
+  describe "resolve/2" do
+    test "resolves aliases" do
+      File.mkdir_p!(Path.join(@fixture_dir, "icons"))
+      path = Path.join(@fixture_dir, "icons/mark.svg")
+      File.write!(path, "<svg />")
+
+      assert {:ok, ^path} =
+               Volt.Assets.resolve("@/icons/mark.svg", aliases: %{"@" => @fixture_dir})
+    end
+
+    test "resolves relative specifiers from an importer" do
+      File.mkdir_p!(Path.join(@fixture_dir, "pages"))
+      File.mkdir_p!(Path.join(@fixture_dir, "icons"))
+      importer = Path.join(@fixture_dir, "pages/index.astral")
+      path = Path.join(@fixture_dir, "icons/clip-paths.svg")
+      File.write!(importer, "")
+      File.write!(path, "<svg />")
+
+      assert {:ok, ^path} = Volt.Assets.resolve("../icons/clip-paths.svg", importer: importer)
+    end
+
+    test "resolves root-relative and plain root specifiers" do
+      File.mkdir_p!(Path.join(@fixture_dir, "icons"))
+      path = Path.join(@fixture_dir, "icons/logo.svg")
+      File.write!(path, "<svg />")
+
+      assert {:ok, ^path} = Volt.Assets.resolve("/icons/logo.svg", root: @fixture_dir)
+      assert {:ok, ^path} = Volt.Assets.resolve("icons/logo.svg", root: @fixture_dir)
+    end
+
+    test "tries configured extensions" do
+      File.mkdir_p!(Path.join(@fixture_dir, "icons"))
+      path = Path.join(@fixture_dir, "icons/logo.svg")
+      File.write!(path, "<svg />")
+
+      assert {:ok, ^path} =
+               Volt.Assets.resolve("@/icons/logo",
+                 aliases: %{"@" => @fixture_dir},
+                 extensions: [".svg"]
+               )
+    end
+
+    test "returns not found for missing assets" do
+      assert {:error, {:not_found, "missing.svg"}} =
+               Volt.Assets.resolve("missing.svg", root: @fixture_dir)
+    end
+  end
+
   describe "to_js_module/2" do
     test "inlines small files as data URI" do
       path = Path.join(@fixture_dir, "tiny.svg")
