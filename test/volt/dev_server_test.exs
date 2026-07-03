@@ -320,6 +320,26 @@ defmodule Volt.DevServerTest do
       assert conn.resp_body =~ "msg"
     end
 
+    test "serves Vue style blocks through self-imported embedded CSS modules" do
+      File.write!(Path.join(@fixture_dir, "src/App.vue"), """
+      <template><div class="my-widget">{{ msg }}</div></template>
+      <script setup>const msg = 'hi'</script>
+      <style>.my-widget { color: rebeccapurple }</style>
+      """)
+
+      conn = call_dev_server("/assets/App.vue")
+      assert conn.status == 200
+
+      assert [style_url] =
+               Regex.run(~r{/assets/App\.vue\?[^"']*type=style[^"']*}, conn.resp_body)
+
+      style_conn = call_dev_server(style_url)
+      assert style_conn.status == 200
+      assert style_conn.resp_body =~ ".my-widget"
+      assert style_conn.resp_body =~ "#639"
+      assert style_conn.resp_body =~ "__volt_updateStyle"
+    end
+
     test "tracks Vue style asset dependencies" do
       logo_path = Path.join(@fixture_dir, "src/logo.svg")
       vue_path = Path.join(@fixture_dir, "src/App.vue")
@@ -414,6 +434,25 @@ defmodule Volt.DevServerTest do
       assert get_resp_header(conn, "content-type") |> hd() =~ "text/css"
     end
 
+    test "serves bare package CSS imports" do
+      css_pkg_dir = Path.join(@fixture_dir, "vendor/csslib")
+      File.mkdir_p!(css_pkg_dir)
+      File.write!(Path.join(css_pkg_dir, "theme.css"), ".from-node-module { color: red }")
+
+      File.write!(Path.join(css_pkg_dir, "package.json"), ~s({
+        "name": "csslib",
+        "exports": { "./theme.css": "./theme.css" }
+      }))
+
+      File.write!(Path.join(@fixture_dir, "src/style.css"), ~s(@import "csslib/theme.css";))
+
+      conn =
+        call_dev_server("/assets/style.css", resolve_dirs: [Path.join(@fixture_dir, "vendor")])
+
+      assert conn.status == 200
+      assert conn.resp_body =~ ".from-node-module"
+    end
+
     test "serves CSS imports as JavaScript modules" do
       conn = call_dev_server("/assets/style.css?import")
       assert conn.status == 200
@@ -460,6 +499,16 @@ defmodule Volt.DevServerTest do
       assert conn.resp_body =~ "/assets/images/logo.svg"
       refute conn.resp_body =~ "./images/logo.svg"
       assert get_resp_header(conn, "content-type") |> hd() =~ "text/css"
+    end
+
+    test "serves raw query for non-asset extensions as JavaScript modules" do
+      File.write!(Path.join(@fixture_dir, "src/note.md"), "# Hello\n\nfrom markdown")
+
+      conn = call_dev_server("/assets/note.md?raw")
+
+      assert conn.status == 200
+      assert conn.resp_body == ~s(export default "# Hello\\n\\nfrom markdown";\n)
+      assert get_resp_header(conn, "content-type") |> hd() =~ "javascript"
     end
 
     test "serves raw CSS and CSS import modules from separate cache entries" do

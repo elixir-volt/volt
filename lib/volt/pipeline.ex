@@ -177,11 +177,11 @@ defmodule Volt.Pipeline do
 
   defp compile_css(path, source, opts) do
     minify = Keyword.get(opts, :minify, false)
+    source_path = Volt.Plugin.EmbeddedModule.parent_path(path)
 
     result =
-      if File.regular?(path) do
-        Vize.CSS.bundle(path, minify: minify)
-      else
+      with {:ok, source} <- css_source(path, source),
+           {:ok, source} <- Volt.CSS.Imports.inline(source, source_path, opts) do
         Vize.CSS.compile(source, minify: minify)
       end
 
@@ -191,7 +191,14 @@ defmodule Volt.Pipeline do
 
       {:ok, %{code: code}} ->
         {:ok, compiled(code, type: :css)}
+
+      {:error, _} = error ->
+        error
     end
+  end
+
+  defp css_source(path, source) do
+    if File.regular?(path), do: File.read(path), else: {:ok, source}
   end
 
   defp compile_css_module(path, source, opts) do

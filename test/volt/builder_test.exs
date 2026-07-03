@@ -677,6 +677,85 @@ defmodule Volt.BuilderTest do
         )
     end
 
+    test "bundles bare package CSS imports" do
+      css_pkg_dir = Path.join(@fixture_dir, "vendor/csslib")
+      File.mkdir_p!(css_pkg_dir)
+      File.write!(Path.join(css_pkg_dir, "theme.css"), ".from-node-module { color: red }")
+
+      File.write!(Path.join(css_pkg_dir, "package.json"), ~s({
+        "name": "csslib",
+        "exports": { "./theme.css": "./theme.css" }
+      }))
+
+      File.write!(Path.join(@fixture_dir, "src/package_css.css"), ~s(@import "csslib/theme.css";))
+
+      File.write!(Path.join(@fixture_dir, "src/package_css.ts"), """
+      import './package_css.css'
+      """)
+
+      assert {:ok, _result} =
+               Volt.Builder.build(
+                 entry: Path.join(@fixture_dir, "src/package_css.ts"),
+                 outdir: @outdir,
+                 minify: false,
+                 format: :esm,
+                 resolve_dirs: [Path.join(@fixture_dir, "vendor")]
+               )
+
+      css = @outdir |> Path.join("*.css") |> Path.wildcard() |> List.first() |> File.read!()
+      assert css =~ ".from-node-module"
+    end
+
+    test "raw query exports non-asset file contents" do
+      File.write!(Path.join(@fixture_dir, "src/note.md"), "# Hello\n\nfrom markdown")
+
+      File.write!(Path.join(@fixture_dir, "src/raw_markdown.ts"), """
+      import note from './note.md?raw'
+      console.log(note)
+      """)
+
+      assert {:ok, _result} =
+               Volt.Builder.build(
+                 entry: Path.join(@fixture_dir, "src/raw_markdown.ts"),
+                 outdir: @outdir,
+                 minify: false,
+                 format: :esm
+               )
+
+      js_path =
+        (Path.wildcard(Path.join(@outdir, "*.js")) ++ Path.wildcard(Path.join(@outdir, "js/*.js")))
+        |> List.first()
+
+      js = File.read!(js_path)
+      assert js =~ "# Hello\\n\\nfrom markdown"
+    end
+
+    test "unresolved existing package subpaths fail build instead of becoming implicit globals" do
+      package_dir = Path.join(@fixture_dir, "vendor/dirlib")
+      File.mkdir_p!(package_dir)
+
+      File.write!(
+        Path.join(package_dir, "package.json"),
+        ~s({"name":"dirlib","main":"./index.js"})
+      )
+
+      File.write!(Path.join(package_dir, "index.js"), "export const ROOT = true")
+
+      File.write!(Path.join(@fixture_dir, "src/missing_package_subpath.ts"), """
+      import { nope } from 'dirlib/missing'
+      console.log(nope)
+      """)
+
+      assert {:error, {:not_found, "dirlib/missing"}} =
+               Volt.Builder.build(
+                 entry: Path.join(@fixture_dir, "src/missing_package_subpath.ts"),
+                 outdir: @outdir,
+                 minify: false,
+                 format: :iife,
+                 resolve_dirs: [Path.join(@fixture_dir, "vendor")]
+               )
+    end
+
     test "external imports become global access in IIFE" do
       File.write!(Path.join(@fixture_dir, "src/vue_app.ts"), """
       import { ref, computed } from 'vue'

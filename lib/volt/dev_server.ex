@@ -209,6 +209,9 @@ defmodule Volt.DevServer do
       not Volt.Path.inside?(file_path, config.root) ->
         conn
 
+      File.regular?(file_path) and explicit_asset_module_request?(conn) ->
+        serve_asset_module(conn, file_path, relative, config)
+
       compilable?(file_path, config) and File.regular?(file_path) ->
         serve_compiled(conn, file_path, relative, config)
 
@@ -303,7 +306,10 @@ defmodule Volt.DevServer do
       import_source: config.import_source,
       vapor: config.vapor,
       custom_renderer: config.custom_renderer,
+      node_modules: config.node_modules,
+      resolve_dirs: config.resolve_dirs,
       sourcemap: true,
+      mode: :development,
       plugins: config.plugins,
       define: config.define,
       rewrite_import: &rewrite_dev_specifier(&1, importer, config)
@@ -450,6 +456,13 @@ defmodule Volt.DevServer do
   defp asset_import_request?(conn) do
     Volt.Assets.Query.module_request?(conn.query_string) or
       Enum.member?(Conn.get_req_header(conn, "sec-fetch-dest"), "script")
+  end
+
+  defp explicit_asset_module_request?(conn) do
+    conn.query_string
+    |> URL.decode_query()
+    |> Map.keys()
+    |> Enum.any?(&(&1 in ["raw", "url", "inline", "no-inline"]))
   end
 
   defp import_query?(query_string) do

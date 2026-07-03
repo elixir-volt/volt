@@ -129,7 +129,9 @@ defmodule Volt.Builder do
         define: all_define,
         format: format,
         treeshake: tree_shaking,
-        root: asset_root
+        root: asset_root,
+        node_modules: node_modules,
+        resolve_dirs: resolve_dirs
       ] ++ if(module_types != %{}, do: [module_types: module_types], else: [])
 
     build_ctx = %Volt.Builder.BuildContext{
@@ -210,7 +212,10 @@ defmodule Volt.Builder do
 
     with {:ok, source} <- File.read(entry),
          {:ok, compiled} <-
-           Volt.Pipeline.compile(entry, source, minify: bundle_opts[:minify] || false) do
+           Volt.Pipeline.compile(entry, source,
+             minify: bundle_opts[:minify] || false,
+             mode: :production
+           ) do
       Volt.Builder.Writer.build_style_entry(
         name,
         compiled.code,
@@ -345,31 +350,20 @@ defmodule Volt.Builder do
       embedded_style?(module_id, ctx.plugins) ->
         compile_css_import(module_id, source, ctx)
 
+      asset_module_query?(query) ->
+        compile_asset_module(path, query, ctx)
+
       Path.extname(path) in @css_exts and not Volt.CSS.Modules.css_module?(path) ->
         compile_css_import(path, source, ctx)
 
       Volt.Assets.asset?(path) ->
-        query_params = Volt.URL.decode_query(query)
-
-        asset_opts = [
-          raw: Map.has_key?(query_params, "raw"),
-          url: Map.has_key?(query_params, "url"),
-          inline: Map.has_key?(query_params, "inline"),
-          no_inline: Map.has_key?(query_params, "no-inline"),
-          prefix: ctx.asset_url_prefix,
-          outdir: ctx.asset_outdir,
-          root: ctx.asset_root
-        ]
-
-        case Volt.Assets.emit_js_module(path, asset_opts) do
-          {:ok, %{code: js, assets: assets}} -> {:ok, js, nil, assets}
-          {:error, _} = error -> error
-        end
+        compile_asset_module(path, query, ctx)
 
       true ->
         case Volt.Pipeline.compile(module_id, source,
                target: ctx.target,
                import_source: ctx.import_source,
+               mode: :production,
                define: ctx.define,
                plugins: ctx.plugins,
                loaders: ctx.loaders
@@ -377,6 +371,32 @@ defmodule Volt.Builder do
           {:ok, %{code: code, css: css}} -> {:ok, code, css, []}
           {:error, _} = error -> error
         end
+    end
+  end
+
+  defp asset_module_query?(query) do
+    query
+    |> Volt.URL.decode_query()
+    |> Map.keys()
+    |> Enum.any?(&(&1 in ["raw", "url", "inline", "no-inline"]))
+  end
+
+  defp compile_asset_module(path, query, ctx) do
+    query_params = Volt.URL.decode_query(query)
+
+    asset_opts = [
+      raw: Map.has_key?(query_params, "raw"),
+      url: Map.has_key?(query_params, "url"),
+      inline: Map.has_key?(query_params, "inline"),
+      no_inline: Map.has_key?(query_params, "no-inline"),
+      prefix: ctx.asset_url_prefix,
+      outdir: ctx.asset_outdir,
+      root: ctx.asset_root
+    ]
+
+    case Volt.Assets.emit_js_module(path, asset_opts) do
+      {:ok, %{code: js, assets: assets}} -> {:ok, js, nil, assets}
+      {:error, _} = error -> error
     end
   end
 
@@ -388,6 +408,7 @@ defmodule Volt.Builder do
     case Volt.Pipeline.compile(path, source,
            target: ctx.target,
            import_source: ctx.import_source,
+           mode: :production,
            define: ctx.define,
            plugins: ctx.plugins,
            loaders: ctx.loaders
