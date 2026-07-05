@@ -137,13 +137,23 @@ defmodule Volt.MixProject do
           Volt.Priv
         ],
         Formatting: [Volt.Formatter, Volt.Format],
+        Testing: [
+          Volt.Test.Assertions,
+          Volt.Test.Bundler,
+          Volt.Test.Config,
+          Volt.Test.Discovery,
+          Volt.Test.Imports,
+          Volt.Test.Runner,
+          Volt.Test.Sigils
+        ],
         "Mix Tasks": [
           Mix.Tasks.Volt.Build,
           Mix.Tasks.Volt.Dev,
           Mix.Tasks.Volt.Lint,
           Mix.Tasks.Volt.Js.Format,
           Mix.Tasks.Volt.Js.Check,
-          Mix.Tasks.Volt.Install
+          Mix.Tasks.Volt.Install,
+          Mix.Tasks.Volt.Test
         ],
         "Internals: Builder": [
           Volt.Builder.Collector,

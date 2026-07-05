@@ -3,9 +3,14 @@ defmodule Volt.JS.Transforms.ImportsTest do
 
   doctest Volt.JS.Transforms.Imports
 
+  import Volt.Test.Sigils
+
   describe "rewrite/3" do
     test "rewrites matching bare imports" do
-      source = "import { ref } from 'vue'\nimport a from './local'"
+      source = ~JS"""
+      import { ref } from 'vue'
+      import a from './local'
+      """
 
       {:ok, result} =
         Volt.JS.Transforms.Imports.rewrite(source, "test.ts", fn
@@ -56,7 +61,7 @@ defmodule Volt.JS.Transforms.ImportsTest do
     end
 
     test "handles dynamic imports" do
-      source = "const m = import('lodash')"
+      source = ~JS"const m = import('lodash')"
 
       {:ok, result} =
         Volt.JS.Transforms.Imports.rewrite(source, "test.js", fn
@@ -81,7 +86,7 @@ defmodule Volt.JS.Transforms.ImportsTest do
     end
 
     test "keeps unmatched imports unchanged" do
-      source = "import { ref } from 'vue'"
+      source = ~JS"import { ref } from 'vue'"
 
       {:ok, result} =
         Volt.JS.Transforms.Imports.rewrite(source, "test.ts", fn _ -> :keep end)

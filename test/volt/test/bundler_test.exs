@@ -1,0 +1,56 @@
+defmodule Volt.Test.BundlerTest do
+  use ExUnit.Case, async: false
+
+  import Volt.Test.Sigils
+
+  setup do
+    tmp_dir =
+      Path.join(System.tmp_dir!(), "volt-test-bundler-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(tmp_dir)
+
+    on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    %{tmp_dir: tmp_dir}
+  end
+
+  test "bundles relative TypeScript imports and strips volt:test imports", %{tmp_dir: tmp_dir} do
+    write!(tmp_dir, "math.ts", ~TS"""
+    export function add(left: number, right: number) {
+      return left + right
+    }
+    """)
+
+    entry =
+      write!(tmp_dir, "math.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+      import { add } from './math'
+
+      test('adds', () => {
+        expect(add(1, 2)).toBe(3)
+      })
+      """)
+
+    assert {:ok, %{code: code, files: files}} = Volt.Test.Bundler.bundle_file(entry)
+
+    assert entry in files
+    assert Path.join(tmp_dir, "math.ts") in files
+    refute code =~ "volt:test"
+    refute code =~ "import { add }"
+    assert code =~ "add"
+  end
+
+  test "returns module resolution errors", %{tmp_dir: tmp_dir} do
+    entry = write!(tmp_dir, "missing.test.ts", "import './missing'\n")
+
+    assert {:error, {:module_not_found, "./missing", ^entry}} =
+             Volt.Test.Bundler.bundle_file(entry)
+  end
+
+  defp write!(root, path, contents) do
+    path = Path.join(root, path)
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, contents)
+    path
+  end
+end
