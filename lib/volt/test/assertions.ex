@@ -13,7 +13,7 @@ defmodule Volt.Test.Assertions do
 
     case failures do
       [] -> flunk("Volt JS test file failed without failed test details: #{inspect(result)}")
-      [failure | _] -> flunk(format_failure(failure, result))
+      [failure | _] -> flunk(format_failure(failure, result, length(failures)))
     end
   end
 
@@ -21,18 +21,30 @@ defmodule Volt.Test.Assertions do
     flunk("Volt JS test file failed: #{inspect(result)}")
   end
 
-  defp format_failure(failure, result) do
+  defp format_failure(failure, result, failure_count) do
     error = failure["error"] || %{}
+    stack = clean_stack(error["stack"])
 
     [
-      "#{result["file"]}: #{failure["fullName"] || failure["name"]}",
+      heading(result, failure, failure_count),
+      location(stack),
       "",
       error["message"] || inspect(error),
       expected_actual(error),
-      stack(error)
+      stack(stack)
     ]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join("\n")
+  end
+
+  defp heading(result, failure, failure_count) do
+    count =
+      case failure_count do
+        1 -> "1 JS test failed"
+        n -> "#{n} JS tests failed; showing first failure"
+      end
+
+    "#{count}\n#{result["file"]}: #{failure["fullName"] || failure["name"]}"
   end
 
   defp expected_actual(%{"expected" => expected, "actual" => actual}) do
@@ -41,6 +53,34 @@ defmodule Volt.Test.Assertions do
 
   defp expected_actual(_), do: nil
 
-  defp stack(%{"stack" => stack}) when is_binary(stack), do: "\nstacktrace:\n#{stack}"
-  defp stack(_), do: nil
+  defp location([line | _]) do
+    case Regex.run(~r/(<input>|[^\s()]+):(\d+):(\d+)/, line) do
+      [_, file, line, column] -> "location: #{file}:#{line}:#{column}"
+      _ -> nil
+    end
+  end
+
+  defp location(_), do: nil
+
+  defp stack([]), do: nil
+
+  defp stack(lines) do
+    "\nJS stacktrace:\n" <> Enum.join(lines, "\n")
+  end
+
+  defp clean_stack(stack) when is_binary(stack) do
+    stack
+    |> String.split("\n")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.reject(&framework_stack?/1)
+  end
+
+  defp clean_stack(_), do: []
+
+  defp framework_stack?(line) do
+    String.contains?(line, "/volt-test-runtime/") or
+      String.contains?(line, "__voltRunTestModule") or
+      String.contains?(line, "assertionError")
+  end
 end
