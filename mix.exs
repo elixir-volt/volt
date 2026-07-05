@@ -142,6 +142,7 @@ defmodule Volt.MixProject do
           Volt.Test.Bundler,
           Volt.Test.Config,
           Volt.Test.Discovery,
+          Volt.Test.ExUnit,
           Volt.Test.Imports,
           Volt.Test.Runner,
           Volt.Test.Sigils
@@ -152,8 +153,7 @@ defmodule Volt.MixProject do
           Mix.Tasks.Volt.Lint,
           Mix.Tasks.Volt.Js.Format,
           Mix.Tasks.Volt.Js.Check,
-          Mix.Tasks.Volt.Install,
-          Mix.Tasks.Volt.Test
+          Mix.Tasks.Volt.Install
         ],
         "Internals: Builder": [
           Volt.Builder.Collector,

@@ -36,25 +36,16 @@ Volt already has most of the primitives needed:
 
 ## User-facing API
 
-### CLI
+### ExUnit entry point
 
-```bash
-mix volt.test
-mix volt.test test assets/js
-mix volt.test --browser
-mix volt.test --watch
-mix volt.test --profile my_app_web
-mix volt.test --only browser
-mix volt.test --exclude integration
+Volt should keep `mix test` as the single test command. JS/TS tests are wired into ExUnit from `test/test_helper.exs`:
+
+```elixir
+ExUnit.start(exclude: [:integration])
+Volt.Test.ExUnit.install()
 ```
 
-`mix volt.test` should be a thin ExUnit-friendly Mix task. It discovers JS/TS test files, creates transient ExUnit bridge modules, and then delegates to ExUnit/Mix test execution for normal `.exs` files.
-
-Suggested rule:
-
-- If only `.exs` paths are passed, behave like `mix test`.
-- If JS/TS paths or no paths are passed, discover configured JS tests and include generated ExUnit bridge tests.
-- Forward common ExUnit flags (`--only`, `--exclude`, `--seed`, `--trace`, `--max-failures`, etc.) instead of inventing a second filter system.
+This avoids a parallel test route. ExUnit remains responsible for filtering, formatters, tags, failures, and CI behavior.
 
 ### Config
 
@@ -160,7 +151,7 @@ Proposed modules:
 - `Volt.Test.BrowserCase` — optional ExUnit case template for PlaywrightEx-backed tests.
 - `Volt.Test.Playwright` — supervision and lifecycle wrapper around PlaywrightEx.
 - `Volt.Test.Page` / `Volt.Test.Locator` — small Elixir facade over PlaywrightEx for browser assertions.
-- `Mix.Tasks.Volt.Test` — CLI entry point. Initial implementation discovers JS/TS tests, generates one ExUnit bridge module per file, and delegates to `mix test`.
+- `Volt.Test.ExUnit` — ExUnit integration entry point. Initial implementation discovers JS/TS tests, generates one ExUnit bridge module per file, and keeps `mix test` as the only test command.
 
 Runtime assets:
 
@@ -174,9 +165,9 @@ Use ExUnit as the root runner.
 
 Initial implementation can use one ExUnit test per JS/TS file:
 
-1. `mix volt.test` discovers JS/TS test files.
-2. It generates transient `.exs` bridge files under `_build/test/volt/generated_tests` or `tmp/volt_test/generated`.
-3. Each generated module uses `Volt.Test.JSCase`.
+1. `Volt.Test.ExUnit.install/1` discovers JS/TS test files from `test/test_helper.exs`.
+2. It defines transient ExUnit bridge modules in memory.
+3. Each generated module uses `ExUnit.Case` directly.
 4. Each generated ExUnit test calls `Volt.Test.Runner.run_file/2`.
 5. The runner returns `:ok` or a structured failure containing file, suite path, test name, message, stack, expected, actual, and source location.
 6. `Volt.Test.Assertions` raises an ExUnit assertion/error with readable output.
@@ -319,7 +310,7 @@ URL: http://localhost:4002/
 ### Phase 1: JS/TS unit-test MVP
 
 - Add config/discovery.
-- Add `mix volt.test`.
+- Add `Volt.Test.ExUnit.install/1` for `test/test_helper.exs`.
 - Add `priv/ts/test/core.ts` with `describe`, `test`, hooks, and core `expect` matchers. Implemented and dogfooded by `priv/ts/test/core.test.ts`.
 - Run one ExUnit test per JS/TS file. Initial implementation is in place via generated bridge modules.
 - Support async tests/promises.
@@ -349,8 +340,7 @@ URL: http://localhost:4002/
 
 ## Open questions
 
-- Should generated ExUnit bridge files live under `_build/test` or `tmp/volt_test`?
-- Should `mix volt.test` call `Mix.Tasks.Test.run/1` with generated files, or invoke ExUnit APIs directly?
+- Should generated ExUnit bridge modules stay in memory, or should Volt optionally materialize them for editor/source navigation?
 - How much of Vitest’s `expect` surface should be included before recommending custom matchers?
 - Should JS browser tests require an app server/base URL to be configured, or should Volt optionally start an endpoint under test?
 - How should snapshots be represented: JS-style `__snapshots__` files, ExUnit-style assertions, or both?
