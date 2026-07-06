@@ -190,17 +190,27 @@ function newSuite(name?: string): SuiteContext {
 }
 
 function expect(actual: unknown) {
-  return {
+  return createExpectation(actual, false)
+}
+
+function createExpectation(actual: unknown, negated: boolean): Matchers {
+  const match = (ok: boolean, message: string, expected?: unknown) => {
+    if (negated ? ok : !ok) {
+      throw assertionError(message, expected, actual)
+    }
+  }
+
+  const matchers: Matchers = {
+    get not() {
+      return createExpectation(actual, !negated)
+    },
+
     toBe(expected: unknown) {
-      if (!Object.is(actual, expected)) {
-        throw assertionError(`Expected ${format(actual)} to be ${format(expected)}`, expected, actual)
-      }
+      match(Object.is(actual, expected), `Expected ${format(actual)} ${notText(negated)}to be ${format(expected)}`, expected)
     },
 
     toEqual(expected: unknown) {
-      if (!deepEqual(actual, expected)) {
-        throw assertionError(`Expected ${format(actual)} to equal ${format(expected)}`, expected, actual)
-      }
+      match(deepEqual(actual, expected), `Expected ${format(actual)} ${notText(negated)}to equal ${format(expected)}`, expected)
     },
 
     toContain(expected: unknown) {
@@ -209,9 +219,38 @@ function expect(actual: unknown) {
           ? actual.includes(String(expected))
           : Array.isArray(actual) && actual.includes(expected)
 
-      if (!ok) {
-        throw assertionError(`Expected ${format(actual)} to contain ${format(expected)}`, expected, actual)
-      }
+      match(ok, `Expected ${format(actual)} ${notText(negated)}to contain ${format(expected)}`, expected)
+    },
+
+    toBeDefined() {
+      match(actual !== undefined, `Expected ${format(actual)} ${notText(negated)}to be defined`, undefined)
+    },
+
+    toBeUndefined() {
+      match(actual === undefined, `Expected ${format(actual)} ${notText(negated)}to be undefined`, undefined)
+    },
+
+    toBeTruthy() {
+      match(Boolean(actual), `Expected ${format(actual)} ${notText(negated)}to be truthy`, true)
+    },
+
+    toBeFalsy() {
+      match(!actual, `Expected ${format(actual)} ${notText(negated)}to be falsy`, false)
+    },
+
+    toBeNull() {
+      match(actual === null, `Expected ${format(actual)} ${notText(negated)}to be null`, null)
+    },
+
+    toBeNaN() {
+      match(Number.isNaN(actual), `Expected ${format(actual)} ${notText(negated)}to be NaN`, Number.NaN)
+    },
+
+    toBeCloseTo(expected: number, digits = 2) {
+      const actualNumber = Number(actual)
+      const tolerance = 10 ** -digits / 2
+      const ok = Number.isFinite(actualNumber) && Math.abs(actualNumber - expected) < tolerance
+      match(ok, `Expected ${format(actual)} ${notText(negated)}to be close to ${format(expected)}`, expected)
     },
 
     toThrow(expected?: string | RegExp) {
@@ -227,25 +266,37 @@ function expect(actual: unknown) {
         thrown = error
       }
 
-      if (thrown === undefined) {
-        throw assertionError('Expected function to throw', expected, undefined)
-      }
+      let ok = thrown !== undefined
 
-      if (expected !== undefined) {
+      if (ok && expected !== undefined) {
         const message = thrown instanceof Error ? thrown.message : String(thrown)
-        const matches =
-          expected instanceof RegExp ? expected.test(message) : message.includes(String(expected))
-
-        if (!matches) {
-          throw assertionError(
-            `Expected thrown message ${format(message)} to match ${format(expected)}`,
-            expected,
-            message
-          )
-        }
+        ok = expected instanceof RegExp ? expected.test(message) : message.includes(String(expected))
       }
+
+      match(ok, `Expected function ${notText(negated)}to throw`, expected)
     }
   }
+
+  return matchers
+}
+
+interface Matchers {
+  readonly not: Matchers
+  toBe(expected: unknown): void
+  toEqual(expected: unknown): void
+  toContain(expected: unknown): void
+  toBeDefined(): void
+  toBeUndefined(): void
+  toBeTruthy(): void
+  toBeFalsy(): void
+  toBeNull(): void
+  toBeNaN(): void
+  toBeCloseTo(expected: number, digits?: number): void
+  toThrow(expected?: string | RegExp): void
+}
+
+function notText(negated: boolean) {
+  return negated ? 'not ' : ''
 }
 
 async function __voltCollectTestModule(code: string, file: string) {

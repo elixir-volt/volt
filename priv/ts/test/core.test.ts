@@ -25,6 +25,27 @@ describe('volt:test core', () => {
     }).toThrow('boom')
   })
 
+  test('not negates matchers', () => {
+    expect(1 + 1).not.toBe(3)
+    expect({ value: 1 }).not.toEqual({ value: 2 })
+    expect('volt').not.toContain('vite')
+    expect(() => {}).not.toThrow()
+  })
+
+  test('common truthiness and defined matchers', () => {
+    expect('value').toBeDefined()
+    expect(undefined).toBeUndefined()
+    expect(true).toBeTruthy()
+    expect(0).toBeFalsy()
+    expect(null).toBeNull()
+    expect(Number.NaN).toBeNaN()
+  })
+
+  test('toBeCloseTo compares floating point values', () => {
+    expect(0.1 + 0.2).toBeCloseTo(0.3, 5)
+    expect(0.1 + 0.2).not.toBeCloseTo(0.4, 5)
+  })
+
   test('async tests can await promises', async () => {
     const value: number = await Promise.resolve(42)
     expect(value).toBe(42)
