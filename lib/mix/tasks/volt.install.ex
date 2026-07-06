@@ -202,6 +202,8 @@ if Code.ensure_loaded?(Igniter) do
              "typescript/no-explicit-any" => :warn,
              "typescript/no-non-null-assertion" => :warn,
              "typescript/consistent-type-imports" => :deny,
+             "typescript/no-floating-promises" => :deny,
+             "typescript/no-misused-promises" => :deny,
              "import/no-cycle" => :deny,
              "import/no-self-import" => :deny,
              "import/no-duplicates" => :deny,

@@ -48,10 +48,17 @@ defmodule Volt.Integration.HMRTest do
   @port 44_831
 
   setup_all do
-    {:ok, _} = PlaywrightEx.Supervisor.start_link(timeout: 10_000)
+    {:ok, _} =
+      PlaywrightEx.Supervisor.start_link(timeout: 10_000, executable: playwright_executable())
+
     {:ok, browser} = PlaywrightEx.launch_browser(:chromium, timeout: 10_000)
     on_exit(fn -> :ok end)
     %{browser: browser}
+  end
+
+  defp playwright_executable do
+    local = Path.expand("node_modules/.bin/playwright")
+    if File.exists?(local), do: local, else: "playwright"
   end
 
   setup %{browser: browser} do

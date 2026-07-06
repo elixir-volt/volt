@@ -22,7 +22,7 @@ declare namespace Volt {
     interface Context {
       task: Metadata
       expect: Expect
-      skip(note?: string): never
+      skip(note?: string): void
       skip(condition: boolean, note?: string): void
     }
 

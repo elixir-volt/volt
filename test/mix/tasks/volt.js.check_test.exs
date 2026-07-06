@@ -72,9 +72,9 @@ defmodule Volt.JsCheckTest do
              Volt.JS.Check.promote_type_check_diagnostic(diagnostic, type_check: true)
   end
 
-  test "type-aware check forwards only typescript rules to tsgolint" do
+  test "type-aware check keeps Oxlint-style rules and retries without unsupported tsgolint rules" do
     File.write!(Path.join(@tmp_dir, "typed.ts"), "export const value = 1\n")
-    tsgolint = fake_tsgolint_capture!(@tmp_dir)
+    tsgolint = fake_tsgolint_unknown_retry!(@tmp_dir)
 
     Application.put_env(:volt, :lint,
       tsgolint: tsgolint,
@@ -82,6 +82,7 @@ defmodule Volt.JsCheckTest do
         "correctness" => :deny,
         "suspicious" => :deny,
         "no-console" => :warn,
+        "typescript/consistent-type-imports" => :deny,
         "typescript/no-floating-promises" => :warn
       }
     )
@@ -110,7 +111,11 @@ defmodule Volt.JsCheckTest do
     tsgolint = fake_tsgolint_capture!(@tmp_dir)
 
     Application.put_env(:volt, :sources, ["**/*.{js,ts,jsx,tsx,vue,svelte}"])
-    Application.put_env(:volt, :lint, tsgolint: tsgolint, rules: %{})
+
+    Application.put_env(:volt, :lint,
+      tsgolint: tsgolint,
+      rules: %{"typescript/no-floating-promises" => :deny}
+    )
 
     capture_io(fn ->
       Mix.Tasks.Volt.Js.Check.run(["--type-aware"])
@@ -150,6 +155,25 @@ defmodule Volt.JsCheckTest do
     File.write!(path, """
     #!/bin/sh
     cat > #{payload_path}
+    """)
+
+    File.chmod!(path, 0o755)
+    path
+  end
+
+  defp fake_tsgolint_unknown_retry!(dir) do
+    path = Path.join(dir, "tsgolint-unknown-retry")
+    payload_path = Path.join(dir, "payload.json")
+    input_path = Path.join(dir, "payload-attempt.json")
+
+    File.write!(path, """
+    #!/bin/sh
+    cat > #{input_path}
+    if grep -q consistent-type-imports #{input_path}; then
+      echo 'panic: unknown rule: consistent-type-imports [recovered, repanicked]' >&2
+      exit 2
+    fi
+    cp #{input_path} #{payload_path}
     """)
 
     File.chmod!(path, 0o755)

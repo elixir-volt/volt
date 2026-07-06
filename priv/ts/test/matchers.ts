@@ -193,7 +193,7 @@ function lengthOf(value: unknown) {
 }
 
 function propertyAt(value: unknown, path: string | readonly (string | number)[]) {
-  const segments = Array.isArray(path) ? path : path.split('.')
+  const segments = typeof path === 'string' ? path.split('.') : path
   let current = value
 
   for (const segment of segments) {

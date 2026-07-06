@@ -102,7 +102,11 @@ async function compileTailwindCss(
         return { base: rootBase, content: fs.readFileSync(utilitiesCssPath, 'utf8') }
       }
 
-      return Beam.callSync('tailwind.load_stylesheet', id, normalizeBase(currentBase, rootBase))
+      return Beam.callSync(
+        'tailwind.load_stylesheet',
+        id,
+        normalizeBase(currentBase, rootBase)
+      ) as { base: string; content: string }
     },
     loadModule: async (id, currentBase, type) => {
       const spec = Beam.callSync(

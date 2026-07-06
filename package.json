@@ -1,7 +1,8 @@
 {
   "private": true,
   "devDependencies": {
-    "oxlint-tsgolint": "0.22.1"
+    "oxlint-tsgolint": "0.22.1",
+    "playwright": "1.61.1"
   },
   "scripts": {
     "postinstall": "chmod +x node_modules/@oxlint-tsgolint/*/tsgolint 2>/dev/null || true"

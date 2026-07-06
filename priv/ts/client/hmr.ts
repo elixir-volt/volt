@@ -133,7 +133,7 @@ function connect() {
         lastPongAt = Date.now()
         break
       case 'update':
-        handleUpdate(
+        void handleUpdate(
           payload as { path: string; changes: string[]; boundary?: string; timestamp?: number }
         )
         break
@@ -177,7 +177,7 @@ async function handleUpdate(payload: {
   const { path, changes, boundary, timestamp } = payload
 
   if (changes.length === 1 && changes[0] === 'style') {
-    updateStyles(path)
+    await updateStyles(path)
     return
   }
 
