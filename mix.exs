@@ -55,7 +55,7 @@ defmodule Volt.MixProject do
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:makeup_js, "~> 0.1", only: :dev, runtime: false},
       {:bandit, "~> 1.0", only: :test},
-      {:playwright_ex, "~> 0.5", optional: true}
+      {:playwright_ex, "~> 0.5", only: :test}
     ]
   end
 
@@ -140,6 +140,7 @@ defmodule Volt.MixProject do
         Formatting: [Volt.Formatter, Volt.Format],
         Testing: [
           Volt.Test.Assertions,
+          Volt.Test.BrowserRunner,
           Volt.Test.Bundle,
           Volt.Test.Bundler,
           Volt.Test.Config,
@@ -147,6 +148,10 @@ defmodule Volt.MixProject do
           Volt.Test.ExUnit,
           Volt.Test.Imports,
           Volt.Test.Lines,
+          Volt.Test.Result,
+          Volt.Test.Result.Metadata,
+          Volt.Test.Result.SerializedError,
+          Volt.Test.Result.Test,
           Volt.Test.Runner,
           Volt.Test.Sigils
         ],

@@ -3,6 +3,7 @@ defmodule Volt.Test.RunnerTest do
 
   import Volt.Test.Sigils
 
+  alias Volt.Test.Result
   alias Volt.Test.Runner
 
   setup do
@@ -30,10 +31,9 @@ defmodule Volt.Test.RunnerTest do
 
     assert {:ok,
             [
-              %{"fullName" => "suite › first", "line" => 4},
-              %{"fullName" => "suite › second", "line" => 6}
-            ]} =
-             Runner.collect_file(path)
+              %Result.Metadata{full_name: "suite › first", line: 4},
+              %Result.Metadata{full_name: "suite › second", line: 6}
+            ]} = Runner.collect_file(path)
   end
 
   test "collects skip todo and tag metadata", %{tmp_dir: tmp_dir} do
@@ -48,9 +48,9 @@ defmodule Volt.Test.RunnerTest do
 
     assert {:ok,
             [
-              %{"mode" => "skip", "skipReason" => "Skipped"},
-              %{"mode" => "todo", "skipReason" => "TODO"},
-              %{"mode" => "run", "tags" => ["slow"]}
+              %Result.Metadata{mode: :skip, skip_reason: "Skipped"},
+              %Result.Metadata{mode: :todo, skip_reason: "TODO"},
+              %Result.Metadata{mode: :run, tags: ["slow"]}
             ]} = Runner.collect_file(path)
   end
 
@@ -66,12 +66,11 @@ defmodule Volt.Test.RunnerTest do
       """)
 
     assert {:ok,
-            %{
-              "status" => "passed",
-              "skipped" => 1,
-              "tests" => [%{"status" => "skipped", "skipReason" => "not today"}]
-            }} =
-             Runner.run_file(path)
+            %Result{
+              status: :passed,
+              skipped: 1,
+              tests: [%Result.Test{status: :skipped, skip_reason: "not today"}]
+            }} = Runner.run_file(path)
   end
 
   test "runs passing JavaScript tests", %{tmp_dir: tmp_dir} do
@@ -86,11 +85,11 @@ defmodule Volt.Test.RunnerTest do
       })
       """)
 
-    assert {:ok, %{"status" => "passed", "total" => 1, "failed" => 0, "tests" => [test]}} =
+    assert {:ok, %Result{status: :passed, total: 1, failed: 0, tests: [test]}} =
              Runner.run_file(path)
 
-    assert test["fullName"] == "math › adds numbers"
-    assert test["status"] == "passed"
+    assert test.full_name == "math › adds numbers"
+    assert test.status == :passed
   end
 
   test "returns structured assertion failures", %{tmp_dir: tmp_dir} do
@@ -101,14 +100,13 @@ defmodule Volt.Test.RunnerTest do
       })
       """)
 
-    assert {:ok, %{"status" => "failed", "failed" => 1, "tests" => [test]}} =
-             Runner.run_file(path)
+    assert {:ok, %Result{status: :failed, failed: 1, tests: [test]}} = Runner.run_file(path)
 
-    assert test["status"] == "failed"
-    assert test["error"]["name"] == "AssertionError"
-    assert test["error"]["message"] =~ "to equal"
-    assert test["error"]["expected"] == %{"value" => 2}
-    assert test["error"]["actual"] == %{"value" => 1}
+    assert test.status == :failed
+    assert test.error.name == "AssertionError"
+    assert test.error.message =~ "to equal"
+    assert test.error.expected == %{"value" => 2}
+    assert test.error.actual == %{"value" => 1}
   end
 
   test "runs tests that import relative modules", %{tmp_dir: tmp_dir} do
@@ -128,7 +126,7 @@ defmodule Volt.Test.RunnerTest do
       })
       """)
 
-    assert {:ok, %{"status" => "passed", "total" => 1, "failed" => 0}} = Runner.run_file(path)
+    assert {:ok, %Result{status: :passed, total: 1, failed: 0}} = Runner.run_file(path)
   end
 
   test "awaits async tests and hooks", %{tmp_dir: tmp_dir} do
@@ -146,7 +144,7 @@ defmodule Volt.Test.RunnerTest do
       })
       """)
 
-    assert {:ok, %{"status" => "passed", "total" => 1, "failed" => 0}} = Runner.run_file(path)
+    assert {:ok, %Result{status: :passed, total: 1, failed: 0}} = Runner.run_file(path)
   end
 
   defp write!(root, path, contents) do

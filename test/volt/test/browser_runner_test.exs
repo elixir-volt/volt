@@ -3,6 +3,8 @@ defmodule Volt.Test.BrowserRunnerTest do
 
   import Volt.Test.Sigils
 
+  alias Volt.Test.Result
+
   @moduletag :integration
 
   setup do
@@ -51,10 +53,10 @@ defmodule Volt.Test.BrowserRunnerTest do
 
     config = Volt.Test.Config.read(browser: true, include: ["browser.test.ts"], root: tmp_dir)
 
-    assert {:ok, [%{"fullName" => "sees browser globals", "line" => 3}]} =
+    assert {:ok, [%Result.Metadata{full_name: "sees browser globals", line: 3}]} =
              Volt.Test.BrowserRunner.collect_file(file, config: config)
 
-    assert {:ok, %{"status" => "passed", "failed" => 0}} =
+    assert {:ok, %Result{status: :passed, failed: 0}} =
              Volt.Test.BrowserRunner.run_test(file, 1, config: config)
   end
 

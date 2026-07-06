@@ -19,18 +19,23 @@ defmodule Volt.Test.Runner do
   @spec collect_file(Path.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def collect_file(path, opts \\ []) do
     with {:ok, tests} <- call_test_runtime(path, "__voltCollectTestModule", [], opts) do
+      tests = Enum.map(tests, &Volt.Test.Result.Metadata.from_map!/1)
       add_source_lines(path, tests)
     end
   end
 
   @spec run_file(Path.t(), keyword()) :: {:ok, result()} | {:error, term()}
   def run_file(path, opts \\ []) do
-    call_test_runtime(path, "__voltRunTestModule", [], opts)
+    with {:ok, result} <- call_test_runtime(path, "__voltRunTestModule", [], opts) do
+      {:ok, Volt.Test.Result.from_map!(result)}
+    end
   end
 
   @spec run_test(Path.t(), integer(), keyword()) :: {:ok, result()} | {:error, term()}
   def run_test(path, test_id, opts \\ []) when is_integer(test_id) do
-    call_test_runtime(path, "__voltRunTestModule", [test_id], opts)
+    with {:ok, result} <- call_test_runtime(path, "__voltRunTestModule", [test_id], opts) do
+      {:ok, Volt.Test.Result.from_map!(result)}
+    end
   end
 
   defp add_source_lines(path, tests) do
@@ -39,7 +44,7 @@ defmodule Volt.Test.Runner do
       {:ok,
        tests
        |> Enum.zip(lines)
-       |> Enum.map(fn {test, line} -> Map.put(test, "line", line) end)}
+       |> Enum.map(fn {test, line} -> %{test | line: line} end)}
     else
       {:error, _} -> {:ok, tests}
     end

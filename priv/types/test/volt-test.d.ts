@@ -112,6 +112,16 @@ declare namespace Volt {
       skipReason?: string
     }
 
+    interface FileResult {
+      file: string
+      status: 'passed' | 'failed'
+      duration: number
+      total: number
+      failed: number
+      skipped: number
+      tests: Result[]
+    }
+
     interface Suite {
       name?: string
       options: Options

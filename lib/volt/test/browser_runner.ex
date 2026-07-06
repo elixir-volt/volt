@@ -7,7 +7,6 @@ defmodule Volt.Test.BrowserRunner do
   execution without changing assertions or reporting.
   """
 
-  alias PlaywrightEx.{Browser, BrowserContext, Frame}
   alias Volt.Test.Config
 
   @type result :: map()
@@ -15,18 +14,23 @@ defmodule Volt.Test.BrowserRunner do
   @spec collect_file(Path.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def collect_file(path, opts \\ []) do
     with {:ok, tests} <- call_browser_runtime(path, :collect, nil, opts) do
+      tests = Enum.map(tests, &Volt.Test.Result.Metadata.from_map!/1)
       add_source_lines(path, tests)
     end
   end
 
   @spec run_file(Path.t(), keyword()) :: {:ok, result()} | {:error, term()}
   def run_file(path, opts \\ []) do
-    call_browser_runtime(path, :run, nil, opts)
+    with {:ok, result} <- call_browser_runtime(path, :run, nil, opts) do
+      {:ok, Volt.Test.Result.from_map!(result)}
+    end
   end
 
   @spec run_test(Path.t(), integer(), keyword()) :: {:ok, result()} | {:error, term()}
   def run_test(path, test_id, opts \\ []) when is_integer(test_id) do
-    call_browser_runtime(path, :run, test_id, opts)
+    with {:ok, result} <- call_browser_runtime(path, :run, test_id, opts) do
+      {:ok, Volt.Test.Result.from_map!(result)}
+    end
   end
 
   defp add_source_lines(path, tests) do
@@ -35,7 +39,7 @@ defmodule Volt.Test.BrowserRunner do
       {:ok,
        tests
        |> Enum.zip(lines)
-       |> Enum.map(fn {test, line} -> Map.put(test, "line", line) end)}
+       |> Enum.map(fn {test, line} -> %{test | line: line} end)}
     else
       {:error, _} -> {:ok, tests}
     end
@@ -49,20 +53,20 @@ defmodule Volt.Test.BrowserRunner do
            Volt.Test.Bundler.bundle_file(path, Keyword.get(opts, :compile_opts, [])),
          {:ok, runtime_code} <- browser_runtime_code(),
          :ok <- ensure_playwright_started(config, timeout),
-         {:ok, browser} <- PlaywrightEx.launch_browser(browser(config), timeout: timeout),
-         {:ok, context} <- Browser.new_context(browser.guid, timeout: timeout),
-         {:ok, %{main_frame: frame}} <- BrowserContext.new_page(context.guid, timeout: timeout) do
+         {:ok, browser} <- launch_browser(browser(config), timeout: timeout),
+         {:ok, context} <- browser_new_context(browser.guid, timeout: timeout),
+         {:ok, %{main_frame: frame}} <- browser_context_new_page(context.guid, timeout: timeout) do
       try do
         evaluate(frame, runtime_code, bundled.code, path, mode, test_id, timeout)
       after
-        BrowserContext.close(context.guid, timeout: timeout)
-        Browser.close(browser.guid, timeout: timeout)
+        browser_context_close(context.guid, timeout: timeout)
+        browser_close(browser.guid, timeout: timeout)
       end
     end
   end
 
   defp browser_runtime_code do
-    Volt.JS.Runtime.Bundler.bundle_file(Volt.Priv.path({:volt, "ts"}, "test/core.ts"))
+    Volt.JS.Runtime.Bundler.bundle_file(Volt.Priv.path({:volt, "ts"}, "test/browser.ts"))
   end
 
   defp ensure_playwright_started(%Config{} = config, timeout) do
@@ -71,7 +75,7 @@ defmodule Volt.Test.BrowserRunner do
       |> Keyword.put_new(:timeout, timeout)
       |> Keyword.put_new(:executable, playwright_executable())
 
-    case PlaywrightEx.Supervisor.start_link(opts) do
+    case playwright_supervisor_start_link(opts) do
       {:ok, _pid} -> :ok
       {:error, {:already_started, _pid}} -> :ok
       {:error, reason} -> {:error, reason}
@@ -87,31 +91,52 @@ defmodule Volt.Test.BrowserRunner do
   defp browser(%Config{}), do: :chromium
 
   defp evaluate(frame, runtime_code, test_code, file, mode, test_id, timeout) do
-    Frame.evaluate(frame.guid,
-      expression: """
-      async ({ runtimeCode, testCode, file, mode, testId }) => {
-        (0, eval)(runtimeCode)
+    with {:ok, _} <-
+           frame_evaluate(frame.guid,
+             expression: runtime_code,
+             is_function: false,
+             arg: nil,
+             timeout: timeout
+           ) do
+      frame_evaluate(frame.guid,
+        expression: "payload => globalThis.__voltExecuteBrowserTest(payload)",
+        is_function: true,
+        arg: %{
+          "testCode" => test_code,
+          "file" => file,
+          "mode" => Atom.to_string(mode),
+          "testId" => test_id
+        },
+        timeout: timeout
+      )
+    end
+  end
 
-        if (mode === 'collect') {
-          return globalThis.__voltCollectTestModule(testCode, file)
-        }
+  defp playwright_supervisor_start_link(opts) do
+    apply(PlaywrightEx.Supervisor, :start_link, [opts])
+  end
 
-        if (testId === null || testId === undefined) {
-          return globalThis.__voltRunTestModule(testCode, file)
-        }
+  defp launch_browser(browser, opts) do
+    apply(PlaywrightEx, :launch_browser, [browser, opts])
+  end
 
-        return globalThis.__voltRunTestModule(testCode, file, testId)
-      }
-      """,
-      is_function: true,
-      arg: %{
-        "runtimeCode" => runtime_code,
-        "testCode" => test_code,
-        "file" => file,
-        "mode" => Atom.to_string(mode),
-        "testId" => test_id
-      },
-      timeout: timeout
-    )
+  defp browser_new_context(browser_guid, opts) do
+    apply(PlaywrightEx.Browser, :new_context, [browser_guid, opts])
+  end
+
+  defp browser_close(browser_guid, opts) do
+    apply(PlaywrightEx.Browser, :close, [browser_guid, opts])
+  end
+
+  defp browser_context_new_page(context_guid, opts) do
+    apply(PlaywrightEx.BrowserContext, :new_page, [context_guid, opts])
+  end
+
+  defp browser_context_close(context_guid, opts) do
+    apply(PlaywrightEx.BrowserContext, :close, [context_guid, opts])
+  end
+
+  defp frame_evaluate(frame_guid, opts) do
+    apply(PlaywrightEx.Frame, :evaluate, [frame_guid, opts])
   end
 end

@@ -73,8 +73,8 @@ defmodule Volt.Test.ExUnit do
     end
   end
 
-  defp test_definition(file, profile, config, %{"id" => test_id} = test) do
-    name = test["fullName"] || test["name"] || inspect(test_id)
+  defp test_definition(file, profile, config, %Volt.Test.Result.Metadata{id: test_id} = test) do
+    name = test.full_name || test.name || inspect(test_id)
     function = Macro.unique_var(:name, __MODULE__)
 
     tags = test_tags(file, test)
@@ -114,15 +114,21 @@ defmodule Volt.Test.ExUnit do
     [
       js: true,
       volt_file: file,
-      volt_test_id: test["id"],
-      volt_tags: test["tags"] || []
+      volt_test_id: test.id,
+      volt_tags: test.tags || []
     ] ++ skip_tags(test)
   end
 
-  defp skip_tags(%{"mode" => "skip"} = test), do: [skip: test["skipReason"] || true]
-  defp skip_tags(%{"mode" => "todo"} = test), do: [skip: test["skipReason"] || "TODO"]
-  defp skip_tags(_test), do: []
+  defp skip_tags(%Volt.Test.Result.Metadata{mode: :skip} = test),
+    do: [skip: test.skip_reason || true]
 
-  defp test_line(%{"line" => line}) when is_integer(line) and line > 0, do: line
-  defp test_line(_test), do: 1
+  defp skip_tags(%Volt.Test.Result.Metadata{mode: :todo} = test),
+    do: [skip: test.skip_reason || "TODO"]
+
+  defp skip_tags(%Volt.Test.Result.Metadata{}), do: []
+
+  defp test_line(%Volt.Test.Result.Metadata{line: line}) when is_integer(line) and line > 0,
+    do: line
+
+  defp test_line(%Volt.Test.Result.Metadata{}), do: 1
 end
