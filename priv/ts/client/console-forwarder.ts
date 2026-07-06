@@ -68,7 +68,6 @@ function serialize(value: unknown): unknown {
     try {
       return String(value)
     } catch {
-      // Ignore secondary stringification errors and use a stable placeholder.
       return '[unserializable]'
     }
   }

@@ -25,7 +25,7 @@ defmodule Volt.Dev.ConsoleForwarder do
 
   @spec inject(String.t()) :: String.t()
   def inject(code) when is_binary(code) do
-    Volt.Priv.js!(@support_modules, "dev/console-forwarder.ts") <> "\n" <> code
+    Volt.Priv.js!(@support_modules, "client/console-forwarder.ts") <> "\n" <> code
   end
 
   @spec log(binary() | Payload.t()) :: :ok

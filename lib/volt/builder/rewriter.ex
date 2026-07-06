@@ -149,7 +149,7 @@ defmodule Volt.Builder.Rewriter do
   end
 
   defp preload_helper do
-    Volt.Priv.js!(@support_modules, "runtime/preload.ts") <> "\n"
+    Volt.Priv.js!(@support_modules, "client/preload.ts") <> "\n"
   end
 
   defp worker_filename_map(worker_specs, ctx) do

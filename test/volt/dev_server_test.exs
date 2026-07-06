@@ -985,7 +985,8 @@ defmodule Volt.DevServerTest do
       File.write!(Path.join(@fixture_dir, "src/bad.ts"), "const = ;")
       conn = call_dev_server("/assets/bad.ts")
       assert conn.status == 500
-      assert conn.resp_body =~ "[Volt] Compilation error"
+      assert conn.resp_body =~ "renderErrorOverlay"
+      assert conn.resp_body =~ "Compilation error"
     end
   end
 

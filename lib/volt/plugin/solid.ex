@@ -17,7 +17,6 @@ defmodule Volt.Plugin.Solid do
   }
 
   @runtime_name __MODULE__.Runtime
-  @support_modules {:volt, "ts"}
   @jsx_exts ~w(.jsx .tsx)
   @impl true
   def name, do: "solid"
@@ -63,19 +62,17 @@ defmodule Volt.Plugin.Solid do
 
   def runtime_packages, do: @runtime_packages
 
-  defp cjs_require_preamble do
-    Volt.Priv.read!(@support_modules, "runtime/cjs-require-preamble.js")
-  end
-
   defp do_compile(source, filename, opts, plugin_opts) do
     runtime =
       Volt.JS.Runtime.ensure!(
         name: @runtime_name,
         packages: @runtime_packages,
         apis: [:browser, :node],
-        entry: {:volt_asset, "frameworks/solid.ts"},
+        entry: {:volt_asset, "compilers/solid.ts"},
         bundle: true,
-        bundle_opts: [preamble: cjs_require_preamble()],
+        bundle_opts: [
+          builtin_shims: %{"assert" => assert_shim_path(), "node:assert" => assert_shim_path()}
+        ],
         max_stack_size: 32 * 1024 * 1024
       )
 
@@ -103,6 +100,8 @@ defmodule Volt.Plugin.Solid do
         error
     end
   end
+
+  defp assert_shim_path, do: Volt.Priv.path({:volt, "ts"}, "shims/node/assert.cjs")
 
   defp maybe_downlevel(code, filename, opts) do
     case Keyword.get(opts, :target) do

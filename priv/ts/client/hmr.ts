@@ -1,4 +1,6 @@
-// ── HMR Context (import.meta.hot) ──────────────────────────────
+import { renderErrorOverlay } from './overlay'
+
+declare const __VOLT_HEARTBEAT__: number
 
 interface HotCallback {
   deps: string[]
@@ -71,12 +73,10 @@ export function createHotContext(ownerPath: string) {
     },
 
     on(_event: string, _cb: (...args: unknown[]) => void) {
-      // reserved for future events
+      return undefined
     }
   }
 }
-
-// ── WebSocket connection ───────────────────────────────────────
 
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
 
@@ -86,15 +86,9 @@ let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 let lastPongAt = 0
 let reconnectAttempts = 0
 
-// Bound at serve time from the server's `hmr_timeout` (half of it) so the
-// heartbeat always lands inside Bandit's websocket `read_timeout` window.
-// The value is injected by the dev server when serving this module.
-const configuredHeartbeat = (globalThis as Record<string, unknown>).__VOLT_HEARTBEAT__
-const HEARTBEAT_INTERVAL = typeof configuredHeartbeat === 'number' ? configuredHeartbeat : 25_000
+const HEARTBEAT_INTERVAL = __VOLT_HEARTBEAT__
 const PONG_GRACE = HEARTBEAT_INTERVAL * 2
 
-// Exponential reconnect backoff with jitter to avoid a thundering herd of
-// browser tabs reconnecting at the same instant when the dev server restarts.
 const RECONNECT_BASE = 1_000
 const RECONNECT_MAX = 30_000
 
@@ -109,14 +103,9 @@ function connect() {
       reconnectTimer = undefined
     }
 
-    // Successful (re)connection resets the backoff.
     reconnectAttempts = 0
     lastPongAt = Date.now()
 
-    // Send periodic pings so the server's websocket read_timeout does not
-    // close an otherwise idle connection between file changes. The server
-    // replies with a `pong`; if we stop receiving pongs we assume the link
-    // is half-open and force a reconnect.
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer)
     }
@@ -172,17 +161,12 @@ function connect() {
   }
 }
 
-// Full-jitter exponential backoff: delay = min(MAX, BASE * 2^attempt) * rand().
-// Caps out at RECONNECT_MAX and is randomized across [0, cap] so concurrent
-// tabs don't retry in lockstep after a dev-server restart.
 function nextReconnectDelay() {
   const exponent = Math.min(reconnectAttempts, 16)
   const cap = Math.min(RECONNECT_MAX, RECONNECT_BASE * 2 ** exponent)
   reconnectAttempts += 1
   return Math.floor(Math.random() * cap)
 }
-
-// ── Update handling ────────────────────────────────────────────
 
 async function handleUpdate(payload: {
   path: string
@@ -340,19 +324,7 @@ async function updateStyles(path: string) {
 }
 
 function showOverlay(reason: unknown) {
-  let overlay = document.getElementById('volt-error-overlay')
-
-  if (!overlay) {
-    overlay = document.createElement('div')
-    overlay.id = 'volt-error-overlay'
-    overlay.style.cssText =
-      'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);color:#ff6b6b;font:14px/1.6 monospace;padding:2em;white-space:pre-wrap;overflow:auto;cursor:pointer'
-    overlay.onclick = () => overlay?.remove()
-    document.body.appendChild(overlay)
-  }
-
-  const message = typeof reason === 'string' ? reason : JSON.stringify(reason, null, 2)
-  overlay.textContent = `[Volt] Build error:\n\n${message}`
+  renderErrorOverlay(reason, { title: 'Build error', dismissible: true })
 }
 
 connect()

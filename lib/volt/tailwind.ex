@@ -86,7 +86,7 @@ defmodule Volt.Tailwind do
             "TAILWIND_DEFAULT_BASE" => File.cwd!()
           }
         end,
-        entry: {:volt_asset, "dev/tailwind.ts"}
+        entry: {:volt_asset, "compilers/tailwind.ts"}
       )
 
     %{state | runtime: runtime, scanner: build_scanner(state.sources)}
