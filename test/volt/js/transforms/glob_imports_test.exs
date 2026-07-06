@@ -1,7 +1,9 @@
 defmodule Volt.JS.Transforms.GlobImportsTest do
   use ExUnit.Case, async: true
 
-  @fixture_dir Path.expand("fixtures/glob", __DIR__)
+  import Volt.Test.Sigils
+
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-glob-imports-test")
 
   setup do
     File.mkdir_p!(Path.join(@fixture_dir, "pages"))
@@ -13,7 +15,7 @@ defmodule Volt.JS.Transforms.GlobImportsTest do
 
   describe "patterns/2" do
     test "extracts glob patterns without transforming source" do
-      source = "const modules = import.meta.glob(['./pages/*.ts', '!./pages/about.ts'])"
+      source = ~TS"const modules = import.meta.glob(['./pages/*.ts', '!./pages/about.ts'])"
 
       assert Volt.JS.Transforms.GlobImports.patterns(source, "app.ts") == [
                "./pages/*.ts",
@@ -29,7 +31,7 @@ defmodule Volt.JS.Transforms.GlobImportsTest do
 
   describe "transform/2 lazy" do
     test "expands glob into lazy import map" do
-      source = "const modules = import.meta.glob('./pages/*.ts')"
+      source = ~TS"const modules = import.meta.glob('./pages/*.ts')"
       result = Volt.JS.Transforms.GlobImports.transform(source, @fixture_dir)
 
       assert result =~ "\"./pages/about.ts\":"
@@ -41,7 +43,7 @@ defmodule Volt.JS.Transforms.GlobImportsTest do
 
   describe "transform/2 eager" do
     test "expands glob into eager imports" do
-      source = "const modules = import.meta.glob('./pages/*.ts', { eager: true })"
+      source = ~TS"const modules = import.meta.glob('./pages/*.ts', { eager: true })"
       result = Volt.JS.Transforms.GlobImports.transform(source, @fixture_dir)
 
       assert result =~ "import * as __glob_"
@@ -52,7 +54,7 @@ defmodule Volt.JS.Transforms.GlobImportsTest do
 
     test "supports array patterns with exclusions" do
       source =
-        "const modules = import.meta.glob(['./pages/*.ts', '!./pages/about.ts'], { eager: true })"
+        ~TS"const modules = import.meta.glob(['./pages/*.ts', '!./pages/about.ts'], { eager: true })"
 
       result = Volt.JS.Transforms.GlobImports.transform(source, @fixture_dir)
 
@@ -95,7 +97,7 @@ defmodule Volt.JS.Transforms.GlobImportsTest do
     end
 
     test "supports TypeScript generic syntax" do
-      source = "const modules = import.meta.glob<Module>('./pages/*.ts')"
+      source = ~TS"const modules = import.meta.glob<Module>('./pages/*.ts')"
       result = Volt.JS.Transforms.GlobImports.transform(source, @fixture_dir)
 
       assert result =~ "./pages/home.ts"
@@ -105,7 +107,7 @@ defmodule Volt.JS.Transforms.GlobImportsTest do
 
   describe "transform/2 no glob" do
     test "passes through code without glob" do
-      source = "const x = 42"
+      source = ~TS"const x = 42"
       assert Volt.JS.Transforms.GlobImports.transform(source, @fixture_dir) == source
     end
   end

@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 0.15.0 - 2026-07-06
+
+### Added
+
+- ExUnit-native JavaScript and TypeScript tests through `Volt.Test.ExUnit.install/1`; `mix test` remains the single test entry point.
+- `volt:test` runtime with `describe`, `test`/`it`, skip/todo modifiers, hooks, async tests, `test.each`, `describe.each`, and common `expect` matchers.
+- Browser JavaScript tests with `browser: true` through PlaywrightEx.
+- Strict `JSONCodec` result contracts for JavaScript test metadata, failures, and file results.
+- OXC-backed source line discovery for registered JavaScript tests.
+- JavaScript/TypeScript test fixture sigils in `Volt.Test.Sigils`.
+- Phoenix example app tests that showcase Volt's Vitest-like test API.
+- Browser dogfood coverage for Volt client overlay, preload, hot-context, and style-update runtime helpers.
+
+### Changed
+
+- Organized Volt TypeScript runtime and declaration files by purpose under `priv/ts` and `priv/types`.
+- Split Volt test runtime TypeScript into focused modules.
+- Split large builder and dev-server test files into feature-focused test modules.
+- Mutable/generated test fixtures now use temporary directories instead of persistent fixture roots.
+- Type-aware JavaScript checks keep Oxlint-shaped `:rules` config while avoiding unsupported `tsgolint` rules.
+- Solid runtime bundling now uses explicit Node builtin shims instead of a global CommonJS `require` preamble.
+- Development HMR client and CSS update support now use shared bundled client modules.
+
+### Fixed
+
+- Playwright integration tests can use the local `node_modules/.bin/playwright` executable.
+- Phoenix example integration tests prepare example Mix/npm dependencies before asserting vendor and production build behavior.
+- Browser console forwarding now decodes payloads through a strict `JSONCodec` contract.
+
 ## 0.14.12 - 2026-06-28
 
 ### Added

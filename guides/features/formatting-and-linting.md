@@ -87,10 +87,12 @@ config :volt, :lint,
   tsgolint: "./node_modules/.bin/tsgolint",
   rules: %{
     "correctness" => :deny,
-    "typescript/no-floating-promises" => :deny
+    "typescript/consistent-type-imports" => :deny,
+    "typescript/no-floating-promises" => :deny,
+    "typescript/no-misused-promises" => :deny
   }
 ```
 
-Oxlint category rules such as `"correctness"` and syntax-only rules such as `"no-console"` apply to the normal lint path and are not forwarded to `tsgolint`. Type-aware rules follow Oxlint's `"typescript/*"` naming convention and are forwarded to `tsgolint` when `--type-aware` is enabled.
+Volt keeps the Oxlint-style rule shape: configure normal and type-aware rules together under `:rules`. When `--type-aware` is enabled, Volt still runs the normal syntax lint path and also invokes `tsgolint` for supported semantic TypeScript rules.
 
 Exits with non-zero status on issues.

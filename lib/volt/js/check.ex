@@ -30,7 +30,8 @@ defmodule Volt.JS.Check do
     rules = Keyword.get(config, :rules, %{})
 
     if opts[:type_aware] do
-      type_aware_lint(files, config, type_aware_rules(rules), opts)
+      ast_lint(Enum.filter(files, &type_aware_file?/1), config, rules) ++
+        type_aware_lint(files, config, typescript_rules(rules), opts)
     else
       ast_lint(files, config, rules)
     end
@@ -83,7 +84,7 @@ defmodule Volt.JS.Check do
         source_overrides: Map.merge(source_overrides, Keyword.get(config, :source_overrides, %{}))
       ] ++ type_aware_options(config)
 
-    case OXC.Lint.run(files, lint_opts) do
+    case run_type_aware_lint(files, lint_opts) do
       {:ok, diagnostics} ->
         Enum.map(diagnostics, fn diagnostic ->
           diagnostic
@@ -139,7 +140,41 @@ defmodule Volt.JS.Check do
     end
   end
 
-  defp type_aware_rules(rules) do
+  defp run_type_aware_lint(files, lint_opts) do
+    if map_size(Keyword.fetch!(lint_opts, :rules)) == 0 and not lint_opts[:type_check] do
+      {:ok, []}
+    else
+      do_run_type_aware_lint(files, lint_opts)
+    end
+  end
+
+  defp do_run_type_aware_lint(files, lint_opts) do
+    case OXC.Lint.run(files, lint_opts) do
+      {:error, errors} ->
+        case unknown_tsgolint_rule(errors) do
+          nil ->
+            {:error, errors}
+
+          rule ->
+            rules = Map.delete(lint_opts[:rules], "typescript/#{rule}")
+            run_type_aware_lint(files, Keyword.put(lint_opts, :rules, rules))
+        end
+
+      result ->
+        result
+    end
+  end
+
+  defp unknown_tsgolint_rule(errors) do
+    Enum.find_value(errors, fn error ->
+      case Regex.run(~r/unknown rule: ([\w-]+)/, lint_error_message(error)) do
+        [_, rule] -> rule
+        _ -> nil
+      end
+    end)
+  end
+
+  defp typescript_rules(rules) do
     Map.filter(rules, fn {rule, _config} ->
       String.starts_with?(to_string(rule), "typescript/")
     end)

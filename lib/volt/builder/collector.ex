@@ -54,6 +54,15 @@ defmodule Volt.Builder.Collector do
 
   defp module_path(module_id), do: module_id |> Volt.URL.split_query() |> elem(0)
 
+  defp asset_module_query?(module_id) do
+    {_path, query} = Volt.URL.split_query(module_id)
+
+    query
+    |> Volt.URL.decode_query()
+    |> Map.keys()
+    |> Enum.any?(&(&1 in ["raw", "url", "inline", "no-inline"]))
+  end
+
   defp collect_asset(abs_path, label, state) do
     source = ""
 
@@ -210,15 +219,20 @@ defmodule Volt.Builder.Collector do
   end
 
   defp graph_source(path, source, _content_type, ctx) do
-    case Volt.Pipeline.compile(path, source,
-           target: ctx.target,
-           import_source: ctx.import_source,
-           define: ctx.define,
-           plugins: ctx.plugins,
-           loaders: ctx.loaders
-         ) do
-      {:ok, %{type: :js, code: code}} -> code
-      _ -> source
+    if asset_module_query?(path) do
+      source
+    else
+      case Volt.Pipeline.compile(path, source,
+             target: ctx.target,
+             import_source: ctx.import_source,
+             mode: :production,
+             define: ctx.define,
+             plugins: ctx.plugins,
+             loaders: ctx.loaders
+           ) do
+        {:ok, %{type: :js, code: code}} -> code
+        _ -> source
+      end
     end
   end
 
@@ -233,6 +247,9 @@ defmodule Volt.Builder.Collector do
          ) do
       nil ->
         cond do
+          asset_module_query?(path) ->
+            {:ok, %Volt.JS.ImportExtractor.Result{imports: [], workers: []}}
+
           Volt.MIME.javascript?(content_type) ->
             extract_js_typed_imports(source, filename)
 

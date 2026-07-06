@@ -8,16 +8,25 @@ defmodule Volt.Dev.ConsoleForwarderTest do
     assert code =~ "console.log('ok')"
   end
 
-  test "logs browser payloads" do
-    log =
-      capture_log(fn ->
-        Volt.Dev.ConsoleForwarder.log(%{
-          "level" => "error",
-          "source" => "/assets/app.js",
-          "args" => ["boom", %{"code" => 500}]
-        })
-      end)
+  test "logs browser payload JSON" do
+    payload =
+      Jason.encode!(%{
+        level: "error",
+        source: "/assets/app.js",
+        args: ["boom", %{"code" => 500}]
+      })
+
+    log = capture_log(fn -> Volt.Dev.ConsoleForwarder.log(payload) end)
 
     assert log =~ "[Volt][browser][/assets/app.js] boom %{\"code\" => 500}"
+  end
+
+  test "rejects payloads outside the strict console contract" do
+    log =
+      capture_log(fn ->
+        Volt.Dev.ConsoleForwarder.log(~s({"level":"trace","source":"/","args":[]}))
+      end)
+
+    assert log == ""
   end
 end

@@ -84,7 +84,7 @@ defmodule Volt.Plugin.Svelte do
         name: @runtime_name,
         packages: @runtime_packages,
         apis: [:browser, :node],
-        entry: {:volt_asset, "frameworks/svelte.ts"},
+        entry: {:volt_asset, "compilers/svelte.ts"},
         bundle: true,
         max_stack_size: 16 * 1024 * 1024
       )

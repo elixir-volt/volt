@@ -68,8 +68,11 @@ defmodule Volt.Plugin.Solid do
         name: @runtime_name,
         packages: @runtime_packages,
         apis: [:browser, :node],
-        entry: {:volt_asset, "frameworks/solid.ts"},
+        entry: {:volt_asset, "compilers/solid.ts"},
         bundle: true,
+        bundle_opts: [
+          builtin_shims: %{"assert" => assert_shim_path(), "node:assert" => assert_shim_path()}
+        ],
         max_stack_size: 32 * 1024 * 1024
       )
 
@@ -97,6 +100,8 @@ defmodule Volt.Plugin.Solid do
         error
     end
   end
+
+  defp assert_shim_path, do: Volt.Priv.path({:volt, "ts"}, "shims/node/assert.cjs")
 
   defp maybe_downlevel(code, filename, opts) do
     case Keyword.get(opts, :target) do

@@ -2,7 +2,7 @@ defmodule Volt.WatcherTest do
   use ExUnit.Case, async: false
 
   setup %{test: test_name} do
-    watch_dir = Path.expand("fixtures/watcher_test/#{test_name}", __DIR__)
+    watch_dir = Path.join([System.tmp_dir!(), "volt-watcher-test", to_string(test_name)])
     File.mkdir_p!(watch_dir)
     Volt.HMR.ImportGraph.clear()
     Volt.Cache.clear()

@@ -38,7 +38,7 @@ defmodule Volt.HMRTest do
   end
 
   test "invalidate_file evicts dev compilation state" do
-    path = Path.expand("fixtures/hmr/app.ts", __DIR__)
+    path = Path.join(System.tmp_dir!(), "volt-hmr-test/app.ts")
     Volt.Cache.put(path, 1, %{code: "old", sourcemap: nil, content_type: "text/javascript"})
     Volt.HMR.ModuleGraph.update_module("/assets/app.ts", "/assets/app.ts", path, [])
 

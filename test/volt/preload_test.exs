@@ -47,7 +47,7 @@ defmodule Volt.PreloadTest do
     end
 
     test "reads from manifest file" do
-      dir = Path.expand("fixtures/preload", __DIR__)
+      dir = Path.join(System.tmp_dir!(), "volt-preload-test")
       File.mkdir_p!(dir)
       path = Path.join(dir, "manifest.json")
       File.write!(path, Jason.encode!(%{"app.js" => "app-abc.js"}))

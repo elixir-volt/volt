@@ -2,7 +2,7 @@ defmodule Volt.JS.Asset do
   @moduledoc "Compatibility accessors for JavaScript and TypeScript support assets bundled with Volt."
 
   @assets {:volt, "ts"}
-  @runtime_rewrites %{"./hmr-client" => "/@volt/client.js"}
+  @runtime_rewrites %{"../hmr" => "/@volt/client.js"}
 
   @doc "Path to the priv/ts directory containing bundled TypeScript assets."
   @spec priv_dir :: String.t()

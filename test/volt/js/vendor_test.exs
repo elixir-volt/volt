@@ -1,7 +1,7 @@
 defmodule Volt.JS.VendorTest do
   use ExUnit.Case, async: false
 
-  @fixture_dir Path.expand("fixtures/vendor", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-vendor-test")
   @node_modules Path.join(@fixture_dir, "node_modules")
   @deps_dir Path.join(@fixture_dir, "deps")
 

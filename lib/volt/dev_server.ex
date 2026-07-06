@@ -34,7 +34,7 @@ defmodule Volt.DevServer do
   alias Volt.URL
 
   @support_modules {:volt, "ts"}
-  @runtime_rewrites %{"./hmr-client" => "/@volt/client.js"}
+  @runtime_rewrites %{"../hmr" => "/@volt/client.js"}
 
   @behaviour Plug
 
@@ -83,13 +83,12 @@ defmodule Volt.DevServer do
 
   def call(%Conn{request_path: "/@volt/client.js"} = conn, config) do
     heartbeat_interval = max(div(config.hmr_timeout, 2), 1_000)
-    client = support_module!("dev/hmr-client.ts")
-    bootstrap = "globalThis.__VOLT_HEARTBEAT__ = #{heartbeat_interval};\n"
+    client = client_module!(heartbeat_interval)
 
     conn
     |> Conn.put_resp_content_type(Volt.MIME.javascript())
     |> Conn.put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
-    |> Conn.send_resp(200, bootstrap <> client)
+    |> Conn.send_resp(200, client)
     |> Conn.halt()
   end
 
@@ -209,6 +208,9 @@ defmodule Volt.DevServer do
       not Volt.Path.inside?(file_path, config.root) ->
         conn
 
+      File.regular?(file_path) and explicit_asset_module_request?(conn) ->
+        serve_asset_module(conn, file_path, relative, config)
+
       compilable?(file_path, config) and File.regular?(file_path) ->
         serve_compiled(conn, file_path, relative, config)
 
@@ -303,7 +305,10 @@ defmodule Volt.DevServer do
       import_source: config.import_source,
       vapor: config.vapor,
       custom_renderer: config.custom_renderer,
+      node_modules: config.node_modules,
+      resolve_dirs: config.resolve_dirs,
       sourcemap: true,
+      mode: :development,
       plugins: config.plugins,
       define: config.define,
       rewrite_import: &rewrite_dev_specifier(&1, importer, config)
@@ -452,6 +457,13 @@ defmodule Volt.DevServer do
       Enum.member?(Conn.get_req_header(conn, "sec-fetch-dest"), "script")
   end
 
+  defp explicit_asset_module_request?(conn) do
+    conn.query_string
+    |> URL.decode_query()
+    |> Map.keys()
+    |> Enum.any?(&(&1 in ["raw", "url", "inline", "no-inline"]))
+  end
+
   defp import_query?(query_string) do
     query_string
     |> URL.decode_query()
@@ -506,7 +518,7 @@ defmodule Volt.DevServer do
 
   defp css_update_module(mod_url, css, exports) do
     [
-      support_module!("dev/css-update.ts", id: mod_url, css: css),
+      support_module!("client/templates/css-update.ts", id: mod_url, css: css),
       "\n",
       exports
     ]
@@ -640,7 +652,7 @@ defmodule Volt.DevServer do
   end
 
   defp hmr_preamble(mod_url) do
-    support_module!("dev/hmr-preamble.ts", mod_url: mod_url)
+    support_module!("client/templates/hmr-preamble.ts", mod_url: mod_url)
   end
 
   # ── Vendor pre-bundling ───────────────────────────────────────────
@@ -707,10 +719,28 @@ defmodule Volt.DevServer do
         e -> inspect(e)
       end)
 
-    overlay = support_module!("dev/error-overlay.ts")
-    invocation = support_module!("dev/error-overlay-invocation.ts", message: msg)
+    overlay = support_module!("client/overlay.ts")
+    overlay <> "\n" <> error_overlay_invocation(msg)
+  end
 
-    overlay <> "\n" <> invocation
+  defp error_overlay_invocation(message) do
+    "renderErrorOverlay($message, $options)"
+    |> OXC.parse!("volt-error-overlay-call.ts")
+    |> OXC.bind(message: {:literal, message}, options: {:literal, %{title: "Compilation error"}})
+    |> OXC.codegen!()
+  end
+
+  defp client_module!(heartbeat_interval) do
+    entry = Volt.Priv.path(@support_modules, "client/hmr.ts")
+
+    case Volt.JS.Runtime.Bundler.bundle_file(entry,
+           format: :esm,
+           define: %{"__VOLT_HEARTBEAT__" => Integer.to_string(heartbeat_interval)}
+         ) do
+      {:ok, code} when is_binary(code) -> code
+      {:ok, %{code: code}} when is_binary(code) -> code
+      {:error, reason} -> raise "Could not bundle Volt dev client: #{inspect(reason)}"
+    end
   end
 
   defp support_module!(relative), do: Volt.Priv.js!(@support_modules, relative)

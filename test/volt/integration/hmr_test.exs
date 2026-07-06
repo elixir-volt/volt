@@ -44,14 +44,51 @@ defmodule Volt.Integration.HMRTest do
 
   alias PlaywrightEx.{Browser, BrowserContext, Frame}
 
-  @fixture_dir Path.expand("../fixtures/integration_hmr", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-integration-hmr-test")
   @port 44_831
 
   setup_all do
-    {:ok, _} = PlaywrightEx.Supervisor.start_link(timeout: 10_000)
-    {:ok, browser} = PlaywrightEx.launch_browser(:chromium, timeout: 10_000)
+    ensure_playwright_started!()
+    {:ok, browser} = launch_browser!()
     on_exit(fn -> :ok end)
     %{browser: browser}
+  end
+
+  defp ensure_playwright_started! do
+    case PlaywrightEx.Supervisor.start_link(timeout: 10_000, executable: playwright_executable()) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
+  end
+
+  defp launch_browser! do
+    case PlaywrightEx.launch_browser(:chromium, timeout: 10_000) do
+      {:ok, browser} ->
+        {:ok, browser}
+
+      {:error, _reason} ->
+        restart_playwright!()
+        PlaywrightEx.launch_browser(:chromium, timeout: 10_000)
+    end
+  catch
+    :exit, _reason ->
+      restart_playwright!()
+      PlaywrightEx.launch_browser(:chromium, timeout: 10_000)
+  end
+
+  defp restart_playwright! do
+    case Process.whereis(PlaywrightEx.Supervisor) do
+      nil -> :ok
+      pid -> Process.exit(pid, :kill)
+    end
+
+    Process.sleep(100)
+    ensure_playwright_started!()
+  end
+
+  defp playwright_executable do
+    local = Path.expand("node_modules/.bin/playwright")
+    if File.exists?(local), do: local, else: "playwright"
   end
 
   setup %{browser: browser} do

@@ -1,7 +1,7 @@
 defmodule Volt.HTMLEntryTest do
   use ExUnit.Case, async: true
 
-  @fixture_dir Path.expand("fixtures/html_entry", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-html-entry-test")
 
   setup do
     File.mkdir_p!(@fixture_dir)

@@ -1,7 +1,7 @@
 defmodule Volt.EnvTest do
   use ExUnit.Case, async: true
 
-  @fixture_dir Path.expand("fixtures/env", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-env-test")
 
   setup do
     File.mkdir_p!(@fixture_dir)

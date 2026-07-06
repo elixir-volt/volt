@@ -21,32 +21,40 @@ defmodule Volt.JS.Runtime.Bundler do
 
     bundle_opts =
       opts
-      |> Keyword.drop([:node_modules])
+      |> Keyword.drop([:node_modules, :builtin_shims])
       |> Keyword.put_new(:entry, entry_label)
 
-    case collect_modules(entry_path, project_root) do
+    case collect_modules(entry_path, project_root, opts) do
       {:ok, files} -> OXC.bundle(files, bundle_opts)
       {:error, _} = error -> error
     end
   end
 
-  defp collect_modules(entry_path, project_root) do
-    case do_collect(entry_path, project_root, [], MapSet.new()) do
+  defp collect_modules(entry_path, project_root, opts) do
+    builtin_shims = opts |> Keyword.get(:builtin_shims, %{}) |> Map.new()
+
+    context = %{
+      project_root: project_root,
+      builtin_shims: builtin_shims,
+      shim_labels: shim_labels(builtin_shims, project_root)
+    }
+
+    case do_collect(entry_path, context, [], MapSet.new()) do
       {:ok, files, _seen} -> {:ok, Enum.reverse(files)}
       {:error, _} = error -> error
     end
   end
 
-  defp do_collect(abs_path, project_root, files, seen) do
+  defp do_collect(abs_path, context, files, seen) do
     if MapSet.member?(seen, abs_path) do
       {:ok, files, seen}
     else
       with {:ok, source} <- File.read(abs_path),
-           {:ok, rewritten, resolved_paths} <- rewrite_and_resolve(source, abs_path, project_root) do
-        label = posix_relative_to(abs_path, project_root)
+           {:ok, rewritten, resolved_paths} <- rewrite_and_resolve(source, abs_path, context) do
+        label = label_for(abs_path, context)
         seen = MapSet.put(seen, abs_path)
         files = [{label, rewritten} | files]
-        collect_deps(resolved_paths, project_root, files, seen)
+        collect_deps(resolved_paths, context, files, seen)
       else
         {:error, reason} when is_atom(reason) -> {:error, {:file_read_error, abs_path, reason}}
         {:error, _} = error -> error
@@ -54,25 +62,26 @@ defmodule Volt.JS.Runtime.Bundler do
     end
   end
 
-  defp collect_deps([], _project_root, files, seen), do: {:ok, files, seen}
+  defp collect_deps([], _context, files, seen), do: {:ok, files, seen}
 
-  defp collect_deps([path | rest], project_root, files, seen) do
-    case do_collect(path, project_root, files, seen) do
-      {:ok, files, seen} -> collect_deps(rest, project_root, files, seen)
+  defp collect_deps([path | rest], context, files, seen) do
+    case do_collect(path, context, files, seen) do
+      {:ok, files, seen} -> collect_deps(rest, context, files, seen)
       {:error, _} = error -> error
     end
   end
 
-  defp rewrite_and_resolve(source, importer, project_root) do
-    Specifiers.rewrite(source, importer, project_root, &rewrite_specifier/3)
+  defp rewrite_and_resolve(source, importer, context) do
+    Specifiers.rewrite(source, importer, context, &rewrite_specifier/3)
   end
 
-  defp rewrite_specifier(specifier, importer, project_root) do
+  defp rewrite_specifier(specifier, importer, context) do
+    project_root = context.project_root
     from_dir = Path.dirname(importer)
 
     case NPM.Resolution.PackageResolver.resolve(specifier, from_dir, @resolve_opts) do
-      {:builtin, _} ->
-        :skip
+      {:builtin, builtin} ->
+        rewrite_builtin(specifier, builtin, importer, project_root, context.builtin_shims)
 
       {:ok, resolved_path} ->
         replacement =
@@ -87,6 +96,48 @@ defmodule Volt.JS.Runtime.Bundler do
       :error ->
         throw({:error, {:module_not_found, specifier, "could not resolve"}})
     end
+  end
+
+  defp rewrite_builtin(specifier, builtin, importer, project_root, builtin_shims) do
+    shim = Map.get(builtin_shims, builtin) || Map.get(builtin_shims, specifier)
+
+    case shim do
+      nil ->
+        :skip
+
+      shim_path ->
+        shim_path = Path.expand(shim_path)
+
+        replacement = relative_import_path(importer, shim_path, project_root)
+
+        {:ok, replacement, shim_path}
+    end
+  end
+
+  defp shim_labels(builtin_shims, project_root) do
+    builtin_shims
+    |> Enum.map(fn {_builtin, path} -> Path.expand(path) end)
+    |> Enum.reject(&Volt.Path.inside?(&1, project_root))
+    |> Enum.map(&{&1, shim_label_for_path(&1)})
+    |> Map.new()
+  end
+
+  defp label_for(path, context) do
+    Map.get(context.shim_labels, path) || posix_relative_to(path, context.project_root)
+  end
+
+  defp relative_import_path(importer, resolved_path, project_root) do
+    if Volt.Path.inside?(resolved_path, project_root) do
+      NPM.Resolution.PackageResolver.relative_import_path(importer, resolved_path, project_root)
+    else
+      importer_label = posix_relative_to(importer, project_root)
+      target_label = shim_label_for_path(resolved_path)
+      Volt.Path.relative_import("/" <> importer_label, "/" <> target_label)
+    end
+  end
+
+  defp shim_label_for_path(path) do
+    "__volt_builtin_shims__/" <> Path.basename(path)
   end
 
   defp posix_relative_to(path, root) do

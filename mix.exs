@@ -1,7 +1,7 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
-  @version "0.14.12"
+  @version "0.15.0"
   @source_url "https://github.com/elixir-volt/volt"
 
   def project do
@@ -102,6 +102,7 @@ defmodule Volt.MixProject do
         "guides/features/glob-imports.md",
         "guides/features/plugins.md",
         "guides/features/formatting-and-linting.md",
+        "guides/features/testing.md",
         "guides/deployment/production-builds.md",
         "guides/migration/from-esbuild.md",
         "guides/cheatsheets/configuration.cheatmd",
@@ -137,6 +138,23 @@ defmodule Volt.MixProject do
           Volt.Priv
         ],
         Formatting: [Volt.Formatter, Volt.Format],
+        Testing: [
+          Volt.Test.Assertions,
+          Volt.Test.BrowserRunner,
+          Volt.Test.Bundle,
+          Volt.Test.Bundler,
+          Volt.Test.Config,
+          Volt.Test.Discovery,
+          Volt.Test.ExUnit,
+          Volt.Test.Imports,
+          Volt.Test.Lines,
+          Volt.Test.Result,
+          Volt.Test.Result.Metadata,
+          Volt.Test.Result.SerializedError,
+          Volt.Test.Result.Test,
+          Volt.Test.Runner,
+          Volt.Test.Sigils
+        ],
         "Mix Tasks": [
           Mix.Tasks.Volt.Build,
           Mix.Tasks.Volt.Dev,

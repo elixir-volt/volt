@@ -132,14 +132,18 @@ defmodule Volt.Builder.Resolver do
   defp resolve_bare(specifier, node_modules, resolve_dirs, plugins) do
     dirs = if node_modules, do: [node_modules | resolve_dirs], else: resolve_dirs
 
-    Enum.find_value(dirs, :skip, fn dir ->
-      {package_name, _subpath} = NPM.Resolution.PackageResolver.split_specifier(specifier)
-      package_dir = Path.join(dir, package_name)
+    case Enum.find_value(dirs, fn dir ->
+           {package_name, _subpath} = NPM.Resolution.PackageResolver.split_specifier(specifier)
+           package_dir = Path.join(dir, package_name)
 
-      if File.dir?(package_dir) do
-        resolve_in_package(specifier, dir, package_dir, plugins)
-      end
-    end)
+           if File.dir?(package_dir) do
+             resolve_in_package(specifier, dir, package_dir, plugins) || :unresolved_package
+           end
+         end) do
+      nil -> :skip
+      :unresolved_package -> {:error, {:not_found, specifier}}
+      result -> result
+    end
   end
 
   defp resolve_in_package(specifier, dir, package_dir, plugins) do

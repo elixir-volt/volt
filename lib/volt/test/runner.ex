@@ -1,0 +1,96 @@
+defmodule Volt.Test.Runner do
+  @moduledoc """
+  Executes Volt JavaScript and TypeScript test files in a QuickBEAM runtime.
+
+  This is the first, intentionally small, runner layer. It supports test files
+  that use global Vitest-like helpers (`describe`, `test`, `it`, `beforeEach`,
+  `afterEach`, and `expect`) provided by `priv/ts/test/core.ts`.
+
+  Test files may import helpers from `volt:test`; those virtual imports are
+  stripped before bundling because the runtime provides the helpers as globals.
+  Local relative JS/TS module graphs are bundled before execution.
+  """
+
+  alias Volt.JS.Runtime
+  alias Volt.Test.Config
+
+  @type result :: map()
+
+  @spec collect_file(Path.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def collect_file(path, opts \\ []) do
+    with {:ok, tests} <- call_test_runtime(path, "__voltCollectTestModule", [], opts) do
+      tests = Enum.map(tests, &Volt.Test.Result.Metadata.from_map!/1)
+      add_source_lines(path, tests)
+    end
+  end
+
+  @spec run_file(Path.t(), keyword()) :: {:ok, result()} | {:error, term()}
+  def run_file(path, opts \\ []) do
+    with {:ok, result} <- call_test_runtime(path, "__voltRunTestModule", [], opts) do
+      {:ok, Volt.Test.Result.from_map!(result)}
+    end
+  end
+
+  @spec run_test(Path.t(), integer(), keyword()) :: {:ok, result()} | {:error, term()}
+  def run_test(path, test_id, opts \\ []) when is_integer(test_id) do
+    with {:ok, result} <- call_test_runtime(path, "__voltRunTestModule", [test_id], opts) do
+      {:ok, Volt.Test.Result.from_map!(result)}
+    end
+  end
+
+  defp add_source_lines(path, tests) do
+    with {:ok, source} <- File.read(path),
+         {:ok, lines} <- Volt.Test.Lines.test_lines(source, Path.basename(path)) do
+      {:ok,
+       tests
+       |> Enum.zip(lines)
+       |> Enum.map(fn {test, line} -> %{test | line: line} end)}
+    else
+      {:error, _} -> {:ok, tests}
+    end
+  end
+
+  defp call_test_runtime(path, function, extra_args, opts) do
+    config = Keyword.get_lazy(opts, :config, fn -> Config.read(Keyword.get(opts, :profile)) end)
+    compile_opts = Keyword.get(opts, :compile_opts, [])
+    timeout = Keyword.get(opts, :timeout, config.timeout)
+
+    with {:ok, bundled} <- Volt.Test.Bundler.bundle_file(path, compile_opts),
+         {:ok, runtime} <- start_runtime(config, opts) do
+      try do
+        Runtime.call(runtime, function, [bundled.code, path | extra_args], timeout: timeout)
+      after
+        Runtime.stop(runtime)
+      end
+    end
+  end
+
+  defp start_runtime(%Config{} = config, opts) do
+    runtime_opts =
+      config.js_runtime
+      |> Keyword.merge(Keyword.get(opts, :js_runtime, []))
+      |> Keyword.put_new(:entry, {:external_path, Volt.Priv.path({:volt, "ts"}, "test/core.ts")})
+      |> Keyword.put_new(:bundle, true)
+      |> Keyword.put_new(:bundle_opts, cache_salt: test_runtime_salt())
+      |> Keyword.put_new(:install_dir, install_dir())
+
+    Runtime.start(runtime_opts)
+  end
+
+  defp test_runtime_salt do
+    {:volt, :code.priv_dir(:volt), priv_test_runtime_files()}
+  end
+
+  defp priv_test_runtime_files do
+    {:volt, "ts"}
+    |> Volt.Priv.path("test")
+    |> Path.join("*.ts")
+    |> Path.wildcard()
+    |> Enum.sort()
+    |> Enum.map(fn path -> {Path.basename(path), File.read!(path)} end)
+  end
+
+  defp install_dir do
+    Path.join(System.tmp_dir!(), "volt-test-runtime")
+  end
+end

@@ -1,3 +1,35 @@
+defmodule Volt.Integration.PhoenixExample do
+  @moduledoc "Prepares the Phoenix example application for integration tests."
+
+  @example_dir Path.join(File.cwd!(), "examples/vanilla")
+
+  def example_dir, do: @example_dir
+  def assets_root, do: Path.join(@example_dir, "assets")
+  def outdir, do: Path.join(@example_dir, "priv/static/assets")
+
+  def ensure_ready! do
+    unless File.dir?(Path.join(@example_dir, "deps/phoenix")) do
+      run!("mix", ["deps.get"])
+    end
+
+    unless File.dir?(Path.join(@example_dir, "node_modules/phoenix")) do
+      run!("mix", ["npm.install"])
+    end
+
+    :ok
+  end
+
+  defp run!(command, args) do
+    case System.cmd(command, args, cd: @example_dir, stderr_to_stdout: true) do
+      {_output, 0} ->
+        :ok
+
+      {output, status} ->
+        raise "#{command} #{Enum.join(args, " ")} failed with #{status}:\n#{output}"
+    end
+  end
+end
+
 defmodule Volt.Integration.PhoenixExampleTest do
   use ExUnit.Case, async: false
 
@@ -6,8 +38,11 @@ defmodule Volt.Integration.PhoenixExampleTest do
   import Plug.Test
   import Plug.Conn
 
-  @example_dir Path.join(File.cwd!(), "examples/vanilla")
-  @assets_root Path.join(@example_dir, "assets")
+  @assets_root Volt.Integration.PhoenixExample.assets_root()
+
+  setup_all do
+    Volt.Integration.PhoenixExample.ensure_ready!()
+  end
 
   describe "dev server" do
     setup do
@@ -98,8 +133,8 @@ defmodule Volt.Integration.PhoenixExampleBuildTest do
 
   @moduletag :integration
 
-  @example_dir Path.join(File.cwd!(), "examples/vanilla")
-  @outdir Path.join(@example_dir, "priv/static/assets")
+  @example_dir Volt.Integration.PhoenixExample.example_dir()
+  @outdir Volt.Integration.PhoenixExample.outdir()
 
   defmodule Endpoint do
     def config(:code_reloader), do: false
@@ -107,6 +142,8 @@ defmodule Volt.Integration.PhoenixExampleBuildTest do
   end
 
   setup_all do
+    Volt.Integration.PhoenixExample.ensure_ready!()
+
     File.rm_rf!(Path.join(@outdir, "js"))
     File.rm_rf!(Path.join(@outdir, "css"))
 

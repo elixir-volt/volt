@@ -4,9 +4,10 @@ import { LiveSocket } from 'phoenix_live_view'
 import config from './config.json'
 import Clock from './hooks/clock'
 import EnvMode from './hooks/env-mode'
+import { pageTitles } from './pages/metadata'
 
-const pages = import.meta.glob('./pages/*.ts', { eager: true })
-console.log(`${config.name} v${config.version}`, Object.keys(pages))
+const pageModules = import.meta.glob('./pages/*.ts', { eager: true })
+console.log(`${config.name} v${config.version}`, Object.keys(pageModules), pageTitles())
 
 const hooks = { Clock, EnvMode }
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')

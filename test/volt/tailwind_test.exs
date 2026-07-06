@@ -1,7 +1,7 @@
 defmodule Volt.TailwindTest do
   use ExUnit.Case
 
-  @fixture_dir Path.expand("fixtures/tailwind_test", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-tailwind-test")
 
   setup do
     File.mkdir_p!(@fixture_dir)
