@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.15.1 - 2026-07-06
+
+### Added
+
+- `Volt.Builder.bundle/1` returns in-memory bundles from Volt's normal Builder graph for test runners and other tooling that need executable JavaScript without production output files.
+- Volt JavaScript tests now use Builder-backed bundling, so test files can use normal Volt bundle options through `bundle: [...]`, including plugins, aliases, `node_modules`, and `resolve_dirs`.
+
+### Changed
+
+- Removed the separate `Volt.Test.Bundler` layer in favor of `Volt.Builder.bundle/1`.
+- Browser test execution now loads large test bundles from temporary script files instead of sending bundle source through Playwright protocol arguments.
+
 ## 0.15.0 - 2026-07-06
 
 ### Added
