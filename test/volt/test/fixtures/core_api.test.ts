@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'volt:test'
-import { add, frameworkName } from './fixture'
+import { add, frameworkName } from './arithmetic'
 
 describe('volt:test core', () => {
   test('toBe compares with Object.is', () => {

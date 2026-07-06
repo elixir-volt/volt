@@ -8,5 +8,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": []
   },
-  "include": ["priv/ts/**/*.ts", "priv/types/**/*.d.ts"]
+  "include": ["priv/ts/**/*.ts", "priv/types/**/*.d.ts", "test/volt/test/fixtures/**/*.ts"]
 }

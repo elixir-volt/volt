@@ -1,3 +1,3 @@
 ExUnit.start(exclude: [:integration])
 
-Volt.Test.ExUnit.install(root: "priv/ts", include: ["test/core.test.ts"])
+Volt.Test.ExUnit.install(root: "test/volt/test/fixtures", include: ["core_api.test.ts"])

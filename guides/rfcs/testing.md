@@ -156,7 +156,7 @@ Proposed modules:
 
 Runtime assets and types:
 
-- `priv/ts/test/core.ts` — `describe`, `test`, `test.skip`, `test.todo`, hooks, context `skip`, and `expect`. Initial implementation provides globals and structured result serialization, dogfooded by a TS test importing a relative fixture module.
+- `priv/ts/test/core.ts` — `describe`, `test`, `test.skip`, `test.todo`, hooks, context `skip`, and `expect`. Initial implementation provides globals and structured result serialization, dogfooded by `test/volt/test/fixtures/core_api.test.ts` importing a relative fixture module.
 - `priv/types/test/volt-test.d.ts` — canonical `volt:test` type contract, including a global `VoltTest` namespace used by the runtime implementation so the API shape is not duplicated between implementation and ambient module declarations.
 - `priv/types/internal/support-globals.d.ts` — private Volt support-module globals such as `$css` and `$mod_url`.
 - `priv/types/client/hmr.d.ts` — app-facing HMR browser globals.
@@ -316,7 +316,7 @@ URL: http://localhost:4002/
 
 - Add config/discovery.
 - Add `Volt.Test.ExUnit.install/1` for `test/test_helper.exs`.
-- Add `priv/ts/test/core.ts` with `describe`, `test`, hooks, and core `expect` matchers. Implemented and dogfooded by `priv/ts/test/core.test.ts`.
+- Add `priv/ts/test/core.ts` with `describe`, `test`, hooks, and core `expect` matchers. Implemented and dogfooded by `test/volt/test/fixtures/core_api.test.ts`.
 - Run one ExUnit test per JS/TS file. Initial implementation is in place via generated bridge modules.
 - Support async tests/promises.
 - Add tests for pass/fail/async/hook behavior.
