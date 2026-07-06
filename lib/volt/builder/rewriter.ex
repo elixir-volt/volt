@@ -3,8 +3,6 @@ defmodule Volt.Builder.Rewriter do
 
   alias Volt.Builder.Externals
 
-  @support_modules {:volt, "ts"}
-
   @dynamic_import_keyword "import"
   @dynamic_import_placeholder_prefix "__volt_dynamic_import__"
 
@@ -124,7 +122,7 @@ defmodule Volt.Builder.Rewriter do
                   import_expression = binary_part(code, start, finish - start)
 
                   replacement = [
-                    "__voltPreload(() => ",
+                    "globalThis.__voltPreload(() => ",
                     import_expression,
                     ", ",
                     Jason.encode!(deps),
@@ -149,7 +147,13 @@ defmodule Volt.Builder.Rewriter do
   end
 
   defp preload_helper do
-    Volt.Priv.js!(@support_modules, "client/preload.ts") <> "\n"
+    {:volt, "ts"}
+    |> Volt.Priv.path("client/preload-global.ts")
+    |> Volt.JS.Runtime.Bundler.bundle_file()
+    |> case do
+      {:ok, code} -> code <> "\n"
+      {:error, reason} -> raise "could not bundle Volt preload helper: #{inspect(reason)}"
+    end
   end
 
   defp worker_filename_map(worker_specs, ctx) do
