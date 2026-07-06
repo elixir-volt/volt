@@ -154,9 +154,13 @@ Proposed modules:
 - `Volt.Test.Page` / `Volt.Test.Locator` — small Elixir facade over PlaywrightEx for browser assertions.
 - `Volt.Test.ExUnit` — ExUnit integration entry point. Initial implementation discovers JS/TS tests, generates one ExUnit bridge module per file, and keeps `mix test` as the only test command.
 
-Runtime assets:
+Runtime assets and types:
 
 - `priv/ts/test/core.ts` — `describe`, `test`, `test.skip`, `test.todo`, hooks, context `skip`, and `expect`. Initial implementation provides globals and structured result serialization, dogfooded by a TS test importing a relative fixture module.
+- `priv/types/test/volt-test.d.ts` — canonical `volt:test` type contract, including a global `VoltTest` namespace used by the runtime implementation so the API shape is not duplicated between implementation and ambient module declarations.
+- `priv/types/internal/support-globals.d.ts` — private Volt support-module globals such as `$css` and `$mod_url`.
+- `priv/types/client/hmr.d.ts` — app-facing HMR browser globals.
+- `priv/types/frameworks/*.d.ts` — framework/compiler-specific shims split per framework.
 - `priv/ts/test/runner.ts` — collection/execution protocol used by `Volt.Test.Runner`.
 - `priv/ts/test/browser.ts` — browser fixture API and JS proxies for Playwright commands.
 

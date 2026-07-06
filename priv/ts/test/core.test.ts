@@ -59,9 +59,13 @@ describe('volt:test modifiers', () => {
 
   test.todo('todo is collected as skipped')
 
-  test('object options can skip and carry tags', { skip: 'documented skip', tags: ['slow'] }, () => {
-    throw new Error('should not run')
-  })
+  test(
+    'object options can skip and carry tags',
+    { skip: 'documented skip', tags: ['slow'] },
+    () => {
+      throw new Error('should not run')
+    }
+  )
 
   test('context skip can skip dynamically', ({ skip }) => {
     skip('dynamic skip')

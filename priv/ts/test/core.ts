@@ -1,72 +1,3 @@
-type TestFunction = (context: TestContext) => unknown | Promise<unknown>
-type HookFunction = () => unknown | Promise<unknown>
-type TestMode = 'run' | 'skip' | 'todo'
-
-interface TestOptions {
-  skip?: boolean | string
-  todo?: boolean | string
-  tags?: string[]
-}
-
-interface TestContext {
-  task: TestMetadata
-  expect: typeof expect
-  skip: (conditionOrNote?: boolean | string, note?: string) => void
-}
-
-interface RegisteredTest {
-  id: number
-  name: string
-  suite: string[]
-  beforeEach: HookFunction[]
-  afterEach: HookFunction[]
-  fn?: TestFunction
-  mode: TestMode
-  skipReason?: string
-  tags: string[]
-}
-
-interface SuiteContext {
-  name?: string
-  beforeEach: HookFunction[]
-  afterEach: HookFunction[]
-}
-
-interface TestMetadata {
-  id: number
-  name: string
-  fullName: string
-  suite: string[]
-  mode: TestMode
-  skipReason?: string
-  tags: string[]
-}
-
-interface TestResult {
-  id: number
-  name: string
-  fullName: string
-  status: 'passed' | 'failed' | 'skipped'
-  duration: number
-  error?: SerializedError
-  skipReason?: string
-}
-
-interface SerializedError {
-  name: string
-  message: string
-  stack?: string
-  expected?: unknown
-  actual?: unknown
-}
-
-interface VoltTestState {
-  tests: RegisteredTest[]
-  suite: string[]
-  suiteStack: SuiteContext[]
-  nextId: number
-}
-
 class SkipError extends Error {
   constructor(readonly reason?: string) {
     super(reason || 'Skipped')
@@ -74,7 +5,7 @@ class SkipError extends Error {
   }
 }
 
-const state: VoltTestState = {
+const state: VoltTest.State = {
   tests: [],
   suite: [],
   suiteStack: [newSuite()],
@@ -103,8 +34,12 @@ function describe(name: string, fn: () => void) {
   }
 }
 
-function createTestAPI(defaultOptions: TestOptions = {}, chainable = true) {
-  const api = (name: string, optionsOrFn?: TestOptions | TestFunction, maybeFn?: TestFunction) => {
+function createTestAPI(defaultOptions: VoltTest.TestOptions = {}, chainable = true) {
+  const api = (
+    name: string,
+    optionsOrFn?: VoltTest.TestOptions | VoltTest.TestFunction,
+    maybeFn?: VoltTest.TestFunction
+  ) => {
     const { options, fn } = normalizeTestArgs(defaultOptions, optionsOrFn, maybeFn)
     registerTest(name, options, fn)
   }
@@ -116,20 +51,13 @@ function createTestAPI(defaultOptions: TestOptions = {}, chainable = true) {
     })
   }
 
-  return api as TestAPI
-}
-
-interface TestAPI {
-  (name: string, fn?: TestFunction): void
-  (name: string, options: TestOptions, fn?: TestFunction): void
-  skip: TestAPI
-  todo: TestAPI
+  return api as VoltTest.TestAPI
 }
 
 function normalizeTestArgs(
-  defaultOptions: TestOptions,
-  optionsOrFn?: TestOptions | TestFunction,
-  maybeFn?: TestFunction
+  defaultOptions: VoltTest.TestOptions,
+  optionsOrFn?: VoltTest.TestOptions | VoltTest.TestFunction,
+  maybeFn?: VoltTest.TestFunction
 ) {
   if (typeof optionsOrFn === 'function') {
     return { options: defaultOptions, fn: optionsOrFn }
@@ -141,7 +69,7 @@ function normalizeTestArgs(
   }
 }
 
-function registerTest(name: string, options: TestOptions, fn?: TestFunction) {
+function registerTest(name: string, options: VoltTest.TestOptions, fn?: VoltTest.TestFunction) {
   const mode = testMode(options, fn)
 
   state.tests.push({
@@ -157,7 +85,7 @@ function registerTest(name: string, options: TestOptions, fn?: TestFunction) {
   })
 }
 
-function testMode(options: TestOptions, fn?: TestFunction): TestMode {
+function testMode(options: VoltTest.TestOptions, fn?: VoltTest.TestFunction): VoltTest.TestMode {
   if (truthyOption(options.skip)) return 'skip'
   if (truthyOption(options.todo) || fn === undefined) return 'todo'
   return 'run'
@@ -167,17 +95,17 @@ function truthyOption(value: unknown) {
   return value === true || typeof value === 'string'
 }
 
-function skipReason(options: TestOptions, mode: TestMode) {
+function skipReason(options: VoltTest.TestOptions, mode: VoltTest.TestMode) {
   if (mode === 'skip') return typeof options.skip === 'string' ? options.skip : 'Skipped'
   if (mode === 'todo') return typeof options.todo === 'string' ? options.todo : 'TODO'
   return undefined
 }
 
-function beforeEach(fn: HookFunction) {
+function beforeEach(fn: VoltTest.HookFunction) {
   currentSuite().beforeEach.push(fn)
 }
 
-function afterEach(fn: HookFunction) {
+function afterEach(fn: VoltTest.HookFunction) {
   currentSuite().afterEach.push(fn)
 }
 
@@ -185,7 +113,7 @@ function currentSuite() {
   return state.suiteStack[state.suiteStack.length - 1]
 }
 
-function newSuite(name?: string): SuiteContext {
+function newSuite(name?: string): VoltTest.SuiteContext {
   return { name, beforeEach: [], afterEach: [] }
 }
 
@@ -193,24 +121,32 @@ function expect(actual: unknown) {
   return createExpectation(actual, false)
 }
 
-function createExpectation(actual: unknown, negated: boolean): Matchers {
+function createExpectation(actual: unknown, negated: boolean): VoltTest.Matchers {
   const match = (ok: boolean, message: string, expected?: unknown) => {
     if (negated ? ok : !ok) {
       throw assertionError(message, expected, actual)
     }
   }
 
-  const matchers: Matchers = {
+  const matchers: VoltTest.Matchers = {
     get not() {
       return createExpectation(actual, !negated)
     },
 
     toBe(expected: unknown) {
-      match(Object.is(actual, expected), `Expected ${format(actual)} ${notText(negated)}to be ${format(expected)}`, expected)
+      match(
+        Object.is(actual, expected),
+        `Expected ${format(actual)} ${notText(negated)}to be ${format(expected)}`,
+        expected
+      )
     },
 
     toEqual(expected: unknown) {
-      match(deepEqual(actual, expected), `Expected ${format(actual)} ${notText(negated)}to equal ${format(expected)}`, expected)
+      match(
+        deepEqual(actual, expected),
+        `Expected ${format(actual)} ${notText(negated)}to equal ${format(expected)}`,
+        expected
+      )
     },
 
     toContain(expected: unknown) {
@@ -219,15 +155,27 @@ function createExpectation(actual: unknown, negated: boolean): Matchers {
           ? actual.includes(String(expected))
           : Array.isArray(actual) && actual.includes(expected)
 
-      match(ok, `Expected ${format(actual)} ${notText(negated)}to contain ${format(expected)}`, expected)
+      match(
+        ok,
+        `Expected ${format(actual)} ${notText(negated)}to contain ${format(expected)}`,
+        expected
+      )
     },
 
     toBeDefined() {
-      match(actual !== undefined, `Expected ${format(actual)} ${notText(negated)}to be defined`, undefined)
+      match(
+        actual !== undefined,
+        `Expected ${format(actual)} ${notText(negated)}to be defined`,
+        undefined
+      )
     },
 
     toBeUndefined() {
-      match(actual === undefined, `Expected ${format(actual)} ${notText(negated)}to be undefined`, undefined)
+      match(
+        actual === undefined,
+        `Expected ${format(actual)} ${notText(negated)}to be undefined`,
+        undefined
+      )
     },
 
     toBeTruthy() {
@@ -243,19 +191,31 @@ function createExpectation(actual: unknown, negated: boolean): Matchers {
     },
 
     toBeNaN() {
-      match(Number.isNaN(actual), `Expected ${format(actual)} ${notText(negated)}to be NaN`, Number.NaN)
+      match(
+        Number.isNaN(actual),
+        `Expected ${format(actual)} ${notText(negated)}to be NaN`,
+        Number.NaN
+      )
     },
 
     toBeCloseTo(expected: number, digits = 2) {
       const actualNumber = Number(actual)
       const tolerance = 10 ** -digits / 2
       const ok = Number.isFinite(actualNumber) && Math.abs(actualNumber - expected) < tolerance
-      match(ok, `Expected ${format(actual)} ${notText(negated)}to be close to ${format(expected)}`, expected)
+      match(
+        ok,
+        `Expected ${format(actual)} ${notText(negated)}to be close to ${format(expected)}`,
+        expected
+      )
     },
 
     toThrow(expected?: string | RegExp) {
       if (typeof actual !== 'function') {
-        throw assertionError(`Expected ${format(actual)} to be a function`, 'function', typeof actual)
+        throw assertionError(
+          `Expected ${format(actual)} to be a function`,
+          'function',
+          typeof actual
+        )
       }
 
       let thrown: unknown
@@ -270,7 +230,8 @@ function createExpectation(actual: unknown, negated: boolean): Matchers {
 
       if (ok && expected !== undefined) {
         const message = thrown instanceof Error ? thrown.message : String(thrown)
-        ok = expected instanceof RegExp ? expected.test(message) : message.includes(String(expected))
+        ok =
+          expected instanceof RegExp ? expected.test(message) : message.includes(String(expected))
       }
 
       match(ok, `Expected function ${notText(negated)}to throw`, expected)
@@ -278,21 +239,6 @@ function createExpectation(actual: unknown, negated: boolean): Matchers {
   }
 
   return matchers
-}
-
-interface Matchers {
-  readonly not: Matchers
-  toBe(expected: unknown): void
-  toEqual(expected: unknown): void
-  toContain(expected: unknown): void
-  toBeDefined(): void
-  toBeUndefined(): void
-  toBeTruthy(): void
-  toBeFalsy(): void
-  toBeNull(): void
-  toBeNaN(): void
-  toBeCloseTo(expected: number, digits?: number): void
-  toThrow(expected?: string | RegExp): void
 }
 
 function notText(negated: boolean) {
@@ -308,9 +254,10 @@ async function __voltCollectTestModule(code: string, file: string) {
 async function __voltRunTestModule(code: string, file: string, onlyId?: number) {
   loadTestModule(code, file)
 
-  const results: TestResult[] = []
+  const results: VoltTest.TestResult[] = []
   const startedAt = Date.now()
-  const tests = onlyId === undefined ? state.tests : state.tests.filter((test) => test.id === onlyId)
+  const tests =
+    onlyId === undefined ? state.tests : state.tests.filter((test) => test.id === onlyId)
 
   for (const registered of tests) {
     const testStartedAt = Date.now()
@@ -354,7 +301,7 @@ function loadTestModule(code: string, _file: string) {
   ;(0, eval)(code)
 }
 
-function contextFor(registered: RegisteredTest): TestContext {
+function contextFor(registered: VoltTest.RegisteredTest): VoltTest.TestContext {
   return {
     task: metadata(registered),
     expect,
@@ -366,7 +313,7 @@ function contextFor(registered: RegisteredTest): TestContext {
   }
 }
 
-function metadata(registered: RegisteredTest): TestMetadata {
+function metadata(registered: VoltTest.RegisteredTest): VoltTest.TestMetadata {
   return {
     id: registered.id,
     name: registered.name,
@@ -379,12 +326,12 @@ function metadata(registered: RegisteredTest): TestMetadata {
 }
 
 function result(
-  registered: RegisteredTest,
+  registered: VoltTest.RegisteredTest,
   status: 'passed' | 'failed' | 'skipped',
   startedAt: number,
-  error?: SerializedError,
+  error?: VoltTest.SerializedError,
   skipReason?: string
-): TestResult {
+): VoltTest.TestResult {
   return {
     id: registered.id,
     name: registered.name,
@@ -396,7 +343,7 @@ function result(
   }
 }
 
-function fullName(registered: RegisteredTest) {
+function fullName(registered: VoltTest.RegisteredTest) {
   return [...registered.suite, registered.name].join(' › ')
 }
 
@@ -408,7 +355,7 @@ function assertionError(message: string, expected: unknown, actual: unknown) {
   return error
 }
 
-function serializeError(error: unknown): SerializedError {
+function serializeError(error: unknown): VoltTest.SerializedError {
   if (error instanceof Error) {
     const details = error as Error & { expected?: unknown; actual?: unknown }
 
@@ -446,8 +393,10 @@ function deepEqual(left: unknown, right: unknown): boolean {
 
   if (leftKeys.length !== rightKeys.length) return false
 
-  return leftKeys.every((key) =>
-    Object.prototype.hasOwnProperty.call(rightRecord, key) && deepEqual(leftRecord[key], rightRecord[key])
+  return leftKeys.every(
+    (key) =>
+      Object.prototype.hasOwnProperty.call(rightRecord, key) &&
+      deepEqual(leftRecord[key], rightRecord[key])
   )
 }
 
