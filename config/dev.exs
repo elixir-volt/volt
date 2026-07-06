@@ -2,7 +2,7 @@ import Config
 
 config :volt,
   root: "priv/ts",
-  entry: "priv/ts/dev/hmr-client.ts"
+  entry: "priv/ts/client/hmr.ts"
 
 config :volt,
        :lint,
