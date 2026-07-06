@@ -48,7 +48,7 @@ defmodule Volt.Test.ExUnit do
   defp collect_tests!(file, profile) do
     case Volt.Test.Runner.collect_file(file, profile: profile) do
       {:ok, [_ | _] = tests} -> tests
-      {:ok, []} -> [%{"id" => 0, "fullName" => "#{file} has no tests", "name" => "no tests"}]
+      {:ok, []} -> raise "Volt JS test file #{file} did not define any tests"
       {:error, reason} -> raise "could not collect Volt JS tests from #{file}: #{inspect(reason)}"
     end
   end
