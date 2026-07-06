@@ -60,7 +60,7 @@ Volt.Test.ExUnit.install(profile: :my_app_web)
 
 Import the Vitest-like API from `volt:test`:
 
-```ts
+```javascript
 import { describe, test, expect, beforeEach, afterEach } from 'volt:test'
 import { add } from './math'
 
@@ -77,7 +77,7 @@ describe('add', () => {
 
 Async tests can return promises or use `async` functions:
 
-```ts
+```javascript
 test('loads data', async () => {
   const value = await Promise.resolve(42)
   expect(value).toBe(42)
@@ -86,7 +86,7 @@ test('loads data', async () => {
 
 Relative imports are bundled before execution:
 
-```ts
+```javascript
 import { frameworkName } from './support'
 
 test('uses helper module', () => {
@@ -98,7 +98,7 @@ test('uses helper module', () => {
 
 Skip or mark tests as TODO:
 
-```ts
+```javascript
 test.skip('not ready yet', () => {
   throw new Error('will not run')
 })
@@ -108,7 +108,7 @@ test.todo('add coverage for browser behavior')
 
 Suites support the same modifiers:
 
-```ts
+```javascript
 describe.skip('external service', () => {
   test('calls service', () => {
     // skipped
@@ -122,7 +122,7 @@ describe.todo('future behavior', () => {
 
 You can also skip dynamically from the test context:
 
-```ts
+```javascript
 test('platform-specific behavior', ({ skip }) => {
   skip(!navigator.userAgent.includes('Firefox'), 'Firefox only')
   expect(true).toBe(true)
@@ -133,7 +133,7 @@ test('platform-specific behavior', ({ skip }) => {
 
 Use `test.each` for table-driven tests:
 
-```ts
+```javascript
 test.each([
   [1, 2, 3],
   [2, 3, 5]
@@ -144,7 +144,7 @@ test.each([
 
 Use `describe.each` to repeat a suite for multiple values:
 
-```ts
+```javascript
 describe.each(['en', 'fr'])('locale %s', (locale) => {
   test('has a locale code', () => {
     expect(String(locale)).toHaveLength(2)
@@ -158,7 +158,7 @@ Supported placeholders in each-test names are `%s`, `%d`, `%i`, `%f`, `%j`, and 
 
 Volt includes a small core matcher set:
 
-```ts
+```javascript
 expect(value).toBe(expected)
 expect(value).toEqual(expected)
 expect(value).toContain(expected)
@@ -181,7 +181,7 @@ expect(fn).toThrow('message')
 
 All matchers support `.not`:
 
-```ts
+```javascript
 expect('volt').not.toContain('vite')
 expect(1 + 1).not.toBe(3)
 ```
@@ -200,7 +200,7 @@ Volt.Test.ExUnit.install(
 
 Browser tests still use the same `volt:test` API and still register one ExUnit test per JS `test(...)`. They are best suited for browser-owned runtime behavior such as DOM helpers, client preload logic, and other code that needs real browser globals. Keep Elixir-owned behavior such as manifests, Plug responses, cache state, and build output in ordinary ExUnit tests.
 
-```ts
+```javascript
 import { test, expect } from 'volt:test'
 
 test('updates the DOM', () => {
@@ -231,7 +231,7 @@ Volt adds useful tags:
 
 For example:
 
-```ts
+```javascript
 test('slow calculation', { tags: ['slow'] }, () => {
   expect(1 + 1).toBe(2)
 })

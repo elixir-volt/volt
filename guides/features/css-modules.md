@@ -31,7 +31,7 @@ Both are handled automatically during development and production builds. The sco
 
 ### React
 
-```tsx
+```javascript
 import styles from './Card.module.css'
 
 export default function Card({ children }) {

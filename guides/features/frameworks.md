@@ -30,7 +30,7 @@ config :volt, :lint, plugins: [:typescript, :react]
 
 ### Entry Point
 
-```tsx
+```javascript
 import { createRoot } from 'react-dom/client'
 import App from './App'
 
@@ -169,7 +169,7 @@ config :volt, :lint, plugins: [:typescript]
 
 ### Entry Point
 
-```tsx
+```javascript
 import { render } from 'solid-js/web'
 import App from './App'
 

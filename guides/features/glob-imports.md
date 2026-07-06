@@ -104,7 +104,7 @@ const pages = import.meta.glob('./pages/*.ts', {
 
 Type-only generic arguments are accepted and ignored at runtime:
 
-```typescript
+```javascript
 const modules = import.meta.glob<PageModule>('./pages/*.ts')
 ```
 

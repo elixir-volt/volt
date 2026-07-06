@@ -129,7 +129,7 @@ ExUnit.start(exclude: [:integration])
 Volt.Test.ExUnit.install()
 ```
 
-```ts
+```javascript
 import { test, expect } from 'volt:test'
 
 test('adds numbers', () => {

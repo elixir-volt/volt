@@ -568,7 +568,7 @@ are rewritten so the browser resolves the full module graph natively:
 
 Each JS module is injected with an `import.meta.hot` preamble for granular HMR:
 
-```typescript
+```javascript
 if (import.meta.hot) {
   import.meta.hot.dispose(() => clearInterval(timer));
   import.meta.hot.accept();
@@ -758,7 +758,7 @@ mix volt.build --entry index.html
 
 Glob patterns are expanded at build time via OXC AST:
 
-```typescript
+```javascript
 const pages = import.meta.glob("./pages/*.ts");
 // → { "./pages/home.ts": () => import("./pages/home.ts"), ... }
 
