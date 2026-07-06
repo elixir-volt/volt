@@ -198,7 +198,7 @@ Volt.Test.ExUnit.install(
 )
 ```
 
-Browser tests still use the same `volt:test` API and still register one ExUnit test per JS `test(...)`:
+Browser tests still use the same `volt:test` API and still register one ExUnit test per JS `test(...)`. They are best suited for browser-owned runtime behavior such as DOM helpers, client preload logic, and other code that needs real browser globals. Keep Elixir-owned behavior such as manifests, Plug responses, cache state, and build output in ordinary ExUnit tests.
 
 ```ts
 import { test, expect } from 'volt:test'
