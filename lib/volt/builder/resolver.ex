@@ -7,7 +7,7 @@ defmodule Volt.Builder.Resolver do
   Returns `{:ok, path}`, `:skip` (for externals/node builtins), or `{:error, reason}`.
   """
   def resolve(specifier, importer, ctx) do
-    {path_specifier, query} = Volt.URL.split_query(specifier)
+    {path_specifier, query} = Volt.JS.Specifier.split_query(specifier)
 
     if external?(path_specifier, ctx.external) do
       :skip

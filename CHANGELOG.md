@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.15.2 - 2026-07-06
+
+### Fixed
+
+- Builder and dev-server resolution now preserve package import specifiers such as `#client/constants`, fixing packages that use nearest-package `imports` maps, including Svelte's browser runtime internals.
+
 ## 0.15.1 - 2026-07-06
 
 ### Added

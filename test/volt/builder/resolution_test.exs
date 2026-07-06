@@ -84,6 +84,46 @@ defmodule Volt.Builder.ResolutionTest do
       assert js =~ "b-"
     end
 
+    test "resolves package imports from nearest package imports map" do
+      File.mkdir_p!(Path.join(@fixture_dir, "node_modules/pkg/src/internal"))
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/pkg/package.json"),
+        Jason.encode!(%{
+          "name" => "pkg",
+          "type" => "module",
+          "exports" => %{"." => "./src/index.js"},
+          "imports" => %{"#internal/value" => "./src/internal/value.js"}
+        })
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/pkg/src/internal/value.js"),
+        "export const value = 'package-import';\n"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "node_modules/pkg/src/index.js"),
+        "import { value } from '#internal/value';\nexport { value };\n"
+      )
+
+      File.write!(
+        Path.join(@fixture_dir, "src/package_import_app.ts"),
+        "import { value } from 'pkg';\nconsole.log(value);\n"
+      )
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/package_import_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          node_modules: Path.join(@fixture_dir, "node_modules")
+        )
+
+      assert File.read!(result.js.path) =~ "package-import"
+    end
+
     test "loaders option enables JSX in .js files" do
       File.write!(Path.join(@fixture_dir, "src/jsx_app.js"), """
       const App = () => <div>Hello</div>

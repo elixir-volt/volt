@@ -1,7 +1,7 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
-  @version "0.15.1"
+  @version "0.15.2"
   @source_url "https://github.com/elixir-volt/volt"
 
   def project do

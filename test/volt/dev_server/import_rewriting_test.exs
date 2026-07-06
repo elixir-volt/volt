@@ -16,6 +16,30 @@ defmodule Volt.DevServer.ImportRewritingTest do
       refute conn.resp_body =~ "'./utils'"
     end
 
+    test "rewrites package imports from nearest package imports map" do
+      File.mkdir_p!(Path.join(@fixture_dir, "src/internal"))
+
+      File.write!(
+        Path.join(@fixture_dir, "src/package.json"),
+        Jason.encode!(%{
+          "name" => "fixture-app",
+          "imports" => %{"#internal/value" => "./internal/value.js"}
+        })
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/internal/value.js"), "export const value = 1")
+
+      File.write!(
+        Path.join(@fixture_dir, "src/entry.ts"),
+        "import { value } from '#internal/value'\nconsole.log(value)"
+      )
+
+      conn = call_dev_server("/assets/entry.ts")
+      assert conn.status == 200
+      assert conn.resp_body =~ "/assets/internal/value.js"
+      refute conn.resp_body =~ "'#internal/value'"
+    end
+
     test "rewrites CSS imports to import-mode URLs" do
       File.write!(Path.join(@fixture_dir, "src/entry.ts"), "import './style.css'")
 

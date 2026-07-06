@@ -528,7 +528,7 @@ defmodule Volt.DevServer do
   # ── Import rewriting ──────────────────────────────────────────────
 
   defp rewrite_dev_specifier(specifier, importer, config) do
-    {path_specifier, query} = URL.split_query(specifier)
+    {path_specifier, query} = Volt.JS.Specifier.split_query(specifier)
 
     case Volt.PluginRunner.resolve(config.plugins, path_specifier, importer) do
       {:ok, resolved} ->
