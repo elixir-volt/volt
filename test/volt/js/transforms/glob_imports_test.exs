@@ -3,7 +3,7 @@ defmodule Volt.JS.Transforms.GlobImportsTest do
 
   import Volt.Test.Sigils
 
-  @fixture_dir Path.expand("fixtures/glob", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-glob-imports-test")
 
   setup do
     File.mkdir_p!(Path.join(@fixture_dir, "pages"))

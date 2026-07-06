@@ -77,7 +77,7 @@ defmodule Volt.DevServerTest do
     def load(_id), do: nil
   end
 
-  @fixture_dir Path.expand("fixtures", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-dev-server-test")
 
   setup do
     File.mkdir_p!(Path.join(@fixture_dir, "src"))

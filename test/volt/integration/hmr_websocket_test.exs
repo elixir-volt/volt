@@ -5,15 +5,11 @@ defmodule Volt.Integration.HMRWebSocketTest do
 
   @moduletag :integration
 
-  # Short server-side websocket idle timeout so we can exercise the
-  # heartbeat/timeout behavior without waiting 60 seconds.
   @hmr_timeout 2_000
 
-  @fixture_dir Path.expand("../fixtures/integration_hmr_ws", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-integration-hmr-websocket-test")
 
   defp port do
-    # Unique port per test run to avoid TIME_WAIT / :eaddrinuse races between
-    # sequential integration tests.
     50_000 + rem(System.unique_integer([:positive, :monotonic]), 10_000)
   end
 

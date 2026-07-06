@@ -1,8 +1,8 @@
 defmodule Volt.Builder.Output.CSSTest do
   use ExUnit.Case, async: false
 
-  @fixture_dir Path.expand("../fixtures/builder_css", __DIR__)
-  @outdir Path.expand("../fixtures/builder_css/dist", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-builder-css-test")
+  @outdir Path.join(@fixture_dir, "dist")
 
   setup do
     File.mkdir_p!(Path.join(@fixture_dir, "src"))

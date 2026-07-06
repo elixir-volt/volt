@@ -44,7 +44,7 @@ defmodule Volt.Integration.HMRTest do
 
   alias PlaywrightEx.{Browser, BrowserContext, Frame}
 
-  @fixture_dir Path.expand("../fixtures/integration_hmr", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-integration-hmr-test")
   @port 44_831
 
   setup_all do

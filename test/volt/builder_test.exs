@@ -77,7 +77,7 @@ defmodule Volt.BuilderTest do
     def resolve("virtual:plain", _), do: {:ok, "virtual:plain"}
 
     def resolve("./style.css", "virtual:site/style-entry"),
-      do: {:ok, Path.expand("fixtures/builder/src/style.css", __DIR__)}
+      do: {:ok, Path.join([System.tmp_dir!(), "volt-builder-test", "src/style.css"])}
 
     def resolve(_, _), do: nil
     def load("virtual:my-virtual"), do: {:ok, "export default 99;"}
@@ -96,8 +96,8 @@ defmodule Volt.BuilderTest do
     def load(_), do: nil
   end
 
-  @fixture_dir Path.expand("fixtures/builder", __DIR__)
-  @outdir Path.expand("fixtures/builder/dist", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-builder-test")
+  @outdir Path.join(@fixture_dir, "dist")
 
   setup do
     File.mkdir_p!(Path.join(@fixture_dir, "src"))

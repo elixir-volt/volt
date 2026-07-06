@@ -1,7 +1,7 @@
 defmodule Volt.JS.TSConfigTest do
   use ExUnit.Case, async: true
 
-  @fixture_dir Path.expand("fixtures/tsconfig", __DIR__)
+  @fixture_dir Path.join(System.tmp_dir!(), "volt-tsconfig-test")
 
   setup do
     File.mkdir_p!(@fixture_dir)
