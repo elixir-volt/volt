@@ -29,8 +29,8 @@ defmodule Volt.Test.Result do
             name: String.t() | nil,
             message: String.t(),
             stack: String.t() | nil,
-            expected: term(),
-            actual: term()
+            expected: term() | nil,
+            actual: term() | nil
           }
   end
 

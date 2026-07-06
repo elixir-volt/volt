@@ -1,82 +1,16 @@
+import {
+  createHotContext,
+  findHotModule,
+  hotModuleFor,
+  preserveHotData,
+  type HotCallback
+} from './hot'
 import { renderErrorOverlay } from './overlay'
+import { removeStyle, updateStyle, updateStyles } from './styles'
+
+export { createHotContext, removeStyle, updateStyle }
 
 declare const __VOLT_HEARTBEAT__: number
-
-interface HotCallback {
-  deps: string[]
-  kind: 'self' | 'single' | 'multi'
-  fn: (module: unknown) => void
-}
-
-interface HotModule {
-  id: string
-  callbacks: HotCallback[]
-  disposeCallbacks: ((data: Record<string, unknown>) => void)[]
-  data: Record<string, unknown>
-  acceptSelf: boolean
-}
-
-const hotModules = new Map<string, HotModule>()
-const dataMap = new Map<string, Record<string, unknown>>()
-
-export function createHotContext(ownerPath: string) {
-  const existing = hotModules.get(ownerPath)
-  if (existing) {
-    existing.callbacks = []
-    existing.disposeCallbacks = []
-    existing.acceptSelf = false
-    existing.data = dataMap.get(ownerPath) ?? {}
-  }
-
-  const mod: HotModule = existing ?? {
-    id: ownerPath,
-    callbacks: [],
-    disposeCallbacks: [],
-    data: dataMap.get(ownerPath) ?? {},
-    acceptSelf: false
-  }
-
-  hotModules.set(ownerPath, mod)
-
-  return {
-    get data() {
-      return mod.data
-    },
-
-    accept(deps?: unknown, callback?: unknown) {
-      if (typeof deps === 'function' || deps === undefined) {
-        mod.acceptSelf = true
-        if (typeof deps === 'function') {
-          mod.callbacks.push({ deps: [ownerPath], kind: 'self', fn: deps as (m: unknown) => void })
-        }
-      } else if (typeof deps === 'string') {
-        mod.callbacks.push({
-          deps: [deps],
-          kind: 'single',
-          fn: callback as (m: unknown) => void
-        })
-      } else if (Array.isArray(deps)) {
-        mod.callbacks.push({
-          deps: deps as string[],
-          kind: 'multi',
-          fn: callback as (m: unknown) => void
-        })
-      }
-    },
-
-    dispose(cb: (data: Record<string, unknown>) => void) {
-      mod.disposeCallbacks.push(cb)
-    },
-
-    invalidate() {
-      location.reload()
-    },
-
-    on(_event: string, _cb: (...args: unknown[]) => void) {
-      return undefined
-    }
-  }
-}
 
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
 
@@ -199,14 +133,14 @@ async function applyHMRUpdate(boundary: string, changedPath: string, timestamp: 
 
   const [boundaryUrl, boundaryModule] = boundaryMatch
   const changedUrl = findHotModule(changedPath)?.[0] ?? resolveAcceptedUrl(boundaryUrl, changedPath)
-  const targetModule = hotModules.get(changedUrl) ?? boundaryModule
+  const targetModule = hotModuleFor(changedUrl) ?? boundaryModule
   const savedCallbacks = [...boundaryModule.callbacks]
 
   const newData: Record<string, unknown> = {}
   for (const cb of targetModule.disposeCallbacks) {
     cb(newData)
   }
-  dataMap.set(changedUrl, newData)
+  preserveHotData(changedUrl, newData)
 
   try {
     const changedModule = await importVersion(changedUrl, timestamp)
@@ -229,21 +163,6 @@ async function applyHMRUpdate(boundary: string, changedPath: string, timestamp: 
   } catch (err) {
     console.error(`[Volt] HMR update failed for ${changedUrl}`, err)
     location.reload()
-  }
-}
-
-function findHotModule(path: string): [string, HotModule] | undefined {
-  const exact = hotModules.get(path)
-
-  if (exact) {
-    return [path, exact]
-  }
-
-  for (const entry of hotModules) {
-    const [url] = entry
-    if (url.endsWith('/' + path) || url === path) {
-      return entry
-    }
   }
 }
 
@@ -272,55 +191,6 @@ function stripExtension(url: string) {
 
 function importVersion(url: string, timestamp: number) {
   return import(/* @vite-ignore */ `${url}${url.includes('?') ? '&' : '?'}t=${timestamp}`)
-}
-
-export function updateStyle(id: string, css: string) {
-  let style = document.querySelector<HTMLStyleElement>(`style[data-volt-id="${id}"]`)
-
-  if (!style) {
-    style = document.createElement('style')
-    style.setAttribute('data-volt-id', id)
-    document.head.appendChild(style)
-  }
-
-  style.textContent = css
-}
-
-export function removeStyle(id: string) {
-  document.querySelector<HTMLStyleElement>(`style[data-volt-id="${id}"]`)?.remove()
-}
-
-async function updateStyles(path: string) {
-  const links = document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
-  let updated = false
-
-  for (const link of links) {
-    const href = link.getAttribute('href')
-
-    if (href && (href.includes(path) || path.endsWith('.css'))) {
-      const url = new URL(link.href)
-      url.searchParams.set('t', Date.now().toString())
-      link.href = url.toString()
-      updated = true
-    }
-  }
-
-  const styles = document.querySelectorAll<HTMLStyleElement>('style[data-volt-id]')
-
-  for (const style of styles) {
-    const id = style.getAttribute('data-volt-id')
-
-    if (id && (id.includes(path) || path.includes(id.replace(/^\//, '')))) {
-      const params = id.includes('?') ? '&t=' : '?import&t='
-      const url = `${id}${params}${Date.now()}`
-      await import(/* @vite-ignore */ url)
-      updated = true
-    }
-  }
-
-  if (!updated) {
-    location.reload()
-  }
 }
 
 function showOverlay(reason: unknown) {
