@@ -1,4 +1,5 @@
 import { currentSuite, inheritedOptions, newSuite, state } from './state'
+import { format } from './format'
 
 export const test = createTestAPI()
 export const it = test
@@ -17,6 +18,10 @@ function createDescribeAPI(defaultOptions: Volt.Test.Options = {}, chainable = t
     }
   }
 
+  Object.assign(api, {
+    each: createDescribeEach(defaultOptions)
+  })
+
   if (chainable) {
     Object.assign(api, {
       skip: createDescribeAPI({ ...defaultOptions, skip: true }, false),
@@ -25,6 +30,15 @@ function createDescribeAPI(defaultOptions: Volt.Test.Options = {}, chainable = t
   }
 
   return api as Volt.Test.DescribeAPI
+}
+
+function createDescribeEach(defaultOptions: Volt.Test.Options) {
+  return (cases: readonly unknown[]) => (name: string, fn: (...args: unknown[]) => void) => {
+    for (const [index, row] of cases.entries()) {
+      const args = caseArgs(row)
+      createDescribeAPI(defaultOptions, false)(formatCaseName(name, args, index), () => fn(...args))
+    }
+  }
 }
 
 function createTestAPI(defaultOptions: Volt.Test.Options = {}, chainable = true) {
@@ -37,6 +51,10 @@ function createTestAPI(defaultOptions: Volt.Test.Options = {}, chainable = true)
     registerTest(name, options, fn)
   }
 
+  Object.assign(api, {
+    each: createTestEach(defaultOptions)
+  })
+
   if (chainable) {
     Object.assign(api, {
       skip: createTestAPI({ ...defaultOptions, skip: true }, false),
@@ -45,6 +63,26 @@ function createTestAPI(defaultOptions: Volt.Test.Options = {}, chainable = true)
   }
 
   return api as Volt.Test.API
+}
+
+function createTestEach(defaultOptions: Volt.Test.Options) {
+  return (cases: readonly unknown[]) =>
+    (
+      name: string,
+      fnOrOptions?: Volt.Test.EachFn | Volt.Test.Options,
+      maybeFn?: Volt.Test.EachFn
+    ) => {
+      const options =
+        typeof fnOrOptions === 'function' ? defaultOptions : { ...defaultOptions, ...fnOrOptions }
+      const fn = typeof fnOrOptions === 'function' ? fnOrOptions : maybeFn
+
+      for (const [index, row] of cases.entries()) {
+        const args = caseArgs(row)
+        registerTest(formatCaseName(name, args, index), options, (context) =>
+          fn?.(...args, context)
+        )
+      }
+    }
 }
 
 function normalizeTestArgs(
@@ -93,6 +131,31 @@ function skipReason(options: Volt.Test.Options, mode: Volt.Test.Mode) {
   if (mode === 'skip') return typeof options.skip === 'string' ? options.skip : 'Skipped'
   if (mode === 'todo') return typeof options.todo === 'string' ? options.todo : 'TODO'
   return undefined
+}
+
+function caseArgs(row: unknown) {
+  return Array.isArray(row) ? row : [row]
+}
+
+function formatCaseName(name: string, args: unknown[], index: number) {
+  let argIndex = 0
+  const formatted = name.replace(/%[sdifjo]/g, (token) => {
+    const value = args[argIndex++]
+
+    switch (token) {
+      case '%d':
+      case '%i':
+      case '%f':
+        return String(Number(value))
+      case '%j':
+      case '%o':
+        return format(value)
+      default:
+        return String(value)
+    }
+  })
+
+  return argIndex === 0 ? `${name} #${index + 1}` : formatted
 }
 
 export function beforeEach(fn: Volt.Test.Hook) {

@@ -156,7 +156,7 @@ Proposed modules:
 
 Runtime assets and types:
 
-- `priv/ts/test/core.ts` — runtime entry that installs the `volt:test` globals. The implementation is split into focused modules for API registration, matcher behavior, state, errors, formatting, and runner protocol. Initial implementation provides `describe`, `describe.skip`, `describe.todo`, `test`, `test.skip`, `test.todo`, hooks, context `skip`, and `expect`, dogfooded by `test/volt/test/fixtures/core_api.test.ts` importing a relative fixture module.
+- `priv/ts/test/core.ts` — runtime entry that installs the `volt:test` globals. The implementation is split into focused modules for API registration, matcher behavior, state, errors, formatting, and runner protocol. Initial implementation provides `describe`, `describe.skip`, `describe.todo`, `describe.each`, `test`, `test.skip`, `test.todo`, `test.each`, hooks, context `skip`, and core `expect` matchers, dogfooded by `test/volt/test/fixtures/core_api.test.ts` importing a relative fixture module.
 - `priv/types/test/volt-test.d.ts` — canonical `volt:test` type contract, including the shared `Volt.Test` namespace used by the runtime implementation so the API shape is not duplicated between implementation and ambient module declarations.
 - `priv/types/internal/support-globals.d.ts` — private Volt support-module globals such as `$css` and `$mod_url`.
 - `priv/types/client/hmr.d.ts` — app-facing HMR browser globals.

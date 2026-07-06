@@ -19,6 +19,19 @@ describe('volt:test core', () => {
     expect(['js', 'ts', 'exs']).toContain('ts')
   })
 
+  test('string and collection matchers cover common cases', () => {
+    expect(frameworkName).toMatch(/volt:test/)
+    expect(['js', 'ts', 'exs']).toHaveLength(3)
+    expect({ nested: { value: 42 } }).toHaveProperty('nested.value', 42)
+  })
+
+  test('numeric comparison matchers compare values', () => {
+    expect(4).toBeGreaterThan(3)
+    expect(4).toBeGreaterThanOrEqual(4)
+    expect(3).toBeLessThan(4)
+    expect(4).toBeLessThanOrEqual(4)
+  })
+
   test('toThrow checks thrown messages', () => {
     expect(() => {
       throw new Error('boom')
@@ -49,6 +62,21 @@ describe('volt:test core', () => {
   test('async tests can await promises', async () => {
     const value: number = await Promise.resolve(42)
     expect(value).toBe(42)
+  })
+})
+
+describe('volt:test each', () => {
+  test.each([
+    [1, 2, 3],
+    [2, 3, 5]
+  ])('adds %d + %d = %d', (left, right, total) => {
+    expect(Number(left) + Number(right)).toBe(total)
+  })
+
+  describe.each(['alpha', 'beta'])('suite %s', (label) => {
+    test('receives each value', () => {
+      expect(String(label)).toMatch(/alpha|beta/)
+    })
   })
 })
 

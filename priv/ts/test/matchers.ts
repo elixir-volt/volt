@@ -46,6 +46,67 @@ function createExpectation(actual: unknown, negated: boolean): Volt.Test.Matcher
       )
     },
 
+    toMatch(expected: string | RegExp) {
+      const text = String(actual)
+      const ok = expected instanceof RegExp ? expected.test(text) : text.includes(expected)
+      match(
+        ok,
+        `Expected ${format(actual)} ${notText(negated)}to match ${format(expected)}`,
+        expected
+      )
+    },
+
+    toHaveLength(expected: number) {
+      const length = lengthOf(actual)
+      match(
+        length === expected,
+        `Expected ${format(actual)} ${notText(negated)}to have length ${expected}`,
+        expected
+      )
+    },
+
+    toHaveProperty(path: string | readonly (string | number)[], expected?: unknown) {
+      const { exists, value } = propertyAt(actual, path)
+      const ok = arguments.length === 1 ? exists : exists && deepEqual(value, expected)
+      match(
+        ok,
+        `Expected ${format(actual)} ${notText(negated)}to have property ${format(path)}`,
+        expected
+      )
+    },
+
+    toBeGreaterThan(expected: number) {
+      match(
+        Number(actual) > expected,
+        `Expected ${format(actual)} ${notText(negated)}to be greater than ${format(expected)}`,
+        expected
+      )
+    },
+
+    toBeGreaterThanOrEqual(expected: number) {
+      match(
+        Number(actual) >= expected,
+        `Expected ${format(actual)} ${notText(negated)}to be greater than or equal to ${format(expected)}`,
+        expected
+      )
+    },
+
+    toBeLessThan(expected: number) {
+      match(
+        Number(actual) < expected,
+        `Expected ${format(actual)} ${notText(negated)}to be less than ${format(expected)}`,
+        expected
+      )
+    },
+
+    toBeLessThanOrEqual(expected: number) {
+      match(
+        Number(actual) <= expected,
+        `Expected ${format(actual)} ${notText(negated)}to be less than or equal to ${format(expected)}`,
+        expected
+      )
+    },
+
     toBeDefined() {
       match(
         actual !== undefined,
@@ -123,6 +184,33 @@ function createExpectation(actual: unknown, negated: boolean): Volt.Test.Matcher
   }
 
   return matchers
+}
+
+function lengthOf(value: unknown) {
+  if (typeof value === 'string' || Array.isArray(value)) return value.length
+  if (value && typeof value === 'object' && 'length' in value) return Number(value.length)
+  return undefined
+}
+
+function propertyAt(value: unknown, path: string | readonly (string | number)[]) {
+  const segments = Array.isArray(path) ? path : path.split('.')
+  let current = value
+
+  for (const segment of segments) {
+    if (current === null || current === undefined) {
+      return { exists: false, value: undefined }
+    }
+
+    const container = current as Record<string | number, unknown>
+
+    if (!(segment in container)) {
+      return { exists: false, value: undefined }
+    }
+
+    current = container[segment]
+  }
+
+  return { exists: true, value: current }
 }
 
 function notText(negated: boolean) {

@@ -28,16 +28,28 @@ declare namespace Volt {
 
     type Fn = (context: Context) => Awaitable<unknown>
     type Hook = () => Awaitable<unknown>
+    type EachFn = (...args: unknown[]) => Awaitable<unknown>
+
+    interface EachAPI {
+      (name: string, fn: EachFn): void
+      (name: string, options: Options, fn: EachFn): void
+    }
 
     interface API {
       (name: string, fn?: Fn): void
       (name: string, options: Options, fn?: Fn): void
+      each(cases: readonly unknown[]): EachAPI
       skip: API
       todo: API
     }
 
+    interface DescribeEachAPI {
+      (name: string, fn: (...args: unknown[]) => void): void
+    }
+
     interface DescribeAPI {
       (name: string, fn: () => void): void
+      each(cases: readonly unknown[]): DescribeEachAPI
       skip: DescribeAPI
       todo: DescribeAPI
     }
@@ -47,6 +59,13 @@ declare namespace Volt {
       toBe(expected: unknown): void
       toEqual(expected: unknown): void
       toContain(expected: unknown): void
+      toMatch(expected: string | RegExp): void
+      toHaveLength(expected: number): void
+      toHaveProperty(path: string | readonly (string | number)[], expected?: unknown): void
+      toBeGreaterThan(expected: number): void
+      toBeGreaterThanOrEqual(expected: number): void
+      toBeLessThan(expected: number): void
+      toBeLessThanOrEqual(expected: number): void
       toBeDefined(): void
       toBeUndefined(): void
       toBeTruthy(): void
@@ -117,6 +136,7 @@ declare module 'volt:test' {
   export type TestContext = Volt.Test.Context
   export type TestFunction = Volt.Test.Fn
   export type HookFunction = Volt.Test.Hook
+  export type EachFunction = Volt.Test.EachFn
   export type TestAPI = Volt.Test.API
   export type DescribeAPI = Volt.Test.DescribeAPI
   export type Matchers = Volt.Test.Matchers

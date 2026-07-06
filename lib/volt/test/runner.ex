@@ -66,9 +66,23 @@ defmodule Volt.Test.Runner do
       |> Keyword.merge(Keyword.get(opts, :js_runtime, []))
       |> Keyword.put_new(:entry, {:external_path, Volt.Priv.path({:volt, "ts"}, "test/core.ts")})
       |> Keyword.put_new(:bundle, true)
+      |> Keyword.put_new(:bundle_opts, cache_salt: test_runtime_salt())
       |> Keyword.put_new(:install_dir, install_dir())
 
     Runtime.start(runtime_opts)
+  end
+
+  defp test_runtime_salt do
+    {:volt, :code.priv_dir(:volt), priv_test_runtime_files()}
+  end
+
+  defp priv_test_runtime_files do
+    {:volt, "ts"}
+    |> Volt.Priv.path("test")
+    |> Path.join("*.ts")
+    |> Path.wildcard()
+    |> Enum.sort()
+    |> Enum.map(fn path -> {Path.basename(path), File.read!(path)} end)
   end
 
   defp install_dir do
