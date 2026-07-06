@@ -36,11 +36,21 @@ defmodule Volt.Test.ExUnit do
     module = module_name(file)
 
     unless Code.ensure_loaded?(module) do
+      tests = collect_tests!(file, profile)
+
       [{_compiled_module, _bytecode}] =
-        Code.compile_string(bridge_source(module, file, profile), file)
+        Code.compile_quoted(bridge_module(module, file, profile, tests), file)
     end
 
     module
+  end
+
+  defp collect_tests!(file, profile) do
+    case Volt.Test.Runner.collect_file(file, profile: profile) do
+      {:ok, [_ | _] = tests} -> tests
+      {:ok, []} -> [%{"id" => 0, "fullName" => "#{file} has no tests", "name" => "no tests"}]
+      {:error, reason} -> raise "could not collect Volt JS tests from #{file}: #{inspect(reason)}"
+    end
   end
 
   defp module_name(file) do
@@ -48,18 +58,43 @@ defmodule Volt.Test.ExUnit do
     Module.concat([Volt.Generated.JSTest, "Test#{hash}"])
   end
 
-  defp bridge_source(module, file, profile) do
-    """
-    defmodule #{inspect(module)} do
-      use ExUnit.Case, async: false
+  defp bridge_module(module, file, profile, tests) do
+    test_defs = Enum.map(tests, &test_definition(file, profile, &1))
 
-      @tag :js
-      @tag volt_file: #{inspect(file)}
-      test #{inspect(file)} do
-        assert {:ok, result} = Volt.Test.Runner.run_file(#{inspect(file)}, profile: #{inspect(profile)})
-        Volt.Test.Assertions.assert_passed!(result)
+    quote do
+      defmodule unquote(module) do
+        use ExUnit.Case, async: false
+
+        unquote_splicing(test_defs)
       end
     end
-    """
+  end
+
+  defp test_definition(file, profile, %{"id" => test_id} = test) do
+    name = test["fullName"] || test["name"] || inspect(test_id)
+    function = Macro.unique_var(:name, __MODULE__)
+
+    register =
+      quote do
+        unquote(function) =
+          ExUnit.Case.register_test(__MODULE__, unquote(file), 1, :test, unquote(name),
+            js: true,
+            volt_file: unquote(file),
+            volt_test_id: unquote(test_id)
+          )
+      end
+
+    body =
+      quote do
+        assert {:ok, result} =
+                 Volt.Test.Runner.run_test(unquote(file), unquote(test_id),
+                   profile: unquote(profile)
+                 )
+
+        Volt.Test.Assertions.assert_passed!(result)
+      end
+
+    def_ast = {:def, [], [{{:unquote, [], [function]}, [], [{:_, [], Elixir}]}, [do: body]]}
+    {:__block__, [], [register, def_ast]}
   end
 end

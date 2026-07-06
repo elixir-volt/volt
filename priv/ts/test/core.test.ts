@@ -48,8 +48,8 @@ describe('volt:test hooks', () => {
     expect(afterCount).toBe(0)
   })
 
-  test('afterEach ran after the previous test', () => {
+  test('afterEach does not run before the current test body', () => {
     expect(value).toBe(41)
-    expect(afterCount).toBe(1)
+    expect(afterCount).toBe(0)
   })
 })

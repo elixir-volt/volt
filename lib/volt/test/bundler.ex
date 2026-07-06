@@ -8,10 +8,9 @@ defmodule Volt.Test.Bundler do
   """
 
   alias Volt.JS.Extensions
+  alias Volt.Test.Bundle
 
-  @type result :: %{code: String.t(), files: [String.t()]}
-
-  @spec bundle_file(Path.t(), keyword()) :: {:ok, result()} | {:error, term()}
+  @spec bundle_file(Path.t(), keyword()) :: {:ok, Bundle.t()} | {:error, term()}
   def bundle_file(entry_path, opts \\ []) do
     entry_path = Path.expand(entry_path)
 
@@ -19,8 +18,8 @@ defmodule Volt.Test.Bundler do
          root = common_root(Map.keys(modules)),
          files = labeled_files(modules, root),
          entry = label(entry_path, root),
-         {:ok, code} <- OXC.bundle(files, bundle_opts(entry, opts)) do
-      {:ok, %{code: code, files: Map.keys(modules) |> Enum.sort()}}
+         {:ok, output} <- OXC.bundle(files, bundle_opts(entry, opts)) do
+      {:ok, bundle(output, entry_path, Map.keys(modules))}
     end
   end
 
@@ -118,10 +117,25 @@ defmodule Volt.Test.Bundler do
     |> Enum.map(&elem(&1, 0))
   end
 
+  defp bundle(output, entry_path, files) do
+    {code, sourcemap} = output_code_and_sourcemap(output)
+
+    %Bundle{
+      entry: entry_path,
+      code: code,
+      sourcemap: sourcemap,
+      files: Enum.sort(files)
+    }
+  end
+
+  defp output_code_and_sourcemap(%{code: code, sourcemap: sourcemap}), do: {code, sourcemap}
+  defp output_code_and_sourcemap(code) when is_binary(code), do: {code, nil}
+
   defp bundle_opts(entry, opts) do
     opts
     |> Keyword.take([:define, :target, :sourcemap, :minify])
     |> Keyword.put(:entry, entry)
     |> Keyword.put_new(:format, :iife)
+    |> Keyword.put_new(:sourcemap, true)
   end
 end

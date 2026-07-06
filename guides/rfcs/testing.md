@@ -145,6 +145,7 @@ Proposed modules:
 - `Volt.Test.Config` — reads `config :volt, :test`, including named profiles. Implemented as the initial wiring layer.
 - `Volt.Test.Discovery` — discovers JS/TS test files using Volt-style glob handling. Implemented as the initial wiring layer.
 - `Volt.Test.Manifest` — normalized representation of files, suites, tests, tags, and browser requirements.
+- `Volt.Test.Bundle` — Elixir-owned executable bundle metadata (`code`, `sourcemap`, `files`, `entry`) kept separate from JS runner result maps.
 - `Volt.Test.Runner` — executes JS/TS tests in QuickBEAM and returns structured results. Initial implementation supports `volt:test` imports and local relative JS/TS module graphs.
 - `Volt.Test.Assertions` — converts JS assertion failures into ExUnit failures. Initial implementation formats first failed JS test as an ExUnit failure.
 - `Volt.Test.JSCase` — ExUnit bridge used by generated wrapper modules.

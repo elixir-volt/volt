@@ -16,6 +16,13 @@ interface SuiteContext {
   afterEach: HookFunction[]
 }
 
+interface TestMetadata {
+  id: number
+  name: string
+  fullName: string
+  suite: string[]
+}
+
 interface TestResult {
   id: number
   name: string
@@ -152,14 +159,25 @@ function expect(actual: unknown) {
   }
 }
 
-async function __voltRunTestModule(code: string, file: string) {
-  reset()
-  ;(0, eval)(`${code}\n//# sourceURL=${file}`)
+async function __voltCollectTestModule(code: string, file: string) {
+  loadTestModule(code, file)
+
+  return state.tests.map((registered): TestMetadata => ({
+    id: registered.id,
+    name: registered.name,
+    fullName: fullName(registered),
+    suite: registered.suite
+  }))
+}
+
+async function __voltRunTestModule(code: string, file: string, onlyId?: number) {
+  loadTestModule(code, file)
 
   const results: TestResult[] = []
   const startedAt = Date.now()
+  const tests = onlyId === undefined ? state.tests : state.tests.filter((test) => test.id === onlyId)
 
-  for (const registered of state.tests) {
+  for (const registered of tests) {
     const testStartedAt = Date.now()
 
     try {
@@ -185,6 +203,11 @@ async function __voltRunTestModule(code: string, file: string) {
   }
 }
 
+function loadTestModule(code: string, _file: string) {
+  reset()
+  ;(0, eval)(code)
+}
+
 function result(
   registered: RegisteredTest,
   status: 'passed' | 'failed',
@@ -194,11 +217,15 @@ function result(
   return {
     id: registered.id,
     name: registered.name,
-    fullName: [...registered.suite, registered.name].join(' › '),
+    fullName: fullName(registered),
     status,
     duration: Date.now() - startedAt,
     ...(error ? { error } : {})
   }
+}
+
+function fullName(registered: RegisteredTest) {
+  return [...registered.suite, registered.name].join(' › ')
 }
 
 function assertionError(message: string, expected: unknown, actual: unknown) {
@@ -269,5 +296,6 @@ Object.assign(globalThis, {
   beforeEach,
   afterEach,
   expect,
+  __voltCollectTestModule,
   __voltRunTestModule
 })

@@ -31,8 +31,11 @@ defmodule Volt.Test.BundlerTest do
       })
       """)
 
-    assert {:ok, %{code: code, files: files}} = Volt.Test.Bundler.bundle_file(entry)
+    assert {:ok, %Volt.Test.Bundle{entry: ^entry, code: code, sourcemap: sourcemap, files: files}} =
+             Volt.Test.Bundler.bundle_file(entry)
 
+    assert is_binary(code)
+    assert is_binary(sourcemap)
     assert entry in files
     assert Path.join(tmp_dir, "math.ts") in files
     refute code =~ "volt:test"

@@ -139,6 +139,7 @@ defmodule Volt.MixProject do
         Formatting: [Volt.Formatter, Volt.Format],
         Testing: [
           Volt.Test.Assertions,
+          Volt.Test.Bundle,
           Volt.Test.Bundler,
           Volt.Test.Config,
           Volt.Test.Discovery,

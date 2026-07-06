@@ -16,8 +16,22 @@ defmodule Volt.Test.Runner do
 
   @type result :: map()
 
+  @spec collect_file(Path.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def collect_file(path, opts \\ []) do
+    call_test_runtime(path, "__voltCollectTestModule", [], opts)
+  end
+
   @spec run_file(Path.t(), keyword()) :: {:ok, result()} | {:error, term()}
   def run_file(path, opts \\ []) do
+    call_test_runtime(path, "__voltRunTestModule", [], opts)
+  end
+
+  @spec run_test(Path.t(), integer(), keyword()) :: {:ok, result()} | {:error, term()}
+  def run_test(path, test_id, opts \\ []) when is_integer(test_id) do
+    call_test_runtime(path, "__voltRunTestModule", [test_id], opts)
+  end
+
+  defp call_test_runtime(path, function, extra_args, opts) do
     config = Keyword.get_lazy(opts, :config, fn -> Config.read(Keyword.get(opts, :profile)) end)
     compile_opts = Keyword.get(opts, :compile_opts, [])
     timeout = Keyword.get(opts, :timeout, config.timeout)
@@ -25,7 +39,7 @@ defmodule Volt.Test.Runner do
     with {:ok, bundled} <- Volt.Test.Bundler.bundle_file(path, compile_opts),
          {:ok, runtime} <- start_runtime(config, opts) do
       try do
-        Runtime.call(runtime, "__voltRunTestModule", [bundled.code, path], timeout: timeout)
+        Runtime.call(runtime, function, [bundled.code, path | extra_args], timeout: timeout)
       after
         Runtime.stop(runtime)
       end
