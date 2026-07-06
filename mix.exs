@@ -102,6 +102,7 @@ defmodule Volt.MixProject do
         "guides/features/glob-imports.md",
         "guides/features/plugins.md",
         "guides/features/formatting-and-linting.md",
+        "guides/features/testing.md",
         "guides/deployment/production-builds.md",
         "guides/migration/from-esbuild.md",
         "guides/cheatsheets/configuration.cheatmd",

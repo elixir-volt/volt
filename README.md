@@ -105,7 +105,7 @@ See the [examples](https://github.com/elixir-volt/volt/tree/master/examples) for
 
 ## Developer tools
 
-JS/TS formatting and linting run as Rust NIFs. `mix format` handles Elixir and JavaScript together:
+JS/TS formatting, linting, and testing run inside the BEAM. `mix format` handles Elixir and JavaScript together:
 
 ```elixir
 # .formatter.exs
@@ -120,6 +120,24 @@ mix volt.js.check --type-aware --type-check
 ```
 
 Project-specific lint rules can be written in Elixir with `OXC.Lint.Rule`. Type-aware TypeScript rules can run through `tsgolint` with `--type-aware`.
+
+JS/TS tests can be registered as ExUnit tests and run with the normal `mix test` command:
+
+```elixir
+# test/test_helper.exs
+ExUnit.start(exclude: [:integration])
+Volt.Test.ExUnit.install()
+```
+
+```ts
+import { test, expect } from 'volt:test'
+
+test('adds numbers', () => {
+  expect(1 + 2).toBe(3)
+})
+```
+
+See the [Testing guide](https://hexdocs.pm/volt/testing.html) for configuration and the supported API.
 
 ## Plugins
 

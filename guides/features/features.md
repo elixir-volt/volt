@@ -165,6 +165,12 @@ Custom lint rules can be written in Elixir with `OXC.Lint.Rule` and configured a
 
 See [Formatting and Linting](formatting-and-linting.md) for setup and configuration.
 
+## JavaScript and TypeScript Testing
+
+Volt can register JS/TS test files as ordinary ExUnit tests. Tests import a Vitest-like API from `volt:test`, run in QuickBEAM, and report through the normal `mix test` pipeline.
+
+See [JavaScript and TypeScript Testing](testing.md) for setup and API examples.
+
 ## Web Workers
 
 Worker URLs using the standard pattern are rewritten in production builds:
