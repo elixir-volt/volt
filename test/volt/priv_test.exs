@@ -27,7 +27,9 @@ defmodule Volt.PrivTest do
       Volt.Priv.js!(
         @support_modules,
         "client/templates/hmr-preamble.ts",
-        [mod_url: "/assets/app.ts"], rewrite_specifiers: %{"../hmr" => "/@volt/client.js"})
+        [mod_url: "/assets/app.ts"],
+        rewrite_specifiers: %{"../hmr" => "/@volt/client.js"}
+      )
 
     assert code =~ ~s(from "/@volt/client.js")
     assert code =~ "createHotContext(\"/assets/app.ts\")"
