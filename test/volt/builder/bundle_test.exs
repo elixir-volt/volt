@@ -1,0 +1,115 @@
+defmodule Volt.Builder.BundleTest do
+  use ExUnit.Case, async: false
+
+  import Volt.Test.Sigils
+
+  setup do
+    tmp_dir =
+      Path.join(System.tmp_dir!(), "volt-builder-bundle-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(tmp_dir)
+
+    on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    %{tmp_dir: tmp_dir}
+  end
+
+  test "bundles relative TypeScript imports through the Builder graph", %{tmp_dir: tmp_dir} do
+    write!(tmp_dir, "math.ts", ~TS"""
+    export function add(left: number, right: number) {
+      return left + right
+    }
+    """)
+
+    entry =
+      write!(tmp_dir, "math.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+      import { add } from './math'
+
+      test('adds', () => {
+        expect(add(1, 2)).toBe(3)
+      })
+      """)
+
+    assert {:ok,
+            %Volt.Builder.Bundle{
+              entry: ^entry,
+              code: code,
+              sourcemap: sourcemap,
+              files: files
+            }} =
+             Volt.Builder.bundle(
+               entry: entry,
+               plugins: [Volt.Test.Plugin],
+               minify: false,
+               sourcemap: true
+             )
+
+    assert is_binary(code)
+    assert is_binary(sourcemap)
+    assert entry in files
+    assert Path.join(tmp_dir, "math.ts") in files
+    refute code =~ "import { add }"
+    assert code =~ "add"
+  end
+
+  test "bundles bare imports through the Builder graph", %{tmp_dir: tmp_dir} do
+    write!(tmp_dir, "node_modules/tiny-pkg/package.json", ~S({"type":"module","main":"index.js"}))
+    write!(tmp_dir, "node_modules/tiny-pkg/index.js", "export const label = 'tiny'\n")
+
+    entry =
+      write!(tmp_dir, "bare.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+      import { label } from 'tiny-pkg'
+
+      test('uses package import', () => {
+        expect(label).toBe('tiny')
+      })
+      """)
+
+    assert {:ok, %Volt.Builder.Bundle{code: code, files: files}} =
+             Volt.Builder.bundle(entry: entry, plugins: [Volt.Test.Plugin], minify: false)
+
+    assert code =~ "tiny"
+    assert Path.join(tmp_dir, "node_modules/tiny-pkg/index.js") in files
+  end
+
+  test "bundles Volt client virtual imports through the Builder graph", %{tmp_dir: tmp_dir} do
+    entry =
+      write!(tmp_dir, "client.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+      import { renderErrorOverlay } from 'volt:client/overlay'
+      import { preloadDep } from 'volt:client/preload'
+
+      test('uses client internals', () => {
+        expect(typeof renderErrorOverlay).toBe('function')
+        expect(typeof preloadDep).toBe('function')
+      })
+      """)
+
+    assert {:ok, %Volt.Builder.Bundle{code: code, files: files}} =
+             Volt.Builder.bundle(entry: entry, plugins: [Volt.Test.Plugin], minify: false)
+
+    assert code =~ "renderErrorOverlay"
+    refute code =~ "volt:client/overlay"
+    refute code =~ "volt:client/preload"
+    assert Enum.any?(files, &String.ends_with?(&1, "priv/ts/client/overlay.ts"))
+    assert Enum.any?(files, &String.ends_with?(&1, "priv/ts/client/preload.ts"))
+  end
+
+  test "returns module resolution errors", %{tmp_dir: tmp_dir} do
+    entry = write!(tmp_dir, "missing.test.ts", "import './missing'\n")
+
+    assert {:error, {:not_found, missing}} =
+             Volt.Builder.bundle(entry: entry, plugins: [Volt.Test.Plugin])
+
+    assert missing == Path.join(tmp_dir, "missing")
+  end
+
+  defp write!(root, path, contents) do
+    path = Path.join(root, path)
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, contents)
+    path
+  end
+end

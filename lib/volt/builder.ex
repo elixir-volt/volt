@@ -11,7 +11,7 @@ defmodule Volt.Builder do
   manifest.
   """
 
-  alias Volt.Builder.{Collector, Output}
+  alias Volt.Builder.{Bundle, Collector, Output}
   alias Volt.Paths
 
   @css_exts Volt.JS.Extensions.css()
@@ -64,88 +64,11 @@ defmodule Volt.Builder do
     entries =
       opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&resolve_entry(&1, plugins))
 
-    outdir = Keyword.get(opts, :outdir, Paths.static()) |> Path.expand()
     public_dir = opts |> Keyword.get(:public_dir, false) |> Volt.PublicDir.resolve()
-    target = opts |> Keyword.get(:target, "") |> to_string()
-    minify = Keyword.get(opts, :minify, true)
-    sourcemap_opt = Keyword.get(opts, :sourcemap, true)
-    sourcemap = sourcemap_opt != false
-    define = Keyword.get(opts, :define, %{})
-    mode = Keyword.get(opts, :mode, "production")
-    env_prefix = Keyword.get(opts, :env_prefix, "VOLT_")
-    asset_url_prefix = Keyword.get(opts, :asset_url_prefix, Paths.prefix())
-    aliases = Keyword.get(opts, :aliases, %{})
-    code_splitting = Keyword.get(opts, :code_splitting, true)
-    tree_shaking = Keyword.get(opts, :tree_shaking, true)
-    chunks = Keyword.get(opts, :chunks, %{})
-    format = Keyword.get(opts, :format, :iife)
-    external_raw = Keyword.get(opts, :external, [])
-    {external_set, external_globals} = normalize_external(external_raw)
-
-    first_entry = hd(entries)
-
-    node_modules =
-      Keyword.get(opts, :node_modules) ||
-        NPM.Resolution.PackageResolver.find_node_modules(entry_base(first_entry))
-
-    resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
-    loaders = Keyword.get(opts, :loaders, %{})
-    module_types = Keyword.get(opts, :module_types, %{})
-    import_source = opts |> Keyword.get(:import_source) |> to_string_or_nil()
-    hash = Keyword.get(opts, :hash, true)
-    asset_root = Keyword.get(opts, :root, Paths.assets())
     name = Keyword.get(opts, :name)
+    {ctx, build_ctx} = build_contexts(entries, opts)
 
-    env_define = Volt.Env.define(mode: mode, root: File.cwd!(), env_prefix: env_prefix)
-    plugin_define = Volt.PluginRunner.define(plugins, mode)
-
-    all_define =
-      env_define
-      |> Map.merge(plugin_define)
-      |> Map.merge(define)
-
-    ctx = %Volt.Builder.Context{
-      node_modules: node_modules,
-      resolve_dirs: resolve_dirs,
-      aliases: aliases,
-      plugins: plugins,
-      external: external_set,
-      external_globals: external_globals,
-      loaders: loaders,
-      module_types: module_types,
-      import_source: import_source,
-      target: target,
-      define: all_define,
-      asset_url_prefix: asset_url_prefix,
-      asset_outdir: outdir,
-      asset_root: asset_root
-    }
-
-    bundle_opts =
-      [
-        minify: minify,
-        sourcemap: sourcemap,
-        target: target,
-        define: all_define,
-        format: format,
-        treeshake: tree_shaking,
-        root: asset_root,
-        node_modules: node_modules,
-        resolve_dirs: resolve_dirs
-      ] ++ if(module_types != %{}, do: [module_types: module_types], else: [])
-
-    build_ctx = %Volt.Builder.BuildContext{
-      outdir: outdir,
-      target: target,
-      hash: hash,
-      bundle_opts: bundle_opts,
-      asset_url_prefix: asset_url_prefix,
-      code_splitting: code_splitting,
-      sourcemap_hidden: sourcemap_opt == :hidden,
-      chunks: chunks
-    }
-
-    Volt.PublicDir.copy(public_dir, Path.dirname(outdir))
+    Volt.PublicDir.copy(public_dir, Path.dirname(build_ctx.outdir))
 
     results =
       Enum.flat_map(entries, fn entry ->
@@ -156,8 +79,92 @@ defmodule Volt.Builder do
       end)
 
     with {:ok, result} <- finalize_build_results(results) do
-      Volt.Builder.Writer.write_manifest(outdir, result.manifest)
+      Volt.Builder.Writer.write_manifest(build_ctx.outdir, result.manifest)
       {:ok, result}
+    end
+  end
+
+  @doc """
+  Bundle one JavaScript entry with Volt's normal build graph and return it in memory.
+
+  `bundle/1` accepts the same graph, compiler, and bundler options as `build/1`,
+  including `:plugins`, `:aliases`, `:node_modules`, `:resolve_dirs`, `:loaders`,
+  `:define`, `:target`, and `:external`. It does not write a manifest or output
+  JavaScript files, and it always returns a single entry bundle.
+
+  This API is intended for tools that need executable JavaScript from Volt's
+  production resolver/compiler pipeline without production file output, such as
+  test runners.
+  """
+  @spec bundle(keyword()) :: {:ok, Bundle.t()} | {:error, term()}
+  def bundle(opts) do
+    plugins = Keyword.get(opts, :plugins, [])
+    entry = opts |> Keyword.fetch!(:entry) |> resolve_entry(plugins)
+    name = Keyword.get(opts, :name)
+
+    case expand_entry(entry, name) do
+      [{entry_path, :script, entry_name}] ->
+        {ctx, build_ctx} = build_contexts([entry_path], Keyword.put_new(opts, :outdir, nil))
+        bundle_entry(entry_path, entry_name, ctx, %{build_ctx | code_splitting: false})
+
+      [{_entry_path, type, _entry_name}] ->
+        {:error, {:unsupported_bundle_entry, type}}
+
+      entries ->
+        {:error, {:expected_single_bundle_entry, entries}}
+    end
+  end
+
+  defp bundle_entry(entry, _name, ctx, build_ctx) do
+    with {:ok, modules, _dep_map, workers, specifier_labels, path_labels} <-
+           Collector.collect(entry, ctx),
+         :ok <- ensure_in_memory_workers_supported(workers),
+         {:ok, compiled} <- compile_all(modules, build_ctx.target, ctx) do
+      compiled = rewrite_nonlocal_labels(compiled, specifier_labels, path_labels)
+
+      output_ctx = %Volt.Builder.OutputContext{
+        plugins: ctx.plugins,
+        external_set: ctx.external,
+        external_globals: ctx.external_globals,
+        workers: workers,
+        worker_results: %{}
+      }
+
+      out = %Volt.Builder.BuildContext{
+        outdir: build_ctx.outdir,
+        hash: false,
+        bundle_opts: build_ctx.bundle_opts,
+        sourcemap_hidden: false,
+        chunks: %{},
+        ctx: output_ctx,
+        asset_url_prefix: build_ctx.asset_url_prefix
+      }
+
+      files =
+        Enum.flat_map(modules, fn {path, _label, _source} -> List.wrap(source_file(path)) end)
+
+      Output.bundle_single(entry, compiled, Enum.uniq(files), out)
+    end
+  end
+
+  defp ensure_in_memory_workers_supported(workers) when map_size(workers) == 0, do: :ok
+
+  defp ensure_in_memory_workers_supported(workers),
+    do: {:error, {:unsupported_bundle_workers, workers}}
+
+  defp source_file(module_id) do
+    {path, _query} = Volt.URL.split_query(module_id)
+
+    cond do
+      File.regular?(path) ->
+        path
+
+      match?({:ok, _id}, Volt.Plugin.EmbeddedModule.parse_id(path)) ->
+        {:ok, id} = Volt.Plugin.EmbeddedModule.parse_id(path)
+        if File.regular?(id.parent), do: id.parent
+
+      true ->
+        nil
     end
   end
 
@@ -243,6 +250,93 @@ defmodule Volt.Builder do
     else
       File.cwd!()
     end
+  end
+
+  defp build_contexts(entries, opts) do
+    outdir =
+      case Keyword.get(opts, :outdir, Paths.static()) do
+        nil -> nil
+        outdir -> Path.expand(outdir)
+      end
+
+    target = opts |> Keyword.get(:target, "") |> to_string()
+    minify = Keyword.get(opts, :minify, true)
+    sourcemap_opt = Keyword.get(opts, :sourcemap, true)
+    sourcemap = sourcemap_opt != false
+    define = Keyword.get(opts, :define, %{})
+    mode = Keyword.get(opts, :mode, "production")
+    env_prefix = Keyword.get(opts, :env_prefix, "VOLT_")
+    asset_url_prefix = Keyword.get(opts, :asset_url_prefix, Paths.prefix())
+    aliases = Keyword.get(opts, :aliases, %{})
+    code_splitting = Keyword.get(opts, :code_splitting, true)
+    tree_shaking = Keyword.get(opts, :tree_shaking, true)
+    chunks = Keyword.get(opts, :chunks, %{})
+    format = Keyword.get(opts, :format, :iife)
+    external_raw = Keyword.get(opts, :external, [])
+    {external_set, external_globals} = normalize_external(external_raw)
+    first_entry = hd(entries)
+
+    node_modules =
+      Keyword.get(opts, :node_modules) ||
+        NPM.Resolution.PackageResolver.find_node_modules(entry_base(first_entry))
+
+    resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
+    loaders = Keyword.get(opts, :loaders, %{})
+    module_types = Keyword.get(opts, :module_types, %{})
+    import_source = opts |> Keyword.get(:import_source) |> to_string_or_nil()
+    hash = Keyword.get(opts, :hash, true)
+    asset_root = Keyword.get(opts, :root, Paths.assets())
+
+    env_define = Volt.Env.define(mode: mode, root: File.cwd!(), env_prefix: env_prefix)
+    plugin_define = Volt.PluginRunner.define(Keyword.get(opts, :plugins, []), mode)
+
+    all_define =
+      env_define
+      |> Map.merge(plugin_define)
+      |> Map.merge(define)
+
+    ctx = %Volt.Builder.Context{
+      node_modules: node_modules,
+      resolve_dirs: resolve_dirs,
+      aliases: aliases,
+      plugins: Keyword.get(opts, :plugins, []),
+      external: external_set,
+      external_globals: external_globals,
+      loaders: loaders,
+      module_types: module_types,
+      import_source: import_source,
+      target: target,
+      define: all_define,
+      asset_url_prefix: asset_url_prefix,
+      asset_outdir: outdir,
+      asset_root: asset_root
+    }
+
+    bundle_opts =
+      [
+        minify: minify,
+        sourcemap: sourcemap,
+        target: target,
+        define: all_define,
+        format: format,
+        treeshake: tree_shaking,
+        root: asset_root,
+        node_modules: node_modules,
+        resolve_dirs: resolve_dirs
+      ] ++ if(module_types != %{}, do: [module_types: module_types], else: [])
+
+    build_ctx = %Volt.Builder.BuildContext{
+      outdir: outdir,
+      target: target,
+      hash: hash,
+      bundle_opts: bundle_opts,
+      asset_url_prefix: asset_url_prefix,
+      code_splitting: code_splitting,
+      sourcemap_hidden: sourcemap_opt == :hidden,
+      chunks: chunks
+    }
+
+    {ctx, build_ctx}
   end
 
   defp has_dynamic_imports?(dep_map) do

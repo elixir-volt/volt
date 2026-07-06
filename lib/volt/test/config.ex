@@ -7,7 +7,8 @@ defmodule Volt.Test.Config do
       config :volt, :test,
         root: "assets",
         include: ["**/*.{test,spec}.{js,ts,jsx,tsx}"],
-        exclude: ["vendor/**", "node_modules/**"]
+        exclude: ["vendor/**", "node_modules/**"],
+        bundle: [plugins: [Volt.Plugin.React]]
 
       config :volt, :my_app_web,
         test: [root: "apps/my_app_web/assets"]
@@ -23,6 +24,7 @@ defmodule Volt.Test.Config do
             browser: false,
             browsers: [:chromium],
             timeout: 30_000,
+            bundle: [],
             js_runtime: [],
             playwright: []
 
@@ -34,6 +36,7 @@ defmodule Volt.Test.Config do
           browser: boolean(),
           browsers: [atom()],
           timeout: timeout(),
+          bundle: keyword(),
           js_runtime: keyword(),
           playwright: keyword()
         }
@@ -46,6 +49,7 @@ defmodule Volt.Test.Config do
     :browser,
     :browsers,
     :timeout,
+    :bundle,
     :js_runtime,
     :playwright
   ]

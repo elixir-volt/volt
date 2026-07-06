@@ -34,6 +34,19 @@ config :volt, :test,
   timeout: 30_000
 ```
 
+Test files are bundled with `Volt.Builder.bundle/1`, so the `bundle:` key accepts normal Volt build graph options such as `:plugins`, `:aliases`, `:node_modules`, `:resolve_dirs`, `:loaders`, and `:define`:
+
+```elixir
+config :volt, :test,
+  root: "assets",
+  bundle: [
+    plugins: [Volt.Plugin.React],
+    aliases: %{"@" => "assets/js"}
+  ]
+```
+
+Use `bundle:` for source-graph concerns and the top-level test options for discovery/execution concerns.
+
 You can also pass options directly from `test/test_helper.exs`, which is useful for package dogfood tests or custom fixture roots:
 
 ```elixir

@@ -118,7 +118,7 @@ defmodule Volt.MixProject do
       groups_for_modules: [
         Core: [Volt, Volt.Preload, Volt.Config, Volt.Plugin],
         "Dev Server": [Volt.DevServer, Volt.Watcher, Volt.HMR, Volt.Dev.ConsoleForwarder],
-        "Production Build": [Volt.Builder, Volt.ChunkGraph, Volt.PublicDir],
+        "Production Build": [Volt.Builder, Volt.Builder.Bundle, Volt.ChunkGraph, Volt.PublicDir],
         "Tailwind CSS": [Volt.Tailwind],
         CSS: [Volt.CSS.Modules],
         Plugins: [
@@ -141,12 +141,9 @@ defmodule Volt.MixProject do
         Testing: [
           Volt.Test.Assertions,
           Volt.Test.BrowserRunner,
-          Volt.Test.Bundle,
-          Volt.Test.Bundler,
           Volt.Test.Config,
           Volt.Test.Discovery,
           Volt.Test.ExUnit,
-          Volt.Test.Imports,
           Volt.Test.Lines,
           Volt.Test.Result,
           Volt.Test.Result.Metadata,

@@ -52,10 +52,9 @@ defmodule Volt.Test.Runner do
 
   defp call_test_runtime(path, function, extra_args, opts) do
     config = Keyword.get_lazy(opts, :config, fn -> Config.read(Keyword.get(opts, :profile)) end)
-    compile_opts = Keyword.get(opts, :compile_opts, [])
     timeout = Keyword.get(opts, :timeout, config.timeout)
 
-    with {:ok, bundled} <- Volt.Test.Bundler.bundle_file(path, compile_opts),
+    with {:ok, bundled} <- Volt.Builder.bundle(test_bundle_opts(path, config, opts)),
          {:ok, runtime} <- start_runtime(config, opts) do
       try do
         Runtime.call(runtime, function, [bundled.code, path | extra_args], timeout: timeout)
@@ -63,6 +62,18 @@ defmodule Volt.Test.Runner do
         Runtime.stop(runtime)
       end
     end
+  end
+
+  defp test_bundle_opts(path, %Config{} = config, opts) do
+    config.bundle
+    |> Keyword.merge(Keyword.get(opts, :bundle, []))
+    |> Keyword.put(:entry, path)
+    |> Keyword.put_new(:format, :iife)
+    |> Keyword.put_new(:minify, false)
+    |> Keyword.put_new(:sourcemap, true)
+    |> Keyword.put_new(:code_splitting, false)
+    |> Keyword.put_new(:mode, "test")
+    |> Keyword.update(:plugins, [Volt.Test.Plugin], &[Volt.Test.Plugin | List.wrap(&1)])
   end
 
   defp start_runtime(%Config{} = config, opts) do

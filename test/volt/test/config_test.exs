@@ -28,6 +28,7 @@ defmodule Volt.Test.ConfigTest do
     assert config.browser == false
     assert config.browsers == [:chromium]
     assert config.timeout == 30_000
+    assert config.bundle == []
   end
 
   test "reads global test config" do
@@ -36,7 +37,8 @@ defmodule Volt.Test.ConfigTest do
       include: ["**/*.spec.ts"],
       browser: true,
       browsers: [:chromium, :firefox],
-      timeout: 10_000
+      timeout: 10_000,
+      bundle: [plugins: [Volt.Plugin.React]]
     )
 
     config = Volt.Test.Config.read()
@@ -46,6 +48,7 @@ defmodule Volt.Test.ConfigTest do
     assert config.browser == true
     assert config.browsers == [:chromium, :firefox]
     assert config.timeout == 10_000
+    assert config.bundle == [plugins: [Volt.Plugin.React]]
   end
 
   test "profile test config overrides global test config" do

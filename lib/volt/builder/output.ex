@@ -3,6 +3,55 @@ defmodule Volt.Builder.Output do
 
   alias Volt.Builder.{Writer, Rewriter}
 
+  @doc "Bundle modules into a single in-memory JS bundle."
+  def bundle_single(entry, {js_files, css_parts, assets}, files, build_ctx) do
+    %{
+      outdir: outdir,
+      bundle_opts: bundle_opts,
+      ctx: ctx,
+      asset_url_prefix: asset_url_prefix
+    } = build_ctx
+
+    js_files = Rewriter.rewrite_external_imports(js_files, ctx)
+    bundle_opts = Keyword.put(bundle_opts, :entry, Path.basename(entry))
+
+    case bundle_js_files(js_files, bundle_opts) do
+      {:ok, bundle_result} ->
+        {js_code, js_sourcemap} = extract_bundle_result(bundle_result)
+        js_code = Rewriter.inject_external_preamble(js_code, js_files, ctx)
+
+        js_code =
+          Rewriter.rewrite_worker_urls(
+            js_code,
+            Rewriter.all_worker_map(ctx),
+            Path.rootname(Path.basename(entry))
+          )
+
+        js_code =
+          Volt.PluginRunner.render_chunk(ctx.plugins, js_code, %{
+            name: Path.rootname(Path.basename(entry)),
+            type: :entry
+          })
+
+        css_opts = Keyword.put(bundle_opts, :asset_url_prefix, asset_url_prefix)
+
+        with {:ok, css_result} <- bundle_css(css_parts, outdir, css_opts) do
+          {:ok,
+           %Volt.Builder.Bundle{
+             entry: entry,
+             code: js_code,
+             sourcemap: js_sourcemap,
+             files: Enum.sort(files),
+             css: css_code(css_result),
+             assets: Enum.uniq(assets ++ css_assets(css_result))
+           }}
+        end
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
   @doc "Bundle modules into a single JS file and write output."
   def build_single(entry, name, {js_files, css_parts, assets}, build_ctx) do
     %{
@@ -342,6 +391,105 @@ defmodule Volt.Builder.Output do
   defp add_chunk_assets(entry, assets) do
     %{entry | assets: Enum.uniq(entry.assets ++ Writer.asset_files(assets))}
   end
+
+  defp bundle_css([], _outdir, _bundle_opts), do: {:ok, nil}
+
+  defp bundle_css(css_parts, nil, bundle_opts) do
+    with {:ok, %{code: css_code, assets: assets}} <- bundle_css_parts(css_parts, bundle_opts),
+         {:ok, css_code} <- compile_css(css_code, bundle_opts) do
+      {:ok, %{code: css_code, assets: assets}}
+    end
+  end
+
+  defp bundle_css(css_parts, outdir, bundle_opts) do
+    with {:ok, %{code: css_code, assets: assets}} <-
+           rewrite_css_parts(css_parts, outdir, bundle_opts),
+         {:ok, css_code} <- compile_css(css_code, bundle_opts) do
+      {:ok, %{code: css_code, assets: assets}}
+    end
+  end
+
+  defp bundle_css_parts(css_parts, bundle_opts) do
+    css_parts
+    |> Enum.reduce_while({:ok, [], []}, fn css_part, {:ok, code_parts, assets} ->
+      case bundle_css_part(css_part, bundle_opts) do
+        {:ok, %{code: code, assets: part_assets}} ->
+          {:cont, {:ok, [code | code_parts], merge_assets(assets, part_assets)}}
+
+        {:error, _} = error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, code_parts, assets} ->
+        {:ok, %{code: code_parts |> Enum.reverse() |> Enum.join("\n"), assets: assets}}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp bundle_css_part({source_path, css}, bundle_opts) do
+    root = Keyword.get(bundle_opts, :root) || File.cwd!()
+    prefix = Keyword.get(bundle_opts, :asset_url_prefix, Volt.Paths.prefix())
+
+    with {:ok, css} <- Volt.CSS.Imports.inline(css, source_path, bundle_opts),
+         {:ok, css} <- Volt.CSS.AssetURLRewriter.rewrite_dev(css, source_path, root, prefix) do
+      {:ok, %{code: css, assets: []}}
+    end
+  end
+
+  defp bundle_css_part(css, _bundle_opts), do: {:ok, %{code: css, assets: []}}
+
+  defp rewrite_css_parts(css_parts, outdir, bundle_opts) do
+    css_parts
+    |> Enum.reduce_while({:ok, [], []}, fn css_part, {:ok, code_parts, assets} ->
+      case rewrite_css_part(css_part, outdir, bundle_opts) do
+        {:ok, %{code: code, assets: part_assets}} ->
+          {:cont, {:ok, [code | code_parts], merge_assets(assets, part_assets)}}
+
+        {:error, _} = error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, code_parts, assets} ->
+        {:ok, %{code: code_parts |> Enum.reverse() |> Enum.join("\n"), assets: assets}}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp rewrite_css_part({source_path, css}, outdir, bundle_opts) do
+    with {:ok, css} <- Volt.CSS.Imports.inline(css, source_path, bundle_opts) do
+      Volt.CSS.AssetURLRewriter.rewrite_with_assets(css, source_path, outdir,
+        prefix: Keyword.get(bundle_opts, :asset_url_prefix, Volt.Paths.prefix()),
+        root: Keyword.get(bundle_opts, :root)
+      )
+    end
+  end
+
+  defp rewrite_css_part(css, _outdir, _bundle_opts), do: {:ok, %{code: css, assets: []}}
+
+  defp compile_css(css_code, bundle_opts) do
+    case Vize.CSS.compile(css_code, minify: bundle_opts[:minify] || false) do
+      {:ok, %{errors: [_ | _] = errors}} -> {:error, {:css_compile_failed, errors}}
+      {:ok, %{code: code}} -> {:ok, code}
+    end
+  end
+
+  defp merge_assets(left, right) do
+    Enum.reduce(right, left, fn asset, acc ->
+      if asset in acc, do: acc, else: [asset | acc]
+    end)
+  end
+
+  defp css_code(nil), do: nil
+  defp css_code(%{code: code}), do: code
+
+  defp css_assets(nil), do: []
+  defp css_assets(%{assets: assets}) when is_list(assets), do: assets
 
   defp css_assets(css_results) do
     css_results

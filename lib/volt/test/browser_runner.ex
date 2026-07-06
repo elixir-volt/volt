@@ -49,8 +49,7 @@ defmodule Volt.Test.BrowserRunner do
     config = Keyword.fetch!(opts, :config)
     timeout = Keyword.get(opts, :timeout, config.timeout)
 
-    with {:ok, bundled} <-
-           Volt.Test.Bundler.bundle_file(path, Keyword.get(opts, :compile_opts, [])),
+    with {:ok, bundled} <- Volt.Builder.bundle(test_bundle_opts(path, config, opts)),
          {:ok, runtime_code} <- browser_runtime_code(),
          :ok <- ensure_playwright_started(config, timeout),
          {:ok, browser} <- launch_browser(browser(config), timeout: timeout),
@@ -63,6 +62,18 @@ defmodule Volt.Test.BrowserRunner do
         browser_close(browser.guid, timeout: timeout)
       end
     end
+  end
+
+  defp test_bundle_opts(path, %Config{} = config, opts) do
+    config.bundle
+    |> Keyword.merge(Keyword.get(opts, :bundle, []))
+    |> Keyword.put(:entry, path)
+    |> Keyword.put_new(:format, :iife)
+    |> Keyword.put_new(:minify, false)
+    |> Keyword.put_new(:sourcemap, true)
+    |> Keyword.put_new(:code_splitting, false)
+    |> Keyword.put_new(:mode, "test")
+    |> Keyword.update(:plugins, [Volt.Test.Plugin], &[Volt.Test.Plugin | List.wrap(&1)])
   end
 
   defp browser_runtime_code do
