@@ -36,6 +36,12 @@ declare namespace Volt {
       todo: API
     }
 
+    interface DescribeAPI {
+      (name: string, fn: () => void): void
+      skip: DescribeAPI
+      todo: DescribeAPI
+    }
+
     interface Matchers {
       readonly not: Matchers
       toBe(expected: unknown): void
@@ -89,6 +95,7 @@ declare namespace Volt {
 
     interface Suite {
       name?: string
+      options: Options
       beforeEach: Hook[]
       afterEach: Hook[]
     }
@@ -111,10 +118,11 @@ declare module 'volt:test' {
   export type TestFunction = Volt.Test.Fn
   export type HookFunction = Volt.Test.Hook
   export type TestAPI = Volt.Test.API
+  export type DescribeAPI = Volt.Test.DescribeAPI
   export type Matchers = Volt.Test.Matchers
   export type ExpectStatic = Volt.Test.Expect
 
-  export const describe: (name: string, fn: () => void) => void
+  export const describe: Volt.Test.DescribeAPI
   export const test: Volt.Test.API
   export const it: Volt.Test.API
   export const beforeEach: (fn: Volt.Test.Hook) => void

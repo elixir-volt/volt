@@ -64,7 +64,8 @@ defmodule Volt.Test.Runner do
     runtime_opts =
       config.js_runtime
       |> Keyword.merge(Keyword.get(opts, :js_runtime, []))
-      |> Keyword.put_new(:entry, {:volt_asset, "test/core.ts"})
+      |> Keyword.put_new(:entry, {:external_path, Volt.Priv.path({:volt, "ts"}, "test/core.ts")})
+      |> Keyword.put_new(:bundle, true)
       |> Keyword.put_new(:install_dir, install_dir())
 
     Runtime.start(runtime_opts)

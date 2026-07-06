@@ -18,6 +18,8 @@ defmodule Volt.JS.Runtime.Entry do
 
   def materialize({:path, path}, install_dir), do: copy_to_runtime_dir(path, install_dir)
 
+  def materialize({:external_path, path}, _install_dir), do: Path.expand(path)
+
   def materialize({:source, source, filename}, install_dir)
       when is_binary(source) and is_binary(filename) do
     path = runtime_path(install_dir, filename, source)

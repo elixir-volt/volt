@@ -53,6 +53,16 @@ describe('volt:test core', () => {
 })
 
 describe('volt:test modifiers', () => {
+  describe.skip('skipped suite', () => {
+    test('suite skip does not execute body', () => {
+      throw new Error('should not run')
+    })
+  })
+
+  describe.todo('todo suite', () => {
+    test('suite todo is collected as skipped')
+  })
+
   test.skip('skip does not execute body', () => {
     throw new Error('should not run')
   })
