@@ -53,7 +53,7 @@ defmodule Volt.Test.Bundler do
       imports =
         result.imports
         |> Enum.map(&elem(&1, 1))
-        |> Enum.filter(&relative_specifier?/1)
+        |> Enum.filter(&test_resolvable_specifier?/1)
 
       {:ok, imports}
     end
@@ -68,11 +68,20 @@ defmodule Volt.Test.Bundler do
     end
   end
 
-  defp resolve(specifier, importer) do
-    base = Path.expand(specifier, Path.dirname(importer))
-    candidates = candidate_paths(base)
+  defp resolve("volt:client/" <> relative, _importer) do
+    {:volt, "ts"}
+    |> Volt.Priv.path(Path.join("client", relative))
+    |> resolve_candidates("volt:client/#{relative}", nil)
+  end
 
-    case Enum.find(candidates, &File.regular?/1) do
+  defp resolve(specifier, importer) do
+    specifier
+    |> Path.expand(Path.dirname(importer))
+    |> resolve_candidates(specifier, importer)
+  end
+
+  defp resolve_candidates(base, specifier, importer) do
+    case Enum.find(candidate_paths(base), &File.regular?/1) do
       nil -> {:error, {:module_not_found, specifier, importer}}
       path -> {:ok, path}
     end
@@ -84,12 +93,34 @@ defmodule Volt.Test.Bundler do
     exact_and_exts ++ index_files
   end
 
-  defp relative_specifier?("./" <> _), do: true
-  defp relative_specifier?("../" <> _), do: true
-  defp relative_specifier?(_), do: false
+  defp test_resolvable_specifier?("./" <> _), do: true
+  defp test_resolvable_specifier?("../" <> _), do: true
+  defp test_resolvable_specifier?("volt:client/" <> _), do: true
+  defp test_resolvable_specifier?(_), do: false
 
   defp labeled_files(modules, root) do
-    Enum.map(modules, fn {path, source} -> {label(path, root), source} end)
+    Enum.map(modules, fn {path, source} ->
+      {label(path, root), rewrite_virtual_imports(source, path, root)}
+    end)
+  end
+
+  defp rewrite_virtual_imports(source, path, root) do
+    case OXC.rewrite_specifiers(source, Path.basename(path), fn
+           "volt:client/" <> _ = specifier ->
+             {:ok, resolved} = resolve(specifier, path)
+             replacement = relative_label_import(label(path, root), label(resolved, root))
+             {:rewrite, replacement}
+
+           _specifier ->
+             :keep
+         end) do
+      {:ok, rewritten} -> rewritten
+      {:error, _errors} -> source
+    end
+  end
+
+  defp relative_label_import(importer_label, target_label) do
+    Volt.Path.relative_import("/" <> importer_label, "/" <> target_label)
   end
 
   defp label(path, root) do

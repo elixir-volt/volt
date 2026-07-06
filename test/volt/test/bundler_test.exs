@@ -43,6 +43,25 @@ defmodule Volt.Test.BundlerTest do
     assert code =~ "add"
   end
 
+  test "bundles Volt client virtual imports", %{tmp_dir: tmp_dir} do
+    entry =
+      write!(tmp_dir, "client.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+      import { renderErrorOverlay } from 'volt:client/overlay'
+
+      test('uses client internals', () => {
+        expect(typeof renderErrorOverlay).toBe('function')
+      })
+      """)
+
+    assert {:ok, %Volt.Test.Bundle{code: code, files: files}} =
+             Volt.Test.Bundler.bundle_file(entry)
+
+    assert code =~ "renderErrorOverlay"
+    refute code =~ "volt:client/overlay"
+    assert Enum.any?(files, &String.ends_with?(&1, "priv/ts/client/overlay.ts"))
+  end
+
   test "returns module resolution errors", %{tmp_dir: tmp_dir} do
     entry = write!(tmp_dir, "missing.test.ts", "import './missing'\n")
 
