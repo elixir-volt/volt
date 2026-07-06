@@ -156,7 +156,7 @@ Proposed modules:
 
 Runtime assets:
 
-- `priv/ts/test/core.ts` — `describe`, `test`, hooks, `expect`. Initial implementation provides globals and structured result serialization, dogfooded by a TS test importing a relative fixture module.
+- `priv/ts/test/core.ts` — `describe`, `test`, `test.skip`, `test.todo`, hooks, context `skip`, and `expect`. Initial implementation provides globals and structured result serialization, dogfooded by a TS test importing a relative fixture module.
 - `priv/ts/test/runner.ts` — collection/execution protocol used by `Volt.Test.Runner`.
 - `priv/ts/test/browser.ts` — browser fixture API and JS proxies for Playwright commands.
 

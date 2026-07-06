@@ -74,13 +74,18 @@ defmodule Volt.Test.ExUnit do
     name = test["fullName"] || test["name"] || inspect(test_id)
     function = Macro.unique_var(:name, __MODULE__)
 
+    tags = test_tags(file, test)
+
     register =
       quote do
         unquote(function) =
-          ExUnit.Case.register_test(__MODULE__, unquote(file), 1, :test, unquote(name),
-            js: true,
-            volt_file: unquote(file),
-            volt_test_id: unquote(test_id)
+          ExUnit.Case.register_test(
+            __MODULE__,
+            unquote(file),
+            unquote(test_line(test)),
+            :test,
+            unquote(name),
+            unquote(Macro.escape(tags))
           )
       end
 
@@ -97,4 +102,20 @@ defmodule Volt.Test.ExUnit do
     def_ast = {:def, [], [{{:unquote, [], [function]}, [], [{:_, [], Elixir}]}, [do: body]]}
     {:__block__, [], [register, def_ast]}
   end
+
+  defp test_tags(file, test) do
+    [
+      js: true,
+      volt_file: file,
+      volt_test_id: test["id"],
+      volt_tags: test["tags"] || []
+    ] ++ skip_tags(test)
+  end
+
+  defp skip_tags(%{"mode" => "skip"} = test), do: [skip: test["skipReason"] || true]
+  defp skip_tags(%{"mode" => "todo"} = test), do: [skip: test["skipReason"] || "TODO"]
+  defp skip_tags(_test), do: []
+
+  defp test_line(%{"line" => line}) when is_integer(line) and line > 0, do: line
+  defp test_line(_test), do: 1
 end

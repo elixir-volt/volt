@@ -18,7 +18,9 @@ defmodule Volt.Test.Runner do
 
   @spec collect_file(Path.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def collect_file(path, opts \\ []) do
-    call_test_runtime(path, "__voltCollectTestModule", [], opts)
+    with {:ok, tests} <- call_test_runtime(path, "__voltCollectTestModule", [], opts) do
+      add_source_lines(path, tests)
+    end
   end
 
   @spec run_file(Path.t(), keyword()) :: {:ok, result()} | {:error, term()}
@@ -29,6 +31,18 @@ defmodule Volt.Test.Runner do
   @spec run_test(Path.t(), integer(), keyword()) :: {:ok, result()} | {:error, term()}
   def run_test(path, test_id, opts \\ []) when is_integer(test_id) do
     call_test_runtime(path, "__voltRunTestModule", [test_id], opts)
+  end
+
+  defp add_source_lines(path, tests) do
+    with {:ok, source} <- File.read(path),
+         {:ok, lines} <- Volt.Test.Lines.test_lines(source, Path.basename(path)) do
+      {:ok,
+       tests
+       |> Enum.zip(lines)
+       |> Enum.map(fn {test, line} -> Map.put(test, "line", line) end)}
+    else
+      {:error, _} -> {:ok, tests}
+    end
   end
 
   defp call_test_runtime(path, function, extra_args, opts) do

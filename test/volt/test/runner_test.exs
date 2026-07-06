@@ -16,6 +16,64 @@ defmodule Volt.Test.RunnerTest do
     %{tmp_dir: tmp_dir}
   end
 
+  test "collects JS test metadata with source lines", %{tmp_dir: tmp_dir} do
+    path =
+      write!(tmp_dir, "collect.test.ts", ~TS"""
+      import { describe, test } from 'volt:test'
+
+      describe('suite', () => {
+        test('first', () => {})
+
+        test('second', () => {})
+      })
+      """)
+
+    assert {:ok,
+            [
+              %{"fullName" => "suite › first", "line" => 4},
+              %{"fullName" => "suite › second", "line" => 6}
+            ]} =
+             Runner.collect_file(path)
+  end
+
+  test "collects skip todo and tag metadata", %{tmp_dir: tmp_dir} do
+    path =
+      write!(tmp_dir, "modifiers.test.ts", ~TS"""
+      import { test, it } from 'volt:test'
+
+      test.skip('skipped', () => {})
+      it.todo('todo')
+      test('tagged', { tags: ['slow'] }, () => {})
+      """)
+
+    assert {:ok,
+            [
+              %{"mode" => "skip", "skipReason" => "Skipped"},
+              %{"mode" => "todo", "skipReason" => "TODO"},
+              %{"mode" => "run", "tags" => ["slow"]}
+            ]} = Runner.collect_file(path)
+  end
+
+  test "skips tests dynamically from context", %{tmp_dir: tmp_dir} do
+    path =
+      write!(tmp_dir, "dynamic_skip.test.ts", ~TS"""
+      import { test } from 'volt:test'
+
+      test('dynamic skip', ({ skip }) => {
+        skip('not today')
+        throw new Error('should not run')
+      })
+      """)
+
+    assert {:ok,
+            %{
+              "status" => "passed",
+              "skipped" => 1,
+              "tests" => [%{"status" => "skipped", "skipReason" => "not today"}]
+            }} =
+             Runner.run_file(path)
+  end
+
   test "runs passing JavaScript tests", %{tmp_dir: tmp_dir} do
     path =
       write!(tmp_dir, "math.test.js", ~JS"""

@@ -39,9 +39,32 @@ defmodule Volt.Test.ExUnitTest do
       assert test.tags.volt_file == file
       assert test.tags.volt_test_id in [1, 2]
       assert test.tags.file == file
-      assert test.tags.line == 1
+      assert test.tags.line in [4, 5]
       assert test.tags.test_type == :test
     end
+  end
+
+  test "install maps JS skip todo and tags to ExUnit tags", %{tmp_dir: tmp_dir} do
+    file =
+      write!(tmp_dir, "modifiers.test.ts", ~TS"""
+      import { test } from 'volt:test'
+
+      test.skip('skipped', () => {})
+      test.todo('todo')
+      test('tagged', { tags: ['slow', 'browser'] }, () => {})
+      """)
+
+    assert [module] = Volt.Test.ExUnit.install(root: tmp_dir, include: ["modifiers.test.ts"])
+
+    tests = Enum.sort_by(module.__ex_unit__().tests, & &1.description)
+    skipped = Enum.find(tests, &(&1.description == "test skipped"))
+    tagged = Enum.find(tests, &(&1.description == "test tagged"))
+    todo = Enum.find(tests, &(&1.description == "test todo"))
+
+    assert skipped.tags.skip == "Skipped"
+    assert todo.tags.skip == "TODO"
+    assert tagged.tags.volt_tags == ["slow", "browser"]
+    assert tagged.tags.volt_file == file
   end
 
   test "generated ExUnit test functions execute a single JS test", %{tmp_dir: tmp_dir} do

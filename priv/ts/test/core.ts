@@ -1,5 +1,18 @@
-type TestFunction = () => unknown | Promise<unknown>
+type TestFunction = (context: TestContext) => unknown | Promise<unknown>
 type HookFunction = () => unknown | Promise<unknown>
+type TestMode = 'run' | 'skip' | 'todo'
+
+interface TestOptions {
+  skip?: boolean | string
+  todo?: boolean | string
+  tags?: string[]
+}
+
+interface TestContext {
+  task: TestMetadata
+  expect: typeof expect
+  skip: (conditionOrNote?: boolean | string, note?: string) => void
+}
 
 interface RegisteredTest {
   id: number
@@ -7,7 +20,10 @@ interface RegisteredTest {
   suite: string[]
   beforeEach: HookFunction[]
   afterEach: HookFunction[]
-  fn: TestFunction
+  fn?: TestFunction
+  mode: TestMode
+  skipReason?: string
+  tags: string[]
 }
 
 interface SuiteContext {
@@ -21,15 +37,19 @@ interface TestMetadata {
   name: string
   fullName: string
   suite: string[]
+  mode: TestMode
+  skipReason?: string
+  tags: string[]
 }
 
 interface TestResult {
   id: number
   name: string
   fullName: string
-  status: 'passed' | 'failed'
+  status: 'passed' | 'failed' | 'skipped'
   duration: number
   error?: SerializedError
+  skipReason?: string
 }
 
 interface SerializedError {
@@ -47,12 +67,22 @@ interface VoltTestState {
   nextId: number
 }
 
+class SkipError extends Error {
+  constructor(readonly reason?: string) {
+    super(reason || 'Skipped')
+    this.name = 'SkipError'
+  }
+}
+
 const state: VoltTestState = {
   tests: [],
   suite: [],
   suiteStack: [newSuite()],
   nextId: 1
 }
+
+const test = createTestAPI()
+const it = test
 
 function reset() {
   state.tests = []
@@ -73,15 +103,74 @@ function describe(name: string, fn: () => void) {
   }
 }
 
-function test(name: string, fn: TestFunction) {
+function createTestAPI(defaultOptions: TestOptions = {}, chainable = true) {
+  const api = (name: string, optionsOrFn?: TestOptions | TestFunction, maybeFn?: TestFunction) => {
+    const { options, fn } = normalizeTestArgs(defaultOptions, optionsOrFn, maybeFn)
+    registerTest(name, options, fn)
+  }
+
+  if (chainable) {
+    Object.assign(api, {
+      skip: createTestAPI({ ...defaultOptions, skip: true }, false),
+      todo: createTestAPI({ ...defaultOptions, todo: true }, false)
+    })
+  }
+
+  return api as TestAPI
+}
+
+interface TestAPI {
+  (name: string, fn?: TestFunction): void
+  (name: string, options: TestOptions, fn?: TestFunction): void
+  skip: TestAPI
+  todo: TestAPI
+}
+
+function normalizeTestArgs(
+  defaultOptions: TestOptions,
+  optionsOrFn?: TestOptions | TestFunction,
+  maybeFn?: TestFunction
+) {
+  if (typeof optionsOrFn === 'function') {
+    return { options: defaultOptions, fn: optionsOrFn }
+  }
+
+  return {
+    options: { ...defaultOptions, ...(optionsOrFn || {}) },
+    fn: maybeFn
+  }
+}
+
+function registerTest(name: string, options: TestOptions, fn?: TestFunction) {
+  const mode = testMode(options, fn)
+
   state.tests.push({
     id: state.nextId++,
     name,
     suite: [...state.suite],
     beforeEach: state.suiteStack.flatMap((suite) => suite.beforeEach),
     afterEach: state.suiteStack.flatMap((suite) => suite.afterEach).reverse(),
-    fn
+    fn,
+    mode,
+    skipReason: skipReason(options, mode),
+    tags: Array.isArray(options.tags) ? options.tags.map(String) : []
   })
+}
+
+function testMode(options: TestOptions, fn?: TestFunction): TestMode {
+  if (truthyOption(options.skip)) return 'skip'
+  if (truthyOption(options.todo) || fn === undefined) return 'todo'
+  return 'run'
+}
+
+function truthyOption(value: unknown) {
+  return value === true || typeof value === 'string'
+}
+
+function skipReason(options: TestOptions, mode: TestMode) {
+  if (mode === 'skip') return typeof options.skip === 'string' ? options.skip : 'Skipped'
+  if (mode === 'todo') return typeof options.todo === 'string' ? options.todo : 'TODO'
+  return undefined
 }
 
 function beforeEach(fn: HookFunction) {
@@ -162,12 +251,7 @@ function expect(actual: unknown) {
 async function __voltCollectTestModule(code: string, file: string) {
   loadTestModule(code, file)
 
-  return state.tests.map((registered): TestMetadata => ({
-    id: registered.id,
-    name: registered.name,
-    fullName: fullName(registered),
-    suite: registered.suite
-  }))
+  return state.tests.map(metadata)
 }
 
 async function __voltRunTestModule(code: string, file: string, onlyId?: number) {
@@ -180,18 +264,28 @@ async function __voltRunTestModule(code: string, file: string, onlyId?: number) 
   for (const registered of tests) {
     const testStartedAt = Date.now()
 
+    if (registered.mode !== 'run') {
+      results.push(result(registered, 'skipped', testStartedAt, undefined, registered.skipReason))
+      continue
+    }
+
     try {
       for (const hook of registered.beforeEach) await hook()
-      await registered.fn()
+      await registered.fn!(contextFor(registered))
       results.push(result(registered, 'passed', testStartedAt))
     } catch (error) {
-      results.push(result(registered, 'failed', testStartedAt, serializeError(error)))
+      if (error instanceof SkipError) {
+        results.push(result(registered, 'skipped', testStartedAt, undefined, error.reason))
+      } else {
+        results.push(result(registered, 'failed', testStartedAt, serializeError(error)))
+      }
     } finally {
       for (const hook of registered.afterEach) await hook()
     }
   }
 
   const failed = results.filter((item) => item.status === 'failed').length
+  const skipped = results.filter((item) => item.status === 'skipped').length
 
   return {
     file,
@@ -199,6 +293,7 @@ async function __voltRunTestModule(code: string, file: string, onlyId?: number) 
     duration: Date.now() - startedAt,
     total: results.length,
     failed,
+    skipped,
     tests: results
   }
 }
@@ -208,11 +303,36 @@ function loadTestModule(code: string, _file: string) {
   ;(0, eval)(code)
 }
 
+function contextFor(registered: RegisteredTest): TestContext {
+  return {
+    task: metadata(registered),
+    expect,
+    skip(conditionOrNote?: boolean | string, note?: string) {
+      if (conditionOrNote === false) return
+      const reason = typeof conditionOrNote === 'string' ? conditionOrNote : note
+      throw new SkipError(reason)
+    }
+  }
+}
+
+function metadata(registered: RegisteredTest): TestMetadata {
+  return {
+    id: registered.id,
+    name: registered.name,
+    fullName: fullName(registered),
+    suite: registered.suite,
+    mode: registered.mode,
+    ...(registered.skipReason ? { skipReason: registered.skipReason } : {}),
+    tags: registered.tags
+  }
+}
+
 function result(
   registered: RegisteredTest,
-  status: 'passed' | 'failed',
+  status: 'passed' | 'failed' | 'skipped',
   startedAt: number,
-  error?: SerializedError
+  error?: SerializedError,
+  skipReason?: string
 ): TestResult {
   return {
     id: registered.id,
@@ -220,7 +340,8 @@ function result(
     fullName: fullName(registered),
     status,
     duration: Date.now() - startedAt,
-    ...(error ? { error } : {})
+    ...(error ? { error } : {}),
+    ...(skipReason ? { skipReason } : {})
   }
 }
 
@@ -292,7 +413,7 @@ function format(value: unknown) {
 Object.assign(globalThis, {
   describe,
   test,
-  it: test,
+  it,
   beforeEach,
   afterEach,
   expect,

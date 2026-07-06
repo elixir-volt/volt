@@ -145,6 +145,7 @@ defmodule Volt.MixProject do
           Volt.Test.Discovery,
           Volt.Test.ExUnit,
           Volt.Test.Imports,
+          Volt.Test.Lines,
           Volt.Test.Runner,
           Volt.Test.Sigils
         ],
