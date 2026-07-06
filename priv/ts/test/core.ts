@@ -5,7 +5,7 @@ class SkipError extends Error {
   }
 }
 
-const state: VoltTest.State = {
+const state: Volt.Test.State = {
   tests: [],
   suite: [],
   suiteStack: [newSuite()],
@@ -34,11 +34,11 @@ function describe(name: string, fn: () => void) {
   }
 }
 
-function createTestAPI(defaultOptions: VoltTest.TestOptions = {}, chainable = true) {
+function createTestAPI(defaultOptions: Volt.Test.Options = {}, chainable = true) {
   const api = (
     name: string,
-    optionsOrFn?: VoltTest.TestOptions | VoltTest.TestFunction,
-    maybeFn?: VoltTest.TestFunction
+    optionsOrFn?: Volt.Test.Options | Volt.Test.Fn,
+    maybeFn?: Volt.Test.Fn
   ) => {
     const { options, fn } = normalizeTestArgs(defaultOptions, optionsOrFn, maybeFn)
     registerTest(name, options, fn)
@@ -51,13 +51,13 @@ function createTestAPI(defaultOptions: VoltTest.TestOptions = {}, chainable = tr
     })
   }
 
-  return api as VoltTest.TestAPI
+  return api as Volt.Test.API
 }
 
 function normalizeTestArgs(
-  defaultOptions: VoltTest.TestOptions,
-  optionsOrFn?: VoltTest.TestOptions | VoltTest.TestFunction,
-  maybeFn?: VoltTest.TestFunction
+  defaultOptions: Volt.Test.Options,
+  optionsOrFn?: Volt.Test.Options | Volt.Test.Fn,
+  maybeFn?: Volt.Test.Fn
 ) {
   if (typeof optionsOrFn === 'function') {
     return { options: defaultOptions, fn: optionsOrFn }
@@ -69,7 +69,7 @@ function normalizeTestArgs(
   }
 }
 
-function registerTest(name: string, options: VoltTest.TestOptions, fn?: VoltTest.TestFunction) {
+function registerTest(name: string, options: Volt.Test.Options, fn?: Volt.Test.Fn) {
   const mode = testMode(options, fn)
 
   state.tests.push({
@@ -85,7 +85,7 @@ function registerTest(name: string, options: VoltTest.TestOptions, fn?: VoltTest
   })
 }
 
-function testMode(options: VoltTest.TestOptions, fn?: VoltTest.TestFunction): VoltTest.TestMode {
+function testMode(options: Volt.Test.Options, fn?: Volt.Test.Fn): Volt.Test.Mode {
   if (truthyOption(options.skip)) return 'skip'
   if (truthyOption(options.todo) || fn === undefined) return 'todo'
   return 'run'
@@ -95,17 +95,17 @@ function truthyOption(value: unknown) {
   return value === true || typeof value === 'string'
 }
 
-function skipReason(options: VoltTest.TestOptions, mode: VoltTest.TestMode) {
+function skipReason(options: Volt.Test.Options, mode: Volt.Test.Mode) {
   if (mode === 'skip') return typeof options.skip === 'string' ? options.skip : 'Skipped'
   if (mode === 'todo') return typeof options.todo === 'string' ? options.todo : 'TODO'
   return undefined
 }
 
-function beforeEach(fn: VoltTest.HookFunction) {
+function beforeEach(fn: Volt.Test.Hook) {
   currentSuite().beforeEach.push(fn)
 }
 
-function afterEach(fn: VoltTest.HookFunction) {
+function afterEach(fn: Volt.Test.Hook) {
   currentSuite().afterEach.push(fn)
 }
 
@@ -113,7 +113,7 @@ function currentSuite() {
   return state.suiteStack[state.suiteStack.length - 1]
 }
 
-function newSuite(name?: string): VoltTest.SuiteContext {
+function newSuite(name?: string): Volt.Test.Suite {
   return { name, beforeEach: [], afterEach: [] }
 }
 
@@ -121,14 +121,14 @@ function expect(actual: unknown) {
   return createExpectation(actual, false)
 }
 
-function createExpectation(actual: unknown, negated: boolean): VoltTest.Matchers {
+function createExpectation(actual: unknown, negated: boolean): Volt.Test.Matchers {
   const match = (ok: boolean, message: string, expected?: unknown) => {
     if (negated ? ok : !ok) {
       throw assertionError(message, expected, actual)
     }
   }
 
-  const matchers: VoltTest.Matchers = {
+  const matchers: Volt.Test.Matchers = {
     get not() {
       return createExpectation(actual, !negated)
     },
@@ -254,7 +254,7 @@ async function __voltCollectTestModule(code: string, file: string) {
 async function __voltRunTestModule(code: string, file: string, onlyId?: number) {
   loadTestModule(code, file)
 
-  const results: VoltTest.TestResult[] = []
+  const results: Volt.Test.Result[] = []
   const startedAt = Date.now()
   const tests =
     onlyId === undefined ? state.tests : state.tests.filter((test) => test.id === onlyId)
@@ -301,7 +301,7 @@ function loadTestModule(code: string, _file: string) {
   ;(0, eval)(code)
 }
 
-function contextFor(registered: VoltTest.RegisteredTest): VoltTest.TestContext {
+function contextFor(registered: Volt.Test.Registered): Volt.Test.Context {
   return {
     task: metadata(registered),
     expect,
@@ -313,7 +313,7 @@ function contextFor(registered: VoltTest.RegisteredTest): VoltTest.TestContext {
   }
 }
 
-function metadata(registered: VoltTest.RegisteredTest): VoltTest.TestMetadata {
+function metadata(registered: Volt.Test.Registered): Volt.Test.Metadata {
   return {
     id: registered.id,
     name: registered.name,
@@ -326,12 +326,12 @@ function metadata(registered: VoltTest.RegisteredTest): VoltTest.TestMetadata {
 }
 
 function result(
-  registered: VoltTest.RegisteredTest,
+  registered: Volt.Test.Registered,
   status: 'passed' | 'failed' | 'skipped',
   startedAt: number,
-  error?: VoltTest.SerializedError,
+  error?: Volt.Test.SerializedError,
   skipReason?: string
-): VoltTest.TestResult {
+): Volt.Test.Result {
   return {
     id: registered.id,
     name: registered.name,
@@ -343,7 +343,7 @@ function result(
   }
 }
 
-function fullName(registered: VoltTest.RegisteredTest) {
+function fullName(registered: Volt.Test.Registered) {
   return [...registered.suite, registered.name].join(' › ')
 }
 
@@ -355,7 +355,7 @@ function assertionError(message: string, expected: unknown, actual: unknown) {
   return error
 }
 
-function serializeError(error: unknown): VoltTest.SerializedError {
+function serializeError(error: unknown): Volt.Test.SerializedError {
   if (error instanceof Error) {
     const details = error as Error & { expected?: unknown; actual?: unknown }
 
