@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, it, test } from './api'
 import { expect } from './matchers'
-import { __voltCollectTestModule, __voltRunTestModule } from './runner'
+import {
+  __voltCollectLoadedTestModule,
+  __voltCollectTestModule,
+  __voltRunLoadedTestModule,
+  __voltRunTestModule
+} from './runner'
 
 Object.assign(globalThis, {
   describe,
@@ -9,6 +14,8 @@ Object.assign(globalThis, {
   beforeEach,
   afterEach,
   expect,
+  __voltCollectLoadedTestModule,
   __voltCollectTestModule,
+  __voltRunLoadedTestModule,
   __voltRunTestModule
 })

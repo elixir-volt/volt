@@ -8,9 +8,29 @@ export async function __voltCollectTestModule(code: string, file: string) {
   return state.tests.map(metadata)
 }
 
+export async function __voltCollectLoadedTestModule(loader: () => Promise<unknown>, _file: string) {
+  await loadBrowserTestModule(loader)
+
+  return state.tests.map(metadata)
+}
+
 export async function __voltRunTestModule(code: string, file: string, onlyId?: number) {
   loadTestModule(code, file)
 
+  return runLoadedTests(file, onlyId)
+}
+
+export async function __voltRunLoadedTestModule(
+  loader: () => Promise<unknown>,
+  file: string,
+  onlyId?: number
+) {
+  await loadBrowserTestModule(loader)
+
+  return runLoadedTests(file, onlyId)
+}
+
+async function runLoadedTests(file: string, onlyId?: number) {
   const results: Volt.Test.Result[] = []
   const startedAt = Date.now()
   const tests =
@@ -56,6 +76,11 @@ export async function __voltRunTestModule(code: string, file: string, onlyId?: n
 function loadTestModule(code: string, _file: string) {
   reset()
   ;(0, eval)(code)
+}
+
+async function loadBrowserTestModule(loader: () => Promise<unknown>) {
+  reset()
+  await loader()
 }
 
 function runRegisteredTest(registered: Volt.Test.Registered) {

@@ -50,14 +50,17 @@ defmodule Volt.Test.BrowserRunner do
     timeout = Keyword.get(opts, :timeout, config.timeout)
 
     with {:ok, bundled} <- Volt.Builder.bundle(test_bundle_opts(path, config, opts)),
+         {:ok, test_url, cleanup} <- write_browser_test_module(bundled.code),
          {:ok, runtime_code} <- browser_runtime_code(),
          :ok <- ensure_playwright_started(config, timeout),
          {:ok, browser} <- launch_browser(browser(config), timeout: timeout),
          {:ok, context} <- browser_new_context(browser.guid, timeout: timeout),
-         {:ok, %{main_frame: frame}} <- browser_context_new_page(context.guid, timeout: timeout) do
+         {:ok, %{main_frame: frame}} <- browser_context_new_page(context.guid, timeout: timeout),
+         {:ok, _} <- frame_goto(frame.guid, url: test_url.page, timeout: timeout) do
       try do
-        evaluate(frame, runtime_code, bundled.code, path, mode, test_id, timeout)
+        evaluate(frame, runtime_code, test_url.module, path, mode, test_id, timeout)
       after
+        cleanup.()
         browser_context_close(context.guid, timeout: timeout)
         browser_close(browser.guid, timeout: timeout)
       end
@@ -101,7 +104,24 @@ defmodule Volt.Test.BrowserRunner do
   defp browser(%Config{browsers: [browser | _]}), do: browser
   defp browser(%Config{}), do: :chromium
 
-  defp evaluate(frame, runtime_code, test_code, file, mode, test_id, timeout) do
+  defp write_browser_test_module(code) do
+    dir = Path.join(System.tmp_dir!(), "volt-browser-test-#{System.unique_integer([:positive])}")
+    page_path = Path.join(dir, "index.html")
+    module_path = Path.join(dir, "test.mjs")
+
+    with :ok <- File.mkdir_p(dir),
+         :ok <- File.write(page_path, "<!doctype html><meta charset=\"utf-8\">"),
+         :ok <- File.write(module_path, code) do
+      {:ok, %{page: file_url(page_path), module: file_url(module_path)},
+       fn -> File.rm_rf(dir) end}
+    end
+  end
+
+  defp file_url(path) do
+    %URI{scheme: "file", path: Path.expand(path)} |> URI.to_string()
+  end
+
+  defp evaluate(frame, runtime_code, test_url, file, mode, test_id, timeout) do
     with {:ok, _} <-
            frame_evaluate(frame.guid,
              expression: runtime_code,
@@ -113,7 +133,7 @@ defmodule Volt.Test.BrowserRunner do
         expression: "payload => globalThis.__voltExecuteBrowserTest(payload)",
         is_function: true,
         arg: %{
-          "testCode" => test_code,
+          "testUrl" => test_url,
           "file" => file,
           "mode" => Atom.to_string(mode),
           "testId" => test_id
@@ -145,6 +165,10 @@ defmodule Volt.Test.BrowserRunner do
 
   defp browser_context_close(context_guid, opts) do
     apply(PlaywrightEx.BrowserContext, :close, [context_guid, opts])
+  end
+
+  defp frame_goto(frame_guid, opts) do
+    apply(PlaywrightEx.Frame, :goto, [frame_guid, opts])
   end
 
   defp frame_evaluate(frame_guid, opts) do
