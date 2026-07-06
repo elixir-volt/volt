@@ -23,7 +23,7 @@ type TailwindCompiler = {
 }
 
 declare const Beam: {
-  callSync: (name: string, ...args: unknown[]) => any
+  callSync: (name: string, ...args: unknown[]) => unknown
 }
 
 declare const TAILWIND_ROOT: string
@@ -73,7 +73,7 @@ async function compileTailwindCss(
 ) {
   const moduleCache = new Map<string, { exports: unknown }>()
   const rootBase = normalizeBase(base, TAILWIND_DEFAULT_BASE)
-  const css = inputCss == null ? '@import "tailwindcss";' : inputCss
+  const css = inputCss === null ? '@import "tailwindcss";' : inputCss
 
   const compiler = await tailwindExports.compile(css, {
     base: rootBase,
@@ -121,7 +121,7 @@ async function compileTailwindCss(
 }
 
 function normalizeBase(base: string | null | undefined, fallbackBase: string) {
-  return base == null || base === '' ? fallbackBase : base
+  return base === null || base === undefined || base === '' ? fallbackBase : base
 }
 
 function unwrapModule(mod: unknown): unknown {
@@ -140,7 +140,7 @@ function requireResolvedModule(
       moduleCache.set(spec.path, { exports: JSON.parse(spec.code) })
     }
 
-    return moduleCache.get(spec.path)!.exports
+    return moduleCache.get(spec.path)?.exports
   }
 
   return loadCommonJSModule(spec.path, moduleCache, spec.code, spec.base)
@@ -155,7 +155,7 @@ function loadCommonJSModule(
   const resolvedPath = modulePath
 
   if (moduleCache.has(resolvedPath)) {
-    return moduleCache.get(resolvedPath)!.exports
+    return moduleCache.get(resolvedPath)?.exports
   }
 
   const loaded = { exports: {} as unknown }

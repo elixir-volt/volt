@@ -64,7 +64,7 @@ function normalizeTestArgs(
   }
 
   return {
-    options: { ...defaultOptions, ...(optionsOrFn || {}) },
+    options: { ...defaultOptions, ...optionsOrFn },
     fn: maybeFn
   }
 }
@@ -269,7 +269,7 @@ async function __voltRunTestModule(code: string, file: string, onlyId?: number) 
 
     try {
       for (const hook of registered.beforeEach) await hook()
-      await registered.fn!(contextFor(registered))
+      await runRegisteredTest(registered)
       results.push(result(registered, 'passed', testStartedAt))
     } catch (error) {
       if (error instanceof SkipError) {
@@ -299,6 +299,14 @@ async function __voltRunTestModule(code: string, file: string, onlyId?: number) 
 function loadTestModule(code: string, _file: string) {
   reset()
   ;(0, eval)(code)
+}
+
+function runRegisteredTest(registered: Volt.Test.Registered) {
+  if (!registered.fn) {
+    throw new Error(`Missing test function for ${fullName(registered)}`)
+  }
+
+  return registered.fn(contextFor(registered))
 }
 
 function contextFor(registered: Volt.Test.Registered): Volt.Test.Context {

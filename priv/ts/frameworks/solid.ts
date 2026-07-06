@@ -1,26 +1,3 @@
-// Babel's CJS internals call require() at runtime for modules like
-// 'assert' and 'path'. Provide a fallback that delegates to QuickBEAM's
-// node globals where available.
-const _globals = globalThis as Record<string, unknown>
-
-const assert = (value: unknown, message?: string) => {
-  if (!value) throw new Error(message || 'assertion failed')
-}
-assert.ok = assert
-assert.equal = (a: unknown, b: unknown, msg?: string) => {
-  if (a != b) throw new Error(msg || `assert.equal: ${a} != ${b}`)
-}
-assert.strictEqual = (a: unknown, b: unknown, msg?: string) => {
-  if (a !== b) throw new Error(msg || `assert.strictEqual: ${a} !== ${b}`)
-}
-
-_globals.require = (name: string) => {
-  if (name === 'assert') return assert
-  const builtin = _globals[name] ?? _globals[name.replace('node:', '')]
-  if (builtin !== undefined) return builtin
-  throw new Error(`require: module '${name}' not available`)
-}
-
 interface BabelTransformResult {
   code?: string
   map?: unknown
@@ -71,15 +48,15 @@ async function compileSolid(
     presets.push([
       'typescript',
       {
-        isTSX: /\.tsx$/.test(filename),
+        isTSX: filename.endsWith('.tsx'),
         allExtensions: true,
         allowDeclareFields: true,
-        ...(options.typescriptOptions ?? {})
+        ...options.typescriptOptions
       }
     ])
   }
 
-  presets.push(['solid', options.solidOptions ?? {}])
+  presets.push(['solid', options.solidOptions])
 
   const result = Babel.transform(source, {
     filename,

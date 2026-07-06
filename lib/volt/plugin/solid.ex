@@ -17,6 +17,7 @@ defmodule Volt.Plugin.Solid do
   }
 
   @runtime_name __MODULE__.Runtime
+  @support_modules {:volt, "ts"}
   @jsx_exts ~w(.jsx .tsx)
   @impl true
   def name, do: "solid"
@@ -62,6 +63,10 @@ defmodule Volt.Plugin.Solid do
 
   def runtime_packages, do: @runtime_packages
 
+  defp cjs_require_preamble do
+    Volt.Priv.read!(@support_modules, "runtime/cjs-require-preamble.js")
+  end
+
   defp do_compile(source, filename, opts, plugin_opts) do
     runtime =
       Volt.JS.Runtime.ensure!(
@@ -70,6 +75,7 @@ defmodule Volt.Plugin.Solid do
         apis: [:browser, :node],
         entry: {:volt_asset, "frameworks/solid.ts"},
         bundle: true,
+        bundle_opts: [preamble: cjs_require_preamble()],
         max_stack_size: 32 * 1024 * 1024
       )
 

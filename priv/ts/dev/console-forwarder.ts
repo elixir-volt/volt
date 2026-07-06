@@ -46,7 +46,7 @@ function send(level: ConsoleLevel, args: unknown[]) {
     headers: { 'content-type': 'application/json' },
     body: payload,
     keepalive: true
-  }).catch(() => {})
+  }).catch(() => undefined)
 }
 
 function serialize(value: unknown): unknown {
@@ -68,6 +68,7 @@ function serialize(value: unknown): unknown {
     try {
       return String(value)
     } catch {
+      // Ignore secondary stringification errors and use a stable placeholder.
       return '[unserializable]'
     }
   }

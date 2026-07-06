@@ -169,7 +169,7 @@ defmodule Volt.JS.Runtime do
         path = Entry.materialize(entry, runtime.install_dir)
 
         if Keyword.get(opts, :bundle, false) do
-          bundle_entry!(path, runtime)
+          bundle_entry!(path, runtime, opts)
         else
           path
         end
@@ -179,13 +179,18 @@ defmodule Volt.JS.Runtime do
     end
   end
 
-  defp bundle_entry!(path, runtime) do
+  defp bundle_entry!(path, runtime, opts) do
     bundle_path = bundle_cache_path(path, runtime)
 
     if File.regular?(bundle_path) do
       bundle_path
     else
-      case Bundler.bundle_file(path, node_modules: runtime.node_modules) do
+      bundle_opts =
+        opts
+        |> Keyword.get(:bundle_opts, [])
+        |> Keyword.put(:node_modules, runtime.node_modules)
+
+      case Bundler.bundle_file(path, bundle_opts) do
         {:ok, code} when is_binary(code) ->
           write_bundle!(bundle_path, code)
 
