@@ -186,6 +186,38 @@ expect('volt').not.toContain('vite')
 expect(1 + 1).not.toBe(3)
 ```
 
+## Browser tests
+
+Use `browser: true` when tests need real browser globals such as `window`, `document`, layout APIs, or DOM events:
+
+```elixir
+Volt.Test.ExUnit.install(
+  root: "test/browser",
+  include: ["**/*.browser.test.ts"],
+  browser: true
+)
+```
+
+Browser tests still use the same `volt:test` API and still register one ExUnit test per JS `test(...)`:
+
+```ts
+import { test, expect } from 'volt:test'
+
+test('updates the DOM', () => {
+  document.body.innerHTML = '<button id="save">Save</button>'
+  expect(document.querySelector('#save')?.textContent).toBe('Save')
+})
+```
+
+Volt runs these tests through PlaywrightEx. Install Playwright for local browser execution:
+
+```bash
+npm install --save-dev playwright
+npx playwright install chromium
+```
+
+By default Volt uses `node_modules/.bin/playwright` when present, otherwise `playwright` from `PATH`. Pass PlaywrightEx supervisor options with `playwright: [...]` if your executable lives elsewhere.
+
 ## ExUnit integration
 
 Each collected JS/TS `test(...)` becomes an ExUnit test. That means normal ExUnit filtering, formatters, failures, and CI behavior continue to work.
@@ -229,4 +261,4 @@ Available sigils: `~JS`, `~TS`, `~JSX`, `~TSX`, `~CSS`, and `~HTML`.
 
 ## Current scope
 
-The current runner is focused on JS/TS unit tests in QuickBEAM. Browser tests through `volt:test/browser` and PlaywrightEx are planned separately, but the core `mix test` integration is already in place.
+The QuickBEAM runner is intended for fast JS/TS unit tests. The browser runner is intended for tests that genuinely need a browser environment. Higher-level Phoenix end-to-end flows can still use PlaywrightEx or Phoenix-oriented browser-test helpers alongside Volt's JS test runner.

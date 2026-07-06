@@ -17,6 +17,9 @@ defmodule Volt.Test.ExUnit do
   This keeps `mix test` as the single test entry point. JavaScript and
   TypeScript files are represented as generated ExUnit modules and participate
   in normal ExUnit tags, formatters, failures, and CI behavior.
+
+  Pass `browser: true` to execute tests in a real Playwright browser instead
+  of QuickBEAM while keeping the same ExUnit registration model.
   """
 
   alias Volt.Test.Config
@@ -29,24 +32,24 @@ defmodule Volt.Test.ExUnit do
 
     config
     |> Discovery.files()
-    |> Enum.map(&define_test_module(&1, profile))
+    |> Enum.map(&define_test_module(&1, profile, config))
   end
 
-  defp define_test_module(file, profile) do
+  defp define_test_module(file, profile, config) do
     module = module_name(file)
 
     unless Code.ensure_loaded?(module) do
-      tests = collect_tests!(file, profile)
+      tests = collect_tests!(file, profile, config)
 
       [{_compiled_module, _bytecode}] =
-        Code.compile_quoted(bridge_module(module, file, profile, tests), file)
+        Code.compile_quoted(bridge_module(module, file, profile, config, tests), file)
     end
 
     module
   end
 
-  defp collect_tests!(file, profile) do
-    case Volt.Test.Runner.collect_file(file, profile: profile) do
+  defp collect_tests!(file, profile, config) do
+    case runner(config).collect_file(file, profile: profile, config: config) do
       {:ok, [_ | _] = tests} -> tests
       {:ok, []} -> raise "Volt JS test file #{file} did not define any tests"
       {:error, reason} -> raise "could not collect Volt JS tests from #{file}: #{inspect(reason)}"
@@ -58,8 +61,8 @@ defmodule Volt.Test.ExUnit do
     Module.concat([Volt.Generated.JSTest, "Test#{hash}"])
   end
 
-  defp bridge_module(module, file, profile, tests) do
-    test_defs = Enum.map(tests, &test_definition(file, profile, &1))
+  defp bridge_module(module, file, profile, config, tests) do
+    test_defs = Enum.map(tests, &test_definition(file, profile, config, &1))
 
     quote do
       defmodule unquote(module) do
@@ -70,7 +73,7 @@ defmodule Volt.Test.ExUnit do
     end
   end
 
-  defp test_definition(file, profile, %{"id" => test_id} = test) do
+  defp test_definition(file, profile, config, %{"id" => test_id} = test) do
     name = test["fullName"] || test["name"] || inspect(test_id)
     function = Macro.unique_var(:name, __MODULE__)
 
@@ -92,8 +95,9 @@ defmodule Volt.Test.ExUnit do
     body =
       quote do
         assert {:ok, result} =
-                 Volt.Test.Runner.run_test(unquote(file), unquote(test_id),
-                   profile: unquote(profile)
+                 unquote(runner(config)).run_test(unquote(file), unquote(test_id),
+                   profile: unquote(profile),
+                   config: unquote(Macro.escape(config))
                  )
 
         Volt.Test.Assertions.assert_passed!(result)
@@ -102,6 +106,9 @@ defmodule Volt.Test.ExUnit do
     def_ast = {:def, [], [{{:unquote, [], [function]}, [], [{:_, [], Elixir}]}, [do: body]]}
     {:__block__, [], [register, def_ast]}
   end
+
+  defp runner(%Config{browser: true}), do: Volt.Test.BrowserRunner
+  defp runner(%Config{}), do: Volt.Test.Runner
 
   defp test_tags(file, test) do
     [
