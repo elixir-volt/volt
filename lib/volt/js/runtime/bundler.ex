@@ -36,7 +36,7 @@ defmodule Volt.JS.Runtime.Bundler do
     context = %{
       project_root: project_root,
       builtin_shims: builtin_shims,
-      shim_labels: shim_labels(builtin_shims)
+      shim_labels: shim_labels(builtin_shims, project_root)
     }
 
     case do_collect(entry_path, context, [], MapSet.new()) do
@@ -114,9 +114,11 @@ defmodule Volt.JS.Runtime.Bundler do
     end
   end
 
-  defp shim_labels(builtin_shims) do
+  defp shim_labels(builtin_shims, project_root) do
     builtin_shims
-    |> Enum.map(fn {_builtin, path} -> {Path.expand(path), shim_label_for_path(path)} end)
+    |> Enum.map(fn {_builtin, path} -> Path.expand(path) end)
+    |> Enum.reject(&Volt.Path.inside?(&1, project_root))
+    |> Enum.map(&{&1, shim_label_for_path(&1)})
     |> Map.new()
   end
 
