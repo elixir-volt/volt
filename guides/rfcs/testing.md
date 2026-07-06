@@ -157,12 +157,12 @@ Proposed modules:
 Runtime assets and types:
 
 - `priv/ts/test/core.ts` — `describe`, `test`, `test.skip`, `test.todo`, hooks, context `skip`, and `expect`. Initial implementation provides globals and structured result serialization, dogfooded by `test/volt/test/fixtures/core_api.test.ts` importing a relative fixture module.
-- `priv/types/test/volt-test.d.ts` — canonical `volt:test` type contract, including a global `VoltTest` namespace used by the runtime implementation so the API shape is not duplicated between implementation and ambient module declarations.
+- `priv/types/test/volt-test.d.ts` — canonical `volt:test` type contract, including the shared `Volt.Test` namespace used by the runtime implementation so the API shape is not duplicated between implementation and ambient module declarations.
 - `priv/types/internal/support-globals.d.ts` — private Volt support-module globals such as `$css` and `$mod_url`.
 - `priv/types/client/hmr.d.ts` — app-facing HMR browser globals.
-- `priv/types/frameworks/*.d.ts` — framework/compiler-specific shims split per framework.
-- `priv/ts/test/runner.ts` — collection/execution protocol used by `Volt.Test.Runner`.
-- `priv/ts/test/browser.ts` — browser fixture API and JS proxies for Playwright commands.
+- `priv/types/frameworks/*.d.ts` — framework/compiler-specific declaration shims split per framework.
+- `priv/ts/test/core.ts` — collection/execution protocol used by `Volt.Test.Runner`.
+- Future `volt:test/browser` runtime assets — browser fixture API and JS proxies for Playwright commands.
 
 ### Execution model
 
@@ -210,7 +210,7 @@ Suggested runtime options:
 ```elixir
 Volt.JS.Runtime.ensure!(
   name: {:global, {:volt_test_runtime, profile}},
-  entry: {:volt_asset, "test/runner.ts"},
+  entry: {:volt_asset, "test/core.ts"},
   bundle: true,
   apis: [:browser, :node],
   handlers: Volt.Test.Runner.handlers(context)

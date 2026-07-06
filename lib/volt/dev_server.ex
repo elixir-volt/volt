@@ -725,7 +725,7 @@ defmodule Volt.DevServer do
 
   defp error_overlay_invocation(message) do
     "renderErrorOverlay($message, $options)"
-    |> OXC.parse!("error-overlay-invocation.ts")
+    |> OXC.parse!("volt-error-overlay-call.ts")
     |> OXC.bind(message: {:literal, message}, options: {:literal, %{title: "Compilation error"}})
     |> OXC.codegen!()
   end
