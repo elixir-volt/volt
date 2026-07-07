@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Added `Volt.Test.Case` for inline ExUnit assertions against JavaScript and TypeScript snippets using `assert ~JS`, `assert ~TS`, `assert ~JSX`, and `assert ~TSX`.
+
 ## 0.15.2 - 2026-07-06
 
 ### Fixed

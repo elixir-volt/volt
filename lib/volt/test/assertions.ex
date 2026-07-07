@@ -5,6 +5,74 @@ defmodule Volt.Test.Assertions do
 
   import ExUnit.Assertions
 
+  @doc """
+  Runs JavaScript-like sigils as Volt test assertions.
+
+  This extends ExUnit's `assert/1` for `~JS`, `~TS`, `~JSX`, and `~TSX`
+  snippets while delegating all other expressions to `ExUnit.Assertions.assert/1`.
+  """
+  defmacro assert(source)
+
+  defmacro assert(source) do
+    case js_sigil_extension(source) do
+      nil ->
+        quote do
+          ExUnit.Assertions.assert(unquote(source))
+        end
+
+      extension ->
+        assert_js_quote(source, [extension: extension], __CALLER__)
+    end
+  end
+
+  @doc """
+  Delegates to ExUnit's `assert/2`.
+  """
+  defmacro assert(source, message) do
+    quote do
+      ExUnit.Assertions.assert(unquote(source), unquote(message))
+    end
+  end
+
+  @doc """
+  Runs a JavaScript or TypeScript snippet as a Volt test assertion.
+
+  The snippet body is wrapped in a single Volt `test(...)`. Top-level import
+  declarations are preserved outside the wrapper so snippets can import app
+  code while keeping assertions inline in ExUnit tests.
+  """
+  defmacro assert_js(source, opts \\ []) do
+    assert_js_quote(source, maybe_put_sigil_extension(source, opts), __CALLER__)
+  end
+
+  defp assert_js_quote(source, opts, caller) do
+    config = Module.get_attribute(caller.module, :volt_test_config) || []
+
+    quote do
+      Volt.Test.Assertions.__assert_js__(
+        unquote(source),
+        Keyword.merge(unquote(Macro.escape(config)), unquote(opts)),
+        %{file: __ENV__.file, line: __ENV__.line, module: __MODULE__}
+      )
+    end
+  end
+
+  defp maybe_put_sigil_extension(source, opts) do
+    case {Keyword.has_key?(opts, :extension), js_sigil_extension(source)} do
+      {false, extension} when is_binary(extension) -> Keyword.put(opts, :extension, extension)
+      _ -> opts
+    end
+  end
+
+  defp js_sigil_extension({:sigil_JS, _meta, _args}), do: ".js"
+  defp js_sigil_extension({:sigil_TS, _meta, _args}), do: ".ts"
+  defp js_sigil_extension({:sigil_JSX, _meta, _args}), do: ".jsx"
+  defp js_sigil_extension({:sigil_TSX, _meta, _args}), do: ".tsx"
+  defp js_sigil_extension(_source), do: nil
+
+  @doc false
+  def __assert_js__(source, opts, caller), do: Volt.Test.Inline.assert!(source, opts, caller)
+
   @spec assert_passed!(Volt.Test.Result.t()) :: :ok
   def assert_passed!(%Volt.Test.Result{status: :passed}), do: :ok
 

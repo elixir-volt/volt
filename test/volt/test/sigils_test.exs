@@ -13,6 +13,8 @@ defmodule Volt.Test.SigilsTest do
 
   test "validates JS-like sigils with the v modifier" do
     assert ~TS"const value: number = 1"v == "const value: number = 1"
+    assert ~JSX"const node = <div />"v == "const node = <div />"
+    assert ~TSX"const node: JSX.Element = <div />"v == "const node: JSX.Element = <div />"
 
     assert_raise ArgumentError, ~r/invalid snippet\.ts source/, fn ->
       ~TS"const = ;"v

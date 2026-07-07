@@ -107,6 +107,68 @@ test('uses helper module', () => {
 })
 ```
 
+## Inline ExUnit assertions
+
+For small checks that belong next to ordinary Elixir tests, use `Volt.Test.Case` and assert against a JavaScript-like sigil:
+
+```elixir
+defmodule MyApp.FrontendTest do
+  use Volt.Test.Case, async: false
+
+  test "formats a label" do
+    assert ~TS"""
+    const label: string = "hello volt"
+
+    expect(label.toUpperCase()).toBe("HELLO VOLT")
+    """
+  end
+end
+```
+
+`Volt.Test.Case` keeps normal ExUnit assertions working and adds inline support for `~JS`, `~TS`, `~JSX`, and `~TSX`. The snippet is wrapped as one Volt JavaScript test. Top-level imports stay top-level, so snippets can import application code:
+
+```elixir
+defmodule MyApp.CounterTest do
+  use Volt.Test.Case, async: false
+
+  test "uses app code" do
+    assert ~TS"""
+    import { label } from "app/counter"
+
+    expect(label()).toBe("Count")
+    """
+  end
+end
+```
+
+Inline assertions use the same global `config :volt, :test` settings as file-based tests. Put aliases and framework plugins in `config/test.exs` when they are shared:
+
+```elixir
+config :volt, :test,
+  bundle: [
+    aliases: %{"app" => "assets/js"},
+    plugins: [Volt.Plugin.React]
+  ]
+```
+
+Module-level options are useful when a group of inline assertions needs a different environment:
+
+```elixir
+defmodule MyApp.BrowserSnippetTest do
+  use Volt.Test.Case, async: false, browser: true
+
+  test "updates the DOM" do
+    assert ~TS"""
+    document.body.innerHTML = "<button>Save</button>"
+
+    expect(document.querySelector("button")?.textContent).toBe("Save")
+    """
+  end
+end
+```
+
+Use file-based tests for larger JS suites, repeated setup, or behavior that is primarily owned by browser code. Use inline assertions for compact checks that read better inside an ExUnit module.
+
 ## Test and suite modifiers
 
 Skip or mark tests as TODO:
