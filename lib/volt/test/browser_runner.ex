@@ -15,7 +15,7 @@ defmodule Volt.Test.BrowserRunner do
   def collect_file(path, opts \\ []) do
     with {:ok, tests} <- call_browser_runtime(path, :collect, nil, opts) do
       tests = Enum.map(tests, &Volt.Test.Result.Metadata.from_map!/1)
-      add_source_lines(path, tests)
+      Volt.Test.Shared.add_source_lines(path, tests)
     end
   end
 
@@ -33,23 +33,11 @@ defmodule Volt.Test.BrowserRunner do
     end
   end
 
-  defp add_source_lines(path, tests) do
-    with {:ok, source} <- File.read(path),
-         {:ok, lines} <- Volt.Test.Lines.test_lines(source, Path.basename(path)) do
-      {:ok,
-       tests
-       |> Enum.zip(lines)
-       |> Enum.map(fn {test, line} -> %{test | line: line} end)}
-    else
-      {:error, _} -> {:ok, tests}
-    end
-  end
-
   defp call_browser_runtime(path, mode, test_id, opts) do
     config = Keyword.fetch!(opts, :config)
     timeout = Keyword.get(opts, :timeout, config.timeout)
 
-    with {:ok, bundled} <- Volt.Builder.bundle(test_bundle_opts(path, config, opts)),
+    with {:ok, bundled} <- Volt.Builder.bundle(Volt.Test.Shared.bundle_opts(path, config, opts)),
          {:ok, test_url, cleanup} <- write_browser_test_module(bundled.code),
          {:ok, runtime_code} <- browser_runtime_code(),
          :ok <- ensure_playwright_started(config, timeout),
@@ -65,18 +53,6 @@ defmodule Volt.Test.BrowserRunner do
         browser_close(browser.guid, timeout: timeout)
       end
     end
-  end
-
-  defp test_bundle_opts(path, %Config{} = config, opts) do
-    config.bundle
-    |> Keyword.merge(Keyword.get(opts, :bundle, []))
-    |> Keyword.put(:entry, path)
-    |> Keyword.put_new(:format, :iife)
-    |> Keyword.put_new(:minify, false)
-    |> Keyword.put_new(:sourcemap, true)
-    |> Keyword.put_new(:code_splitting, false)
-    |> Keyword.put_new(:mode, "test")
-    |> Keyword.update(:plugins, [Volt.Test.Plugin], &[Volt.Test.Plugin | List.wrap(&1)])
   end
 
   defp browser_runtime_code do

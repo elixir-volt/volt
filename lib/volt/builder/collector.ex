@@ -222,14 +222,7 @@ defmodule Volt.Builder.Collector do
     if asset_module_query?(path) do
       source
     else
-      case Volt.Pipeline.compile(path, source,
-             target: ctx.target,
-             import_source: ctx.import_source,
-             mode: :production,
-             define: ctx.define,
-             plugins: ctx.plugins,
-             loaders: ctx.loaders
-           ) do
+      case Volt.Builder.Compiler.compile(path, source, ctx) do
         {:ok, %{type: :js, code: code}} -> code
         _ -> source
       end

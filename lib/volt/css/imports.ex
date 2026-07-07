@@ -87,7 +87,7 @@ defmodule Volt.CSS.Imports do
 
       if File.dir?(package_dir) do
         case NPM.Resolution.PackageResolver.resolve_entry(package_dir,
-               subpath: subpath_for(specifier),
+               subpath: Volt.JS.Package.subpath_for(specifier),
                conditions: @css_conditions,
                extensions: @css_extensions
              ) do
@@ -96,13 +96,6 @@ defmodule Volt.CSS.Imports do
         end
       end
     end)
-  end
-
-  defp subpath_for(specifier) do
-    case NPM.Resolution.PackageResolver.split_specifier(specifier) do
-      {_, nil} -> "."
-      {_, subpath} -> subpath
-    end
   end
 
   defp import_rule_bounds(css, %{start: start, end: finish}) do

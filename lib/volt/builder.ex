@@ -454,14 +454,7 @@ defmodule Volt.Builder do
         compile_asset_module(path, query, ctx)
 
       true ->
-        case Volt.Pipeline.compile(module_id, source,
-               target: ctx.target,
-               import_source: ctx.import_source,
-               mode: :production,
-               define: ctx.define,
-               plugins: ctx.plugins,
-               loaders: ctx.loaders
-             ) do
+        case Volt.Builder.Compiler.compile(module_id, source, ctx) do
           {:ok, %{code: code, css: css}} -> {:ok, code, css, []}
           {:error, _} = error -> error
         end
@@ -499,14 +492,7 @@ defmodule Volt.Builder do
   end
 
   defp compile_css_import(path, source, ctx) do
-    case Volt.Pipeline.compile(path, source,
-           target: ctx.target,
-           import_source: ctx.import_source,
-           mode: :production,
-           define: ctx.define,
-           plugins: ctx.plugins,
-           loaders: ctx.loaders
-         ) do
+    case Volt.Builder.Compiler.compile(path, source, ctx) do
       {:ok, %{code: css}} -> {:ok, "export default undefined;", css, []}
       {:error, _} = error -> error
     end

@@ -46,12 +46,13 @@ defmodule Volt.Test.Assertions do
   end
 
   defp assert_js_quote(source, opts, caller) do
-    config = Module.get_attribute(caller.module, :volt_test_config) || []
+    config = caller.module |> Module.get_attribute(:volt_test_config) |> Kernel.||([])
+    config = Macro.escape(config)
 
     quote do
       Volt.Test.Assertions.__assert_js__(
         unquote(source),
-        Keyword.merge(unquote(Macro.escape(config)), unquote(opts)),
+        Keyword.merge(unquote(config), unquote(opts)),
         %{file: __ENV__.file, line: __ENV__.line, module: __MODULE__}
       )
     end
@@ -124,15 +125,14 @@ defmodule Volt.Test.Assertions do
   defp stack([]), do: nil
 
   defp stack(lines) do
-    "\nJS stacktrace:\n" <> Enum.join(lines, "\n")
+    IO.iodata_to_binary(["\nJS stacktrace:\n", Enum.intersperse(lines, "\n")])
   end
 
   defp clean_stack(stack) when is_binary(stack) do
     stack
     |> String.split("\n")
     |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.reject(&framework_stack?/1)
+    |> Enum.reject(&(&1 == "" or framework_stack?(&1)))
   end
 
   defp clean_stack(_), do: []

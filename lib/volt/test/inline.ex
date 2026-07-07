@@ -77,18 +77,21 @@ defmodule Volt.Test.Inline do
   defp import_ranges(_ast), do: []
 
   defp extract_ranges(source, ranges) do
-    ranges
-    |> Enum.map(fn {start_pos, end_pos} ->
+    Enum.map_join(ranges, "\n", fn {start_pos, end_pos} ->
       binary_part(source, start_pos, end_pos - start_pos)
     end)
-    |> Enum.join("\n")
   end
 
   defp remove_ranges(source, ranges) do
-    ranges
-    |> Enum.sort_by(&elem(&1, 0), :desc)
-    |> Enum.reduce(source, fn {start_pos, end_pos}, acc ->
-      binary_part(acc, 0, start_pos) <> binary_part(acc, end_pos, byte_size(acc) - end_pos)
-    end)
+    {parts, position} =
+      ranges
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.reduce({[], 0}, fn {start_pos, end_pos}, {parts, position} ->
+        part = binary_part(source, position, start_pos - position)
+        {[part | parts], end_pos}
+      end)
+
+    tail = binary_part(source, position, byte_size(source) - position)
+    IO.iodata_to_binary(Enum.reverse([tail | parts]))
   end
 end

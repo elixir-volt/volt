@@ -16,12 +16,14 @@ ast_side_effects = app_config ++ file_mutation ++ ["System.cmd", "QuickBEAM.*"] 
 adapter = [
   "Mix.Tasks.Volt.*",
   "Volt",
-  "Volt.Formatter"
+  "Volt.Formatter",
+  "Volt.Test.*"
 ]
 
 orchestrator = [
   "Volt.Builder",
   "Volt.Builder.Collector",
+  "Volt.Builder.Compiler",
   "Volt.Builder.Externals",
   "Volt.Builder.Output",
   "Volt.Builder.Rewriter",
@@ -35,6 +37,7 @@ orchestrator = [
 
 model = [
   "Volt.Builder.BuildContext",
+  "Volt.Builder.Bundle",
   "Volt.Builder.Collector.State",
   "Volt.Builder.Context",
   "Volt.Builder.Dependencies",
@@ -65,6 +68,7 @@ logic = [
   "Volt.ChunkGraph",
   "Volt.CSS.AST",
   "Volt.CSS.AssetURLRewriter",
+  "Volt.CSS.Imports",
   "Volt.CSS.Dependencies",
   "Volt.CSS.Modules",
   "Volt.Env",
@@ -76,9 +80,11 @@ logic = [
   "Volt.JS.Format",
   "Volt.JS.Helpers",
   "Volt.JS.ImportExtractor",
+  "Volt.JS.Package",
   "Volt.JS.Patch",
   "Volt.JS.PrebundleEntry",
   "Volt.JS.Resolution",
+  "Volt.JS.Specifier",
   "Volt.JS.Resolver",
   "Volt.JS.Transforms.AssetURLs",
   "Volt.JS.Transforms.DynamicImports",
@@ -103,9 +109,11 @@ logic = [
 
 infrastructure = [
   "Volt.Application",
+  "Volt.Builder.CSS",
   "Volt.Builder.Writer",
   "Volt.Cache",
   "Volt.Dev.ConsoleForwarder",
+  "Volt.Dev.ConsoleForwarder.Payload",
   "Volt.ETS",
   "Volt.HMR.Boundary",
   "Volt.HMR.GlobGraph",

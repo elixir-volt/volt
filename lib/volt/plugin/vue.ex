@@ -76,14 +76,22 @@ defmodule Volt.Plugin.Vue do
         |> embedded_modules(source, opts)
         |> Volt.Plugin.EmbeddedModule.normalize_all()
         |> Enum.filter(&(&1.type == :style))
-        |> Enum.map_join("", fn module ->
-          "\nimport #{inspect(Volt.Plugin.EmbeddedModule.specifier(path, module))};"
-        end)
+        |> Enum.map(&style_import(path, &1))
 
-      code <> style_imports
+      IO.iodata_to_binary([code | style_imports])
     else
       code
     end
+  end
+
+  defp style_import(path, module) do
+    specifier = Volt.Plugin.EmbeddedModule.specifier(path, module)
+
+    "import \"__specifier__\";"
+    |> OXC.parse!("vue-style-import-template.ts")
+    |> Volt.JS.AST.replace_literal("__specifier__", specifier)
+    |> OXC.codegen!()
+    |> then(&["\n", String.trim(&1)])
   end
 
   defp imports(source), do: source |> scripts() |> Enum.flat_map(&script_imports/1)

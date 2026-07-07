@@ -1,7 +1,7 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
-  @version "0.15.3"
+  @version "0.15.4"
   @source_url "https://github.com/elixir-volt/volt"
 
   def project do
@@ -121,7 +121,7 @@ defmodule Volt.MixProject do
         "Dev Server": [Volt.DevServer, Volt.Watcher, Volt.HMR, Volt.Dev.ConsoleForwarder],
         "Production Build": [Volt.Builder, Volt.Builder.Bundle, Volt.ChunkGraph, Volt.PublicDir],
         "Tailwind CSS": [Volt.Tailwind],
-        CSS: [Volt.CSS.Modules],
+        CSS: [Volt.CSS.Imports, Volt.CSS.Modules],
         Plugins: [
           Volt.Plugin.Vue,
           Volt.Plugin.Svelte,
@@ -142,15 +142,19 @@ defmodule Volt.MixProject do
         Testing: [
           Volt.Test.Assertions,
           Volt.Test.BrowserRunner,
+          Volt.Test.Case,
           Volt.Test.Config,
           Volt.Test.Discovery,
           Volt.Test.ExUnit,
+          Volt.Test.Inline,
           Volt.Test.Lines,
+          Volt.Test.Plugin,
           Volt.Test.Result,
           Volt.Test.Result.Metadata,
           Volt.Test.Result.SerializedError,
           Volt.Test.Result.Test,
           Volt.Test.Runner,
+          Volt.Test.Shared,
           Volt.Test.Sigils
         ],
         "Mix Tasks": [
@@ -162,8 +166,10 @@ defmodule Volt.MixProject do
           Mix.Tasks.Volt.Install
         ],
         "Internals: Builder": [
+          Volt.Builder.CSS,
           Volt.Builder.Collector,
           Volt.Builder.Collector.State,
+          Volt.Builder.Compiler,
           Volt.Builder.Context,
           Volt.Builder.BuildContext,
           Volt.Builder.Dependencies,
@@ -192,7 +198,8 @@ defmodule Volt.MixProject do
         "Internals: Dev Server": [
           Volt.Cache,
           Volt.DevServer.CacheEntry,
-          Volt.DevServer.Config
+          Volt.DevServer.Config,
+          Volt.Dev.ConsoleForwarder.Payload
         ],
         "Internals: HMR": [
           Volt.HMR.Boundary,
@@ -213,6 +220,7 @@ defmodule Volt.MixProject do
           Volt.JS.Helpers,
           Volt.JS.ImportExtractor,
           Volt.JS.ImportExtractor.Result,
+          Volt.JS.Package,
           Volt.JS.Patch,
           Volt.JS.PrebundleEntry,
           Volt.JS.PrebundleEntry.Export,
@@ -223,6 +231,7 @@ defmodule Volt.MixProject do
           Volt.JS.Runtime.Entry,
           Volt.JS.Runtime.Error,
           Volt.JS.Runtime.Installer,
+          Volt.JS.Specifier,
           Volt.JS.Transforms.AssetURLs,
           Volt.JS.Transforms.DynamicImports,
           Volt.JS.Transforms.DynamicImports.Replacement,

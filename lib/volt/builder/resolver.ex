@@ -147,7 +147,7 @@ defmodule Volt.Builder.Resolver do
   end
 
   defp resolve_in_package(specifier, dir, package_dir, plugins) do
-    subpath = subpath_for(specifier)
+    subpath = Volt.JS.Package.subpath_for(specifier)
     extensions = Volt.JS.Extensions.resolvable(plugins)
 
     case NPM.Resolution.PackageResolver.resolve_entry(package_dir,
@@ -194,13 +194,6 @@ defmodule Volt.Builder.Resolver do
          ) do
       {:ok, path} -> path
       :error -> nil
-    end
-  end
-
-  defp subpath_for(specifier) do
-    case NPM.Resolution.PackageResolver.split_specifier(specifier) do
-      {_, nil} -> "."
-      {_, subpath} -> subpath
     end
   end
 end

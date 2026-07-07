@@ -22,8 +22,8 @@ defmodule Volt.Builder.Writer do
 
   def write_css(css_parts, outdir, name, hash, bundle_opts) do
     with {:ok, %{code: css_code, assets: assets}} <-
-           rewrite_css_parts(css_parts, outdir, bundle_opts),
-         {:ok, css_code} <- compile_css(css_code, bundle_opts) do
+           Volt.Builder.CSS.rewrite_parts(css_parts, outdir, bundle_opts),
+         {:ok, css_code} <- Volt.Builder.CSS.compile(css_code, bundle_opts) do
       css_filename = hashed_name(name, css_code, ".css", hash)
       css_path = Path.join(outdir, css_filename)
       File.write!(css_path, css_code)
@@ -35,8 +35,8 @@ defmodule Volt.Builder.Writer do
     File.mkdir_p!(outdir)
 
     with {:ok, %{code: css_code, assets: assets}} <-
-           rewrite_css_part({source_path, css_code}, outdir, bundle_opts),
-         {:ok, css_code} <- compile_css(css_code, bundle_opts) do
+           Volt.Builder.CSS.rewrite_part({source_path, css_code}, outdir, bundle_opts),
+         {:ok, css_code} <- Volt.Builder.CSS.compile(css_code, bundle_opts) do
       css_filename = hashed_name(name, css_code, ".css", hash)
       css_path = Path.join(outdir, css_filename)
 
@@ -64,44 +64,6 @@ defmodule Volt.Builder.Writer do
          css: css_result,
          manifest: manifest
        }}
-    end
-  end
-
-  defp rewrite_css_parts(css_parts, outdir, bundle_opts) do
-    css_parts
-    |> Enum.reduce_while({:ok, [], []}, fn css_part, {:ok, code_parts, assets} ->
-      case rewrite_css_part(css_part, outdir, bundle_opts) do
-        {:ok, %{code: code, assets: part_assets}} ->
-          {:cont, {:ok, [code | code_parts], merge_assets(assets, part_assets)}}
-
-        {:error, _} = error ->
-          {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, code_parts, assets} ->
-        {:ok, %{code: code_parts |> Enum.reverse() |> Enum.join("\n"), assets: assets}}
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  defp rewrite_css_part({source_path, css}, outdir, bundle_opts) do
-    with {:ok, css} <- Volt.CSS.Imports.inline(css, source_path, bundle_opts) do
-      Volt.CSS.AssetURLRewriter.rewrite_with_assets(css, source_path, outdir,
-        prefix: Keyword.get(bundle_opts, :asset_url_prefix, Volt.Paths.prefix()),
-        root: Keyword.get(bundle_opts, :root)
-      )
-    end
-  end
-
-  defp rewrite_css_part(css, _outdir, _bundle_opts), do: {:ok, %{code: css, assets: []}}
-
-  defp compile_css(css_code, bundle_opts) do
-    case Vize.CSS.compile(css_code, minify: bundle_opts[:minify] || false) do
-      {:ok, %{errors: [_ | _] = errors}} -> {:error, {:css_compile_failed, errors}}
-      {:ok, %{code: code}} -> {:ok, code}
     end
   end
 
@@ -173,12 +135,6 @@ defmodule Volt.Builder.Writer do
 
       _file, acc ->
         acc
-    end)
-  end
-
-  defp merge_assets(left, right) do
-    Enum.reduce(right, left, fn asset, acc ->
-      if asset in acc, do: acc, else: [asset | acc]
     end)
   end
 end
