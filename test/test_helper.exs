@@ -1,4 +1,4 @@
-Path.wildcard(Path.expand("../test_support/**/*.exs", __DIR__))
+Path.wildcard(Path.expand("support/**/*.exs", __DIR__))
 |> Enum.sort()
 |> Enum.each(&Code.require_file/1)
 
