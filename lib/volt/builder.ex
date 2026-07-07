@@ -46,7 +46,7 @@ defmodule Volt.Builder do
     * `:mode` — build mode for env variables (default: `"production"`)
     * `:env_prefix` — env variable prefix or prefixes exposed to client code (default: `"VOLT_"`)
     * `:asset_url_prefix` — public URL prefix for emitted asset references (default: `"/assets"`)
-    * `:code_splitting` — split dynamic imports into separate chunks (default: `true`)
+    * `:code_splitting` — split dynamic imports and multi-entry ESM shared modules into chunks (default: `true`)
     * `:tree_shaking` — remove unused exports (default: `true`)
     * `:chunks` — manual chunk definitions, map of chunk name to list of patterns:
 
@@ -70,18 +70,119 @@ defmodule Volt.Builder do
 
     Volt.PublicDir.copy(public_dir, Path.dirname(build_ctx.outdir))
 
+    expanded_entries = Enum.flat_map(entries, &expand_entry(&1, name))
+
     results =
-      Enum.flat_map(entries, fn entry ->
-        expand_entry(entry, name)
-        |> Enum.map(fn {entry_path, entry_type, entry_name} ->
-          build_entry(entry_path, entry_type, entry_name, ctx, build_ctx)
-        end)
-      end)
+      if shared_entries?(expanded_entries, build_ctx, name) do
+        [build_shared_entries(expanded_entries, ctx, build_ctx)]
+      else
+        build_isolated_entries(expanded_entries, ctx, build_ctx)
+      end
 
     with {:ok, result} <- finalize_build_results(results) do
       Volt.Builder.Writer.write_manifest(build_ctx.outdir, result.manifest)
       {:ok, result}
     end
+  end
+
+  defp shared_entries?(entries, build_ctx, name) do
+    Keyword.get(build_ctx.bundle_opts, :format) == :esm and build_ctx.code_splitting and
+      is_nil(name) and
+      build_ctx.chunks == %{} and length(entries) > 1 and
+      Enum.all?(entries, fn {_entry_path, type, _entry_name} -> type == :script end)
+  end
+
+  defp build_shared_entries(entries, ctx, build_ctx) do
+    with {:ok, collected} <- collect_shared_entries(entries, ctx),
+         false <- label_collision?(collected.path_labels),
+         {:ok, worker_results} <- build_worker_results(collected.workers, ctx, build_ctx),
+         {:ok, compiled} <- compile_all(collected.modules, build_ctx.target, ctx) do
+      compiled =
+        rewrite_nonlocal_labels(compiled, collected.specifier_labels, collected.path_labels)
+
+      output_ctx = %Volt.Builder.OutputContext{
+        plugins: ctx.plugins,
+        external_set: ctx.external,
+        external_globals: ctx.external_globals,
+        workers: collected.workers,
+        worker_results: worker_results
+      }
+
+      out = %Volt.Builder.BuildContext{
+        outdir: build_ctx.outdir,
+        hash: build_ctx.hash,
+        bundle_opts: build_ctx.bundle_opts,
+        sourcemap_hidden: build_ctx.sourcemap_hidden,
+        chunks: build_ctx.chunks,
+        ctx: output_ctx,
+        asset_url_prefix: build_ctx.asset_url_prefix
+      }
+
+      case Output.build_shared_entries(
+             entries,
+             compiled,
+             collected.modules,
+             collected.path_labels,
+             out
+           ) do
+        {:error, :shared_entry_module_ids_unavailable} ->
+          build_isolated_entries(entries, ctx, build_ctx) |> finalize_build_results()
+
+        result ->
+          result
+      end
+    else
+      true -> build_isolated_entries(entries, ctx, build_ctx) |> finalize_build_results()
+      {:error, _} = error -> error
+    end
+  end
+
+  defp build_isolated_entries(entries, ctx, build_ctx) do
+    Enum.map(entries, fn {entry_path, entry_type, entry_name} ->
+      build_entry(entry_path, entry_type, entry_name, ctx, build_ctx)
+    end)
+  end
+
+  defp collect_shared_entries(entries, ctx) do
+    Enum.reduce_while(entries, {:ok, empty_shared_collection()}, fn {entry, :script, _name},
+                                                                    {:ok, acc} ->
+      case Collector.collect(entry, ctx) do
+        {:ok, modules, _dep_map, workers, specifier_labels, path_labels} ->
+          {:cont,
+           {:ok,
+            %{
+              modules: merge_modules(acc.modules, modules),
+              workers: merge_nested_maps(acc.workers, workers),
+              specifier_labels: Map.merge(acc.specifier_labels, specifier_labels),
+              path_labels: Map.merge(acc.path_labels, path_labels)
+            }}}
+
+        {:error, _} = error ->
+          {:halt, error}
+      end
+    end)
+  end
+
+  defp empty_shared_collection do
+    %{modules: [], workers: %{}, specifier_labels: %{}, path_labels: %{}}
+  end
+
+  defp merge_modules(left, right) do
+    seen = MapSet.new(left, fn {path, _label, _source} -> path end)
+    left ++ Enum.reject(right, fn {path, _label, _source} -> MapSet.member?(seen, path) end)
+  end
+
+  defp merge_nested_maps(left, right) do
+    Map.merge(left, right, fn _key, left_value, right_value ->
+      Map.merge(left_value, right_value)
+    end)
+  end
+
+  defp label_collision?(path_labels) do
+    path_labels
+    |> Map.values()
+    |> Enum.frequencies()
+    |> Enum.any?(fn {_label, count} -> count > 1 end)
   end
 
   @doc """

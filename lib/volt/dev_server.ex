@@ -738,7 +738,6 @@ defmodule Volt.DevServer do
            define: %{"__VOLT_HEARTBEAT__" => Integer.to_string(heartbeat_interval)}
          ) do
       {:ok, code} when is_binary(code) -> code
-      {:ok, %{code: code}} when is_binary(code) -> code
       {:error, reason} -> raise "Could not bundle Volt dev client: #{inspect(reason)}"
     end
   end

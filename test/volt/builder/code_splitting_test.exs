@@ -2,6 +2,47 @@ defmodule Volt.Builder.CodeSplittingTest do
   use Volt.TestSupport.BuilderCase
 
   describe "build/1 code splitting" do
+    test "multi-entry ESM builds share common chunks" do
+      File.write!(
+        Path.join(@fixture_dir, "src/shared.ts"),
+        "export const shared = 'shared-value'"
+      )
+
+      File.write!(Path.join(@fixture_dir, "src/one.ts"), """
+      import { shared } from './shared'
+      document.body.dataset.one = shared
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/two.ts"), """
+      import { shared } from './shared'
+      document.body.dataset.two = shared
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: [Path.join(@fixture_dir, "src/one.ts"), Path.join(@fixture_dir, "src/two.ts")],
+          outdir: @outdir,
+          format: :esm,
+          hash: false,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert length(result.js) == 2
+      assert File.regular?(Path.join(@outdir, "one.js"))
+      assert File.regular?(Path.join(@outdir, "two.js"))
+      assert File.regular?(Path.join(@outdir, "shared.js"))
+
+      assert File.read!(Path.join(@outdir, "one.js")) =~ ~s(from "./shared.js")
+      assert File.read!(Path.join(@outdir, "two.js")) =~ ~s(from "./shared.js")
+      assert File.read!(Path.join(@outdir, "shared.js")) =~ "shared-value"
+
+      manifest = @outdir |> Path.join("manifest.json") |> File.read!() |> :json.decode()
+      assert manifest["one.js"]["imports"] == ["shared.js"]
+      assert manifest["two.js"]["imports"] == ["shared.js"]
+      refute manifest["shared.js"]["isEntry"]
+    end
+
     test "manual chunks split modules into separate files" do
       lib_dir = Path.join(@fixture_dir, "src/lib")
       File.mkdir_p!(lib_dir)

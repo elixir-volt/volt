@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.15.5 - 2026-07-07
+
+### Added
+
+- Production builds now bundle eligible multi-entry ESM script inputs together and emit Rolldown shared chunks, deduplicating modules imported by multiple entries while preserving manifest imports.
+
+### Changed
+
+- Upgrade OXC to `~> 0.17.2`, QuickBEAM to `~> 0.10.19`, and npm_ex to `~> 0.7.5`.
+
 ## 0.15.4 - 2026-07-06
 
 ### Fixed

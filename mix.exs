@@ -1,7 +1,7 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
-  @version "0.15.4"
+  @version "0.15.5"
   @source_url "https://github.com/elixir-volt/volt"
 
   def project do
@@ -13,7 +13,7 @@ defmodule Volt.MixProject do
       deps: deps(),
       aliases: aliases(),
       test_ignore_filters: [&String.starts_with?(&1, "test/support/")],
-      dialyzer: [plt_add_apps: [:mix], flags: [:no_opaque]],
+      dialyzer: [plt_add_apps: [:mix, :ex_unit], flags: [:no_opaque]],
       name: "Volt",
       description:
         "Elixir-native frontend build tool — dev server, HMR, and production builds powered by OXC and Vize.",
@@ -35,10 +35,10 @@ defmodule Volt.MixProject do
     [
       {:reach, "~> 2.6.1", only: [:dev, :test], runtime: false},
       {:glob_ex, "~> 0.1"},
-      {:oxc, "~> 0.17.1"},
+      {:oxc, "~> 0.17.2"},
       {:vize, "~> 0.13.0"},
       {:oxide_ex, "~> 0.2.1"},
-      {:quickbeam, "~> 0.10.18"},
+      {:quickbeam, "~> 0.10.19"},
       {:dotenvy, "~> 1.1"},
       {:floki, "~> 0.38"},
       {:plug, "~> 1.16"},
@@ -48,7 +48,7 @@ defmodule Volt.MixProject do
       {:jason, "~> 1.4"},
       {:json_codec, "~> 0.1.5"},
       {:igniter, "~> 0.5", optional: true},
-      {:npm, "~> 0.7.4"},
+      {:npm, "~> 0.7.5"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
