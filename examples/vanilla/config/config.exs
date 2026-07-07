@@ -24,7 +24,7 @@ config :volt,
   target: :es2020,
   minify: false,
   hash: false,
-  resolve_dirs: ["node_modules", "deps"],
+  resolve_dirs: ["node_modules", "deps", Mix.Project.build_path()],
   tailwind: [
     css: "assets/css/app.css",
     sources: [

@@ -2,6 +2,8 @@
 
 A minimal Phoenix app using Volt with plain TypeScript — no frontend framework.
 
+It also dogfoods Phoenix LiveView colocated CSS via `Phoenix.LiveView.ColocatedCSS` and a Tailwind import from `phoenix-colocated/vanilla_example/colocated.css`.
+
 ```sh
 mix setup
 mix phx.server

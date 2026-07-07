@@ -201,6 +201,14 @@ defmodule Volt.Integration.PhoenixExampleBuildTest do
     assert css =~ "font-semibold"
   end
 
+  test "produces Tailwind CSS with Phoenix colocated CSS", %{build_status: 0} do
+    manifest = @outdir |> Path.join("css/manifest.json") |> File.read!() |> Jason.decode!()
+    css = File.read!(Path.join([@outdir, "css", manifest["app.css"]["file"]]))
+
+    assert css =~ ".colocated-card"
+    assert css =~ "oklch(98.7% .022 95.277)"
+  end
+
   test "generates sourcemap", %{build_status: 0} do
     manifest = @outdir |> Path.join("js/manifest.json") |> File.read!() |> Jason.decode!()
     map_path = manifest["app.js"]["file"] <> ".map"

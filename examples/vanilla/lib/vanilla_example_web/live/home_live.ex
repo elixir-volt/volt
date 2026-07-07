@@ -11,6 +11,13 @@ defmodule VanillaExampleWeb.HomeLive do
 
   def render(assigns) do
     ~H"""
+    <style :type={VanillaExampleWeb.ColocatedCSS}>
+      .colocated-card {
+        border-color: oklch(66.6% 0.179 58.318);
+        background: oklch(98.7% 0.022 95.277);
+      }
+    </style>
+
     <Layouts.app flash={@flash}>
       <main class="mx-auto mt-12 max-w-2xl space-y-8 px-6 pb-12">
         <header class="flex items-center gap-4">
@@ -21,7 +28,7 @@ defmodule VanillaExampleWeb.HomeLive do
           </div>
         </header>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="colocated-card rounded-2xl border p-6 shadow-sm">
           <h2 class="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">Counter</h2>
           <button
             type="button"

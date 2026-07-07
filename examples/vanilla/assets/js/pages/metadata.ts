@@ -9,7 +9,7 @@ export type PageMetadata = {
 
 export const pages: PageMetadata[] = [
   { slug: 'home', title: home.title, description: home.description },
-  { slug: 'about', title: about.title, description: about.description }
+  { slug: 'about', title: about.title, description: about.description },
 ]
 
 export function pageTitles() {

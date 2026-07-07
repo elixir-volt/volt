@@ -1,3 +1,6 @@
 @import "tailwindcss" source(none);
+@import "phoenix-colocated/vanilla_example/colocated.css";
+
 @source "../js";
 @source "../../lib";
+@source "../../_build/dev/phoenix-colocated/vanilla_example/*/";
