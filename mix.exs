@@ -12,6 +12,7 @@ defmodule Volt.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
+      test_ignore_filters: [&String.starts_with?(&1, "test/support/")],
       dialyzer: [plt_add_apps: [:mix], flags: [:no_opaque]],
       name: "Volt",
       description:

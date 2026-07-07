@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Tailwind stylesheet and module resolution now searches Phoenix-style asset locations such as `deps` and `Mix.Project.build_path()`, fixing `phoenix-colocated/*/colocated.css` imports in fresh Phoenix projects.
+
 ## 0.15.3 - 2026-07-06
 
 ### Added

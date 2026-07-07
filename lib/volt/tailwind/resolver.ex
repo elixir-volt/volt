@@ -52,7 +52,7 @@ defmodule Volt.Tailwind.Resolver do
     {package_name, subpath} = NPM.Resolution.PackageResolver.split_specifier(id)
 
     resolved =
-      [find_node_modules_for(base), runtime_node_modules]
+      ([find_node_modules_for(base), runtime_node_modules] ++ phoenix_tailwind_search_dirs())
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
       |> Enum.find_value(fn node_modules ->
@@ -141,5 +141,13 @@ defmodule Volt.Tailwind.Resolver do
 
   defp find_node_modules_for(base) do
     base |> normalize_base() |> NPM.Resolution.PackageResolver.find_node_modules()
+  end
+
+  defp phoenix_tailwind_search_dirs do
+    if Code.ensure_loaded?(Mix.Project) do
+      [Path.expand("deps"), Mix.Project.build_path()]
+    else
+      []
+    end
   end
 end

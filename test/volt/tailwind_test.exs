@@ -69,6 +69,29 @@ defmodule Volt.TailwindTest do
       assert css =~ "rebeccapurple"
     end
 
+    test "loads Phoenix colocated CSS from the Mix build path" do
+      colocated_dir = Path.join(Mix.Project.build_path(), "phoenix-colocated/volt_tailwind_test")
+      File.mkdir_p!(colocated_dir)
+
+      File.write!(
+        Path.join(colocated_dir, "colocated.css"),
+        ".colocated-card { color: oklch(70% 0.2 40); }"
+      )
+
+      on_exit(fn -> File.rm_rf!(colocated_dir) end)
+
+      {:ok, css} =
+        Volt.Tailwind.build(
+          sources: [%{base: @fixture_dir, pattern: "**/*.html"}],
+          css:
+            "@import \"phoenix-colocated/volt_tailwind_test/colocated.css\";\n@import \"tailwindcss\";",
+          css_base: @fixture_dir
+        )
+
+      assert css =~ ".colocated-card"
+      assert css =~ "oklch(70% 0.2 40)"
+    end
+
     test "loads local references via @reference" do
       File.write!(Path.join(@fixture_dir, "reference.css"), """
       @import "tailwindcss";
