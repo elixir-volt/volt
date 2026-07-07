@@ -114,6 +114,38 @@ defmodule Volt.WatcherTest do
     GenServer.stop(pid)
   end
 
+  test "triggers full Tailwind rebuild on imported CSS changes", %{watch_dir: watch_dir} do
+    Registry.register(Volt.HMR.Registry, :clients, nil)
+
+    css_file = Path.join(watch_dir, "app.css")
+    imported_css = Path.join(watch_dir, "imported.css")
+    outdir = Path.join(watch_dir, "css_out")
+
+    File.write!(css_file, "@import \"./imported.css\";\n@import \"tailwindcss\";")
+    File.write!(imported_css, ".imported-card { color: rgb(34 197 94); }")
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: watch_dir,
+        tailwind: true,
+        tailwind_css: css_file,
+        tailwind_outdir: outdir,
+        name: :test_watcher_tw_imported_css
+      )
+
+    Process.sleep(100)
+    File.write!(imported_css, ".imported-card { color: rgb(239 68 68); }")
+
+    assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+                   3000
+
+    css = File.read!(Path.join(outdir, "app.css"))
+    assert css =~ ".imported-card"
+    assert css =~ "rgb(239 68 68)"
+
+    GenServer.stop(pid)
+  end
+
   test "triggers tailwind rebuild on template changes", %{watch_dir: watch_dir} do
     Registry.register(Volt.HMR.Registry, :clients, nil)
 

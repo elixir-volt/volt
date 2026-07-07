@@ -46,7 +46,9 @@ defmodule Volt.Watcher do
     pending: %{},
     tailwind_timer: nil,
     tailwind_changed: [],
+    tailwind_full?: false,
     tailwind_outdir: nil,
+    tailwind_dirs: [],
     reload_dirs: []
   ]
 
@@ -66,7 +68,7 @@ defmodule Volt.Watcher do
       |> Keyword.drop([:root, :name, :watch_dirs, :reload_dirs, :tailwind_outdir])
       |> Map.new()
 
-    all_dirs = Enum.uniq([root | watch_dirs ++ reload_dirs])
+    all_dirs = Enum.uniq([root | watch_dirs ++ reload_dirs ++ tailwind_colocated_dirs(config)])
 
     fs_pids =
       Enum.map(all_dirs, fn dir ->
@@ -80,6 +82,7 @@ defmodule Volt.Watcher do
       fs_pids: fs_pids,
       config: config,
       tailwind_outdir: tailwind_outdir,
+      tailwind_dirs: all_dirs,
       reload_dirs: reload_dirs
     }
 
@@ -91,10 +94,17 @@ defmodule Volt.Watcher do
   end
 
   defp initial_tailwind_build(dirs, css_path, outdir) do
-    sources =
-      Enum.map(dirs, fn dir ->
-        %{base: dir, pattern: "**/*"}
-      end)
+    case build_tailwind(dirs, css_path, outdir) do
+      {:ok, css} ->
+        Logger.debug("[Volt] Initial Tailwind build: #{byte_size(css)} bytes")
+
+      {:error, reason} ->
+        Logger.warning("[Volt] Initial Tailwind build failed: #{inspect(reason)}")
+    end
+  end
+
+  defp build_tailwind(dirs, css_path, outdir) do
+    sources = Enum.map(dirs, &%{base: &1, pattern: "**/*"})
 
     {css_input, css_base} =
       if css_path do
@@ -103,17 +113,13 @@ defmodule Volt.Watcher do
         {nil, File.cwd!()}
       end
 
-    case Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
-      {:ok, css} ->
-        if outdir do
-          File.mkdir_p!(outdir)
-          File.write!(Path.join(outdir, "app.css"), css)
-        end
+    with {:ok, css} <- Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
+      if outdir do
+        File.mkdir_p!(outdir)
+        File.write!(Path.join(outdir, "app.css"), css)
+      end
 
-        Logger.debug("[Volt] Initial Tailwind build: #{byte_size(css)} bytes")
-
-      {:error, reason} ->
-        Logger.warning("[Volt] Initial Tailwind build failed: #{inspect(reason)}")
+      {:ok, css}
     end
   end
 
@@ -129,7 +135,7 @@ defmodule Volt.Watcher do
           {:noreply, state}
 
         ext in Extensions.css() ->
-          handle_css_change(path, state)
+          state = handle_css_change(path, state)
           {:noreply, state}
 
         Volt.Assets.asset?(path) ->
@@ -160,8 +166,9 @@ defmodule Volt.Watcher do
 
   def handle_info(:tailwind_rebuild, state) do
     changed = state.tailwind_changed
-    state = %{state | tailwind_timer: nil, tailwind_changed: []}
-    handle_tailwind_rebuild(changed, state)
+    full? = state.tailwind_full?
+    state = %{state | tailwind_timer: nil, tailwind_changed: [], tailwind_full?: false}
+    handle_tailwind_rebuild(changed, full?, state)
     {:noreply, state}
   end
 
@@ -187,12 +194,17 @@ defmodule Volt.Watcher do
     %{state | pending: Map.put(state.pending, path, ref)}
   end
 
-  defp maybe_schedule_tailwind(state, path) do
+  defp maybe_schedule_tailwind(state, path, opts \\ []) do
     if state.config[:tailwind] do
       if state.tailwind_timer, do: Process.cancel_timer(state.tailwind_timer)
       timer = Process.send_after(self(), :tailwind_rebuild, @tailwind_debounce_ms)
 
-      %{state | tailwind_timer: timer, tailwind_changed: [path | state.tailwind_changed]}
+      %{
+        state
+        | tailwind_timer: timer,
+          tailwind_changed: [path | state.tailwind_changed],
+          tailwind_full?: state.tailwind_full? or Keyword.get(opts, :full?, false)
+      }
     else
       state
     end
@@ -254,9 +266,13 @@ defmodule Volt.Watcher do
       StyleGraph.remove(path)
     end
 
-    HMR.broadcast(:update, %{path: relative, changes: [:style]})
-    broadcast_css_dependents(css_dependents, state.root)
-    broadcast_glob_dependents(path, state.root)
+    if Volt.Path.inside?(path, state.root) do
+      HMR.broadcast(:update, %{path: relative, changes: [:style]})
+      broadcast_css_dependents(css_dependents, state.root)
+      broadcast_glob_dependents(path, state.root)
+    end
+
+    maybe_schedule_tailwind(state, path, full?: true)
   end
 
   defp broadcast_css_dependents(dependents, root) do
@@ -331,7 +347,18 @@ defmodule Volt.Watcher do
     end
   end
 
-  defp handle_tailwind_rebuild(changed_paths, state) do
+  defp handle_tailwind_rebuild(_changed_paths, true, state) do
+    case build_tailwind(state.tailwind_dirs, state.config[:tailwind_css], state.tailwind_outdir) do
+      {:ok, css} ->
+        HMR.broadcast(:update, %{path: "assets/css/app.css", changes: [:style]})
+        Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
+
+      {:error, reason} ->
+        HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)})
+    end
+  end
+
+  defp handle_tailwind_rebuild(changed_paths, false, state) do
     changed =
       Enum.map(changed_paths, fn path ->
         ext = path |> Path.extname() |> String.trim_leading(".")
@@ -381,6 +408,18 @@ defmodule Volt.Watcher do
   defp reload_path?(path, state) do
     Enum.any?(state.reload_dirs, &Volt.Path.inside?(path, &1))
   end
+
+  defp tailwind_colocated_dirs(%{tailwind: true}) do
+    if Code.ensure_loaded?(Mix.Project) do
+      path = Path.join(Mix.Project.build_path(), "phoenix-colocated")
+      File.mkdir_p!(path)
+      [Path.expand(path)]
+    else
+      []
+    end
+  end
+
+  defp tailwind_colocated_dirs(_config), do: []
 
   @impl true
   def terminate(_reason, state) do
