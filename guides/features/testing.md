@@ -206,7 +206,7 @@ Use `browser: true` when tests need real browser globals such as `window`, `docu
 ```elixir
 Volt.Test.ExUnit.install(
   root: "test/browser",
-  include: ["**/*.browser.test.ts"],
+  include: ["**/*.test.ts"],
   browser: true
 )
 ```
