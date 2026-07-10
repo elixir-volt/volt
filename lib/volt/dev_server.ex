@@ -32,7 +32,7 @@ defmodule Volt.DevServer do
   require Logger
 
   alias Plug.Conn
-  alias Volt.URL
+  alias Volt.{Config, URL}
 
   @support_modules {:volt, "ts"}
   @runtime_rewrites %{"../hmr" => "/@volt/client.js"}
@@ -43,8 +43,8 @@ defmodule Volt.DevServer do
   def init(opts) do
     profile = Keyword.get(opts, :profile)
     build_opts = Keyword.delete(opts, :profile)
-    config = Volt.Config.build(profile, build_opts)
-    server_config = Volt.Config.server(profile, build_opts)
+    config = Config.build(profile, build_opts)
+    server_config = Config.server(profile, build_opts)
 
     root = Keyword.get(opts, :root) || to_string(config.root)
     expanded_root = Path.expand(root)
@@ -52,7 +52,7 @@ defmodule Volt.DevServer do
     node_modules = NPM.Resolution.PackageResolver.find_node_modules(expanded_root)
     plugins = config.plugins
     module_types = config.module_types
-    tailwind_config = Volt.Config.tailwind(profile)
+    tailwind_config = Config.tailwind(profile)
 
     prebundle_vendor(expanded_root, node_modules, plugins, config.resolve_dirs, module_types)
 
@@ -108,7 +108,7 @@ defmodule Volt.DevServer do
 
   @impl true
   def call(conn, config) do
-    _ = Volt.Dev.ensure_watcher(config.watcher_opts)
+    Volt.Dev.ensure_watcher(config.watcher_opts)
     do_call(conn, config)
   end
 

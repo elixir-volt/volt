@@ -1,17 +1,28 @@
 defmodule Volt.Dev do
   @moduledoc false
 
+  require Logger
+
   @registry Volt.Dev.WatcherRegistry
   @supervisor Volt.Dev.WatcherSupervisor
 
-  @spec ensure_watcher(keyword() | false | nil) :: {:ok, pid()} | {:error, term()}
-  def ensure_watcher(opts) when opts in [false, nil], do: {:error, :disabled}
+  @spec ensure_watcher(keyword() | false | nil) :: :ok
+  def ensure_watcher(opts) when opts in [false, nil], do: :ok
 
   def ensure_watcher(opts) when is_list(opts) do
-    if dev_supervision_started?() do
-      start_watcher(opts)
-    else
-      {:error, :not_started}
+    result =
+      if dev_supervision_started?() do
+        start_watcher(opts)
+      else
+        {:error, :not_started}
+      end
+
+    case result do
+      {:ok, _pid} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("[Volt] Could not start file watcher: #{inspect(reason)}")
     end
   end
 

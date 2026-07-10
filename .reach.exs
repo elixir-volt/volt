@@ -112,6 +112,7 @@ infrastructure = [
   "Volt.Builder.CSS",
   "Volt.Builder.Writer",
   "Volt.Cache",
+  "Volt.Dev",
   "Volt.Dev.ConsoleForwarder",
   "Volt.Dev.ConsoleForwarder.Payload",
   "Volt.ETS",

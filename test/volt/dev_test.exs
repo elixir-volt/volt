@@ -5,7 +5,8 @@ defmodule Volt.DevTest do
     root = Path.join(System.tmp_dir!(), "volt-dev-#{System.unique_integer([:positive])}")
     File.mkdir_p!(root)
 
-    assert {:ok, pid} = Volt.Dev.ensure_watcher(id: :default, root: root, tailwind: false)
+    assert :ok = Volt.Dev.ensure_watcher(id: :default, root: root, tailwind: false)
+    assert [{pid, _}] = Registry.lookup(Volt.Dev.WatcherRegistry, {:watcher, :default, root})
 
     on_exit(fn ->
       if Process.alive?(pid) do
@@ -16,10 +17,13 @@ defmodule Volt.DevTest do
     end)
 
     assert Process.alive?(pid)
-    assert {:ok, ^pid} = Volt.Dev.ensure_watcher(id: :default, root: root, tailwind: false)
+    assert :ok = Volt.Dev.ensure_watcher(id: :default, root: root, tailwind: false)
+    assert [{^pid, _}] = Registry.lookup(Volt.Dev.WatcherRegistry, {:watcher, :default, root})
 
-    assert {:ok, profile_pid} =
-             Volt.Dev.ensure_watcher(id: :admin, root: root, tailwind: false)
+    assert :ok = Volt.Dev.ensure_watcher(id: :admin, root: root, tailwind: false)
+
+    assert [{profile_pid, _}] =
+             Registry.lookup(Volt.Dev.WatcherRegistry, {:watcher, :admin, root})
 
     on_exit(fn ->
       if Process.alive?(profile_pid) do

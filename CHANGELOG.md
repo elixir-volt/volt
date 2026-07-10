@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.16.0 - 2026-07-10
+
 ### Changed
 
 - `Volt.DevServer` now starts and supervises its file watcher automatically on the first development request, so Phoenix applications no longer need a `Mix.Tasks.Volt.Dev` endpoint watcher entry.
