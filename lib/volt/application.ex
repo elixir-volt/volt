@@ -12,6 +12,8 @@ defmodule Volt.Application do
 
     children = [
       {Registry, keys: :duplicate, name: Volt.HMR.Registry},
+      {Registry, keys: :unique, name: Volt.Dev.WatcherRegistry},
+      {DynamicSupervisor, strategy: :one_for_one, name: Volt.Dev.WatcherSupervisor},
       {Volt.Tailwind, Volt.Config.tailwind()}
     ]
 

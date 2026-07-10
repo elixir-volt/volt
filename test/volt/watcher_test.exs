@@ -28,6 +28,21 @@ defmodule Volt.WatcherTest do
     GenServer.stop(pid)
   end
 
+  test "stays alive when the configured Tailwind stylesheet is missing", %{
+    watch_dir: watch_dir
+  } do
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: watch_dir,
+        name: :test_watcher_missing_tailwind,
+        tailwind: true,
+        tailwind_css: Path.join(watch_dir, "missing.css")
+      )
+
+    assert Process.alive?(pid)
+    GenServer.stop(pid)
+  end
+
   test "detects file changes and broadcasts update", %{watch_dir: watch_dir} do
     Registry.register(Volt.HMR.Registry, :clients, nil)
 
@@ -111,6 +126,36 @@ defmodule Volt.WatcherTest do
     assert_receive {:volt_hmr, :update, %{path: path, changes: ["full"]}}, 2000
     assert path == Path.relative_to_cwd(page)
 
+    GenServer.stop(pid)
+  end
+
+  test "rebuilds the Tailwind input before broadcasting its style update", %{
+    watch_dir: watch_dir
+  } do
+    Registry.register(Volt.HMR.Registry, :clients, nil)
+
+    css_file = Path.join(watch_dir, "app.css")
+    outdir = Path.join(watch_dir, "css_out")
+    File.write!(css_file, "@import \"tailwindcss\";\n.original { color: red; }")
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: watch_dir,
+        tailwind: true,
+        tailwind_css: css_file,
+        tailwind_outdir: outdir,
+        name: :test_watcher_tw_input_css
+      )
+
+    Process.sleep(100)
+    File.write!(css_file, "@import \"tailwindcss\";\n.updated { color: blue; }")
+
+    refute_receive {:volt_hmr, :update, %{path: "app.css", changes: [:style]}}, 50
+
+    assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+                   3000
+
+    assert File.regular?(Path.join(outdir, "app.css"))
     GenServer.stop(pid)
   end
 

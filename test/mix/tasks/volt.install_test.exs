@@ -32,7 +32,8 @@ defmodule Volt.InstallTest do
               http: [ip: {127, 0, 0, 1}, port: 4000],
               watchers: [
                 esbuild: {Esbuild, :install_and_run, [:demo, ~w(--watch)]},
-                tailwind: {Tailwind, :install_and_run, [:demo, ~w(--watch)]}
+                tailwind: {Tailwind, :install_and_run, [:demo, ~w(--watch)]},
+                volt: {Mix.Tasks.Volt.Dev, :run, [~w(--tailwind)]}
               ]
 
             config :demo, DemoWeb.Endpoint,
@@ -116,7 +117,16 @@ defmodule Volt.InstallTest do
 
       refute dev_content =~ "esbuild:"
       refute dev_content =~ "tailwind:"
-      assert dev_content =~ "volt:"
+      refute dev_content =~ "volt:"
+      refute dev_content =~ "Mix.Tasks.Volt.Dev"
+
+      endpoint_content =
+        igniter.rewrite.sources["lib/demo_web/endpoint.ex"]
+        |> Rewrite.Source.get(:content)
+
+      assert endpoint_content =~
+               "if code_reloading? do\n    plug(Phoenix.CodeReloader)\n" <>
+                 "    plug(Volt.DevServer, root: \"assets\")\n  end"
 
       mix_content =
         igniter.rewrite.sources["mix.exs"]

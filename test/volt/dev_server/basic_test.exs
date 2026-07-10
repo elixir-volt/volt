@@ -12,6 +12,35 @@ defmodule Volt.DevServer.BasicTest do
   end
 
   describe "dev server composition" do
+    test "starts the supervised watcher on the first request" do
+      tailwind_config = Application.get_env(:volt, :tailwind)
+      Application.delete_env(:volt, :tailwind)
+
+      on_exit(fn ->
+        if tailwind_config do
+          Application.put_env(:volt, :tailwind, tailwind_config)
+        else
+          Application.delete_env(:volt, :tailwind)
+        end
+      end)
+
+      root = Path.join(@fixture_dir, "src")
+      opts = Volt.DevServer.init(root: root, prefix: "/assets", watch: true)
+      key = {:watcher, :default, Path.expand(root)}
+
+      assert [] = Registry.lookup(Volt.Dev.WatcherRegistry, key)
+
+      conn(:get, "/") |> Volt.DevServer.call(opts)
+
+      assert [{pid, _}] = Registry.lookup(Volt.Dev.WatcherRegistry, key)
+      assert Process.alive?(pid)
+
+      on_exit(fn ->
+        if Process.alive?(pid),
+          do: DynamicSupervisor.terminate_child(Volt.Dev.WatcherSupervisor, pid)
+      end)
+    end
+
     test "passes through non-asset requests for downstream HTML plugs" do
       opts = Volt.DevServer.init(root: Path.join(@fixture_dir, "src"), prefix: "/assets")
 

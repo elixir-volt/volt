@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- `Volt.DevServer` now starts and supervises its file watcher automatically on the first development request, so Phoenix applications no longer need a `Mix.Tasks.Volt.Dev` endpoint watcher entry.
+
+### Fixed
+
+- Tailwind input CSS changes now rebuild before broadcasting a style update instead of being compiled as ordinary CSS and showing a browser error overlay.
+- The vanilla LiveView example no longer marks its entry module as self-accepting, avoiding duplicate `LiveSocket` initialization during JavaScript updates.
+
 ## 0.15.5 - 2026-07-07
 
 ### Added

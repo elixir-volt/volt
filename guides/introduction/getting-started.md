@@ -12,7 +12,7 @@ The installer:
 - Adds format and lint config to `config/config.exs`
 - Adds `Volt.Formatter` plugin to `.formatter.exs`
 - Adds the `Volt.DevServer` plug to your endpoint
-- Adds the Volt watcher to `config/dev.exs`
+- Configures Volt's automatic development watcher
 - Updates `assets.build` and `assets.deploy` aliases
 - Removes `esbuild` and `tailwind` deps if present
 
@@ -53,7 +53,7 @@ config :volt,
 
 ### Dev Server and Watcher
 
-Add the dev server plug to your endpoint (inside the `code_reloading?` block, after `Phoenix.CodeReloader`):
+Add the dev server plug to your endpoint (inside the `code_reloading?` block, after `Phoenix.CodeReloader`). The plug starts its supervised file watcher automatically when it receives the first development request:
 
 ```elixir
 # lib/my_app_web/endpoint.ex
@@ -63,21 +63,16 @@ if code_reloading? do
 end
 ```
 
-Configure the dev server and add the watcher:
+Configure any additional directories that should participate in Tailwind rebuilds:
 
 ```elixir
 # config/dev.exs
 config :volt, :server,
   prefix: "/assets",
   watch_dirs: ["lib/"]
-
-config :my_app, MyAppWeb.Endpoint,
-  watchers: [
-    volt: {Mix.Tasks.Volt.Dev, :run, [~w(--tailwind)]}
-  ]
 ```
 
-The watcher starts `mix volt.dev` automatically when `mix phx.server` runs, watching for file changes and triggering HMR updates and Tailwind rebuilds.
+No Phoenix `:watchers` entry or separate OS process is required. `mix volt.dev` remains available for standalone or non-Phoenix workflows. Set `watch: false` in the server configuration to disable automatic watching.
 
 ### Layout Tags
 

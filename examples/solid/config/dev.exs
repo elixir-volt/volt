@@ -6,8 +6,7 @@ config :solid_example, SolidExampleWeb.Endpoint,
   code_reloader: true,
   debug_errors: true,
   secret_key_base:
-    "volt-example-secret-key-base-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
-  watchers: []
+    "volt-example-secret-key-base-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 config :volt, :server,
   prefix: "/assets",

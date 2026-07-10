@@ -19,6 +19,7 @@ defmodule Volt.DevServer do
     * `:target` — JS downlevel target (e.g. `:es2020`)
     * `:import_source` — JSX import source (e.g. `"vue"`)
     * `:vapor` — use Vue Vapor mode (default: `false`)
+    * `:watch` — start the supervised file watcher on the first request (default: `true`)
 
   ## Example
 
@@ -50,10 +51,40 @@ defmodule Volt.DevServer do
 
     node_modules = NPM.Resolution.PackageResolver.find_node_modules(expanded_root)
     plugins = config.plugins
-
     module_types = config.module_types
+    tailwind_config = Volt.Config.tailwind(profile)
 
     prebundle_vendor(expanded_root, node_modules, plugins, config.resolve_dirs, module_types)
+
+    watcher_opts =
+      if server_config.watch do
+        watch_dirs =
+          if tailwind_config != [] and server_config.watch_dirs == [] do
+            [Volt.Paths.lib()]
+          else
+            server_config.watch_dirs
+          end
+
+        [
+          id: profile || :default,
+          root: expanded_root,
+          watch_dirs: watch_dirs,
+          reload_dirs: server_config.reload_dirs,
+          tailwind: tailwind_config != [],
+          tailwind_css: tailwind_config[:css],
+          tailwind_outdir: Path.join(to_string(config.outdir), "css"),
+          target: config.target,
+          import_source: config.import_source,
+          vapor: config.vapor,
+          custom_renderer: config.custom_renderer,
+          plugins: plugins,
+          aliases: config.aliases,
+          resolve_dirs: config.resolve_dirs,
+          module_types: module_types,
+          define:
+            Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix)
+        ]
+      end
 
     %Volt.DevServer.Config{
       root: expanded_root,
@@ -70,18 +101,24 @@ defmodule Volt.DevServer do
       module_types: module_types,
       define:
         Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix),
-      hmr_timeout: server_config.hmr_timeout
+      hmr_timeout: server_config.hmr_timeout,
+      watcher_opts: watcher_opts
     }
   end
 
   @impl true
-  def call(%Conn{request_path: "/@volt/ws"} = conn, config) do
+  def call(conn, config) do
+    _ = Volt.Dev.ensure_watcher(config.watcher_opts)
+    do_call(conn, config)
+  end
+
+  defp do_call(%Conn{request_path: "/@volt/ws"} = conn, config) do
     conn
     |> WebSockAdapter.upgrade(Volt.HMR.Socket, [], timeout: config.hmr_timeout)
     |> Conn.halt()
   end
 
-  def call(%Conn{request_path: "/@volt/client.js"} = conn, config) do
+  defp do_call(%Conn{request_path: "/@volt/client.js"} = conn, config) do
     heartbeat_interval = max(div(config.hmr_timeout, 2), 1_000)
     client = client_module!(heartbeat_interval)
 
@@ -92,12 +129,12 @@ defmodule Volt.DevServer do
     |> Conn.halt()
   end
 
-  def call(%Conn{request_path: "/@volt/virtual/" <> encoded_id} = conn, config) do
+  defp do_call(%Conn{request_path: "/@volt/virtual/" <> encoded_id} = conn, config) do
     id = Volt.JS.Vendor.decode_specifier(encoded_id)
     serve_virtual(conn, id, config)
   end
 
-  def call(%Conn{method: "POST", request_path: "/@volt/console"} = conn, _config) do
+  defp do_call(%Conn{method: "POST", request_path: "/@volt/console"} = conn, _config) do
     {:ok, body, conn} = Conn.read_body(conn)
     Volt.Dev.ConsoleForwarder.log(body)
 
@@ -106,7 +143,7 @@ defmodule Volt.DevServer do
     |> Conn.halt()
   end
 
-  def call(%Conn{request_path: "/@vendor/" <> specifier_js} = conn, config) do
+  defp do_call(%Conn{request_path: "/@vendor/" <> specifier_js} = conn, config) do
     conn = Conn.fetch_query_params(conn)
     specifier = specifier_js |> String.trim_trailing(".js") |> Volt.JS.Vendor.decode_specifier()
 
@@ -131,7 +168,7 @@ defmodule Volt.DevServer do
     end
   end
 
-  def call(%Conn{request_path: request_path} = conn, config) do
+  defp do_call(%Conn{request_path: request_path} = conn, config) do
     prefix = config.prefix
 
     case Volt.PublicDir.lookup(config.public_dir, request_path) do

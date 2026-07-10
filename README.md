@@ -73,6 +73,8 @@ config :volt, :server,
   watch_dirs: ["lib/"]
 ```
 
+The `Volt.DevServer` Plug starts its supervised file watcher on the first development request. No Phoenix `:watchers` entry or separate frontend process is required.
+
 `Volt.static_path/2` resolves Volt-managed assets to source files in dev and content-hashed paths in production:
 
 ```heex

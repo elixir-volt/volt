@@ -20,7 +20,7 @@ if Code.ensure_loaded?(Igniter) do
     5. Add format and lint config to `config/config.exs`
     6. Add `Volt.Formatter` plugin to `.formatter.exs`
     7. Add `Volt.DevServer` plug to your endpoint
-    8. Add the Volt watcher to `config/dev.exs`
+    8. Configure the automatic Volt watcher in `config/dev.exs`
     """
 
     use Igniter.Mix.Task
@@ -104,7 +104,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp old_watcher?(item) do
-      Tuple.elem_equals?(item, 0, :esbuild) or Tuple.elem_equals?(item, 0, :tailwind)
+      Enum.any?([:esbuild, :tailwind, :volt], &Tuple.elem_equals?(item, 0, &1))
     end
 
     defp update_aliases(igniter) do
@@ -224,15 +224,8 @@ if Code.ensure_loaded?(Igniter) do
       ProjectFormatter.add_formatter_plugin(igniter, Volt.Formatter)
     end
 
-    defp add_dev_config(igniter, app_name, endpoint) do
-      watcher =
-        {:code,
-         Sourceror.parse_string!("""
-         {Mix.Tasks.Volt.Dev, :run, [~w(--tailwind)]}
-         """)}
-
+    defp add_dev_config(igniter, _app_name, _endpoint) do
       igniter
-      |> ProjectConfig.configure("dev.exs", app_name, [endpoint, :watchers, :volt], watcher)
       |> ProjectConfig.configure("dev.exs", :volt, [:server, :prefix], Paths.prefix())
       |> ProjectConfig.configure(
         "dev.exs",
@@ -269,14 +262,14 @@ if Code.ensure_loaded?(Igniter) do
 
     defp insert_dev_server_plug(zipper, endpoint) do
       with :error <- Common.move_to(zipper, &has_dev_server_plug?/1),
-           {:ok, zipper} <- Common.move_to(zipper, &code_reloading?/1) do
+           {:ok, zipper} <- Common.move_to(zipper, &code_reloading?/1),
+           {:ok, zipper} <- Common.move_to_do_block(zipper) do
         {:ok,
          Common.add_code(
            zipper,
            """
            plug Volt.DevServer, root: "assets"
-           """,
-           placement: :after
+           """
          )}
       else
         {:ok, _} -> {:ok, zipper}

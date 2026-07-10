@@ -53,7 +53,10 @@ defmodule Volt.Watcher do
   ]
 
   def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
+    case Keyword.get(opts, :name, __MODULE__) do
+      nil -> GenServer.start_link(__MODULE__, opts)
+      name -> GenServer.start_link(__MODULE__, opts, name: name)
+    end
   end
 
   @impl true
@@ -106,14 +109,8 @@ defmodule Volt.Watcher do
   defp build_tailwind(dirs, css_path, outdir) do
     sources = Enum.map(dirs, &%{base: &1, pattern: "**/*"})
 
-    {css_input, css_base} =
-      if css_path do
-        {File.read!(css_path), Path.dirname(css_path)}
-      else
-        {nil, File.cwd!()}
-      end
-
-    with {:ok, css} <- Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
+    with {:ok, {css_input, css_base}} <- read_tailwind_css(css_path),
+         {:ok, css} <- Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
       if outdir do
         File.mkdir_p!(outdir)
         File.write!(Path.join(outdir, "app.css"), css)
@@ -123,19 +120,31 @@ defmodule Volt.Watcher do
     end
   end
 
+  defp read_tailwind_css(nil), do: {:ok, {nil, File.cwd!()}}
+
+  defp read_tailwind_css(path) do
+    case File.read(path) do
+      {:ok, css} -> {:ok, {css, Path.dirname(path)}}
+      {:error, reason} -> {:error, {:tailwind_css, path, reason}}
+    end
+  end
+
   @impl true
   def handle_info({:file_event, _pid, {path, events}}, state) do
     if relevant_write_event?(events) do
       ext = Path.extname(path)
 
       cond do
-        ext in Extensions.watchable_js(state.config[:plugins] || []) ->
-          state = schedule_rebuild(state, path)
-          state = maybe_schedule_tailwind(state, path)
+        tailwind_output?(path, state) ->
           {:noreply, state}
 
         ext in Extensions.css() ->
           state = handle_css_change(path, state)
+          {:noreply, state}
+
+        ext in Extensions.watchable_js(state.config[:plugins] || []) ->
+          state = schedule_rebuild(state, path)
+          state = maybe_schedule_tailwind(state, path)
           {:noreply, state}
 
         Volt.Assets.asset?(path) ->
@@ -255,6 +264,7 @@ defmodule Volt.Watcher do
   defp handle_css_change(path, state) do
     relative = Path.relative_to(path, state.root)
     css_dependents = StyleGraph.dependents(path)
+    tailwind_input? = tailwind_input?(path, state)
 
     Volt.Cache.evict_file(path)
     Volt.HMR.ModuleGraph.invalidate_file(path)
@@ -266,7 +276,7 @@ defmodule Volt.Watcher do
       StyleGraph.remove(path)
     end
 
-    if Volt.Path.inside?(path, state.root) do
+    if Volt.Path.inside?(path, state.root) and not tailwind_input? do
       HMR.broadcast(:update, %{path: relative, changes: [:style]})
       broadcast_css_dependents(css_dependents, state.root)
       broadcast_glob_dependents(path, state.root)
@@ -274,6 +284,16 @@ defmodule Volt.Watcher do
 
     maybe_schedule_tailwind(state, path, full?: true)
   end
+
+  defp tailwind_input?(path, %{config: %{tailwind: true, tailwind_css: css}})
+       when is_binary(css) do
+    Path.expand(path) == Path.expand(css)
+  end
+
+  defp tailwind_input?(_path, _state), do: false
+
+  defp tailwind_output?(_path, %{tailwind_outdir: nil}), do: false
+  defp tailwind_output?(path, state), do: Volt.Path.inside?(path, state.tailwind_outdir)
 
   defp broadcast_css_dependents(dependents, root) do
     dependents
@@ -365,22 +385,16 @@ defmodule Volt.Watcher do
         %{file: path, extension: ext}
       end)
 
-    {css_input, css_base} =
-      case state.config[:tailwind_css] do
-        nil -> {nil, File.cwd!()}
-        path -> {File.read!(path), Path.dirname(path)}
+    with {:ok, {css_input, css_base}} <- read_tailwind_css(state.config[:tailwind_css]),
+         {:ok, css} <- Volt.Tailwind.rebuild(changed, css: css_input, css_base: css_base) do
+      if outdir = state.tailwind_outdir do
+        File.mkdir_p!(outdir)
+        File.write!(Path.join(outdir, "app.css"), css)
       end
 
-    case Volt.Tailwind.rebuild(changed, css: css_input, css_base: css_base) do
-      {:ok, css} ->
-        if outdir = state.tailwind_outdir do
-          File.mkdir_p!(outdir)
-          File.write!(Path.join(outdir, "app.css"), css)
-        end
-
-        HMR.broadcast(:update, %{path: "assets/css/app.css", changes: [:style]})
-        Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
-
+      HMR.broadcast(:update, %{path: "assets/css/app.css", changes: [:style]})
+      Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
+    else
       :unchanged ->
         :ok
 

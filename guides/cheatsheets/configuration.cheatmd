@@ -238,7 +238,15 @@ URL prefix for dev server routes.
 config :volt, :server, watch_dirs: ["lib/", "assets/"]
 ```
 
-Directories to watch for HMR.
+Additional directories to watch for Tailwind rebuilds. The asset root is watched automatically.
+
+### Automatic Watcher
+
+```elixir
+config :volt, :server, watch: true
+```
+
+The dev-server Plug starts a supervised watcher on the first request. Set this to `false` when another process owns file watching.
 
 ## Formatting Options
 {: .col-2}

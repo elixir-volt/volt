@@ -116,6 +116,12 @@ defmodule Volt.ConfigTest do
   describe "server/0 and server/1" do
     test "returns defaults when nothing is set" do
       assert Volt.Config.server().prefix == "/assets"
+      assert Volt.Config.server().watch
+    end
+
+    test "automatic watcher can be disabled" do
+      Application.put_env(:volt, :server, watch: false)
+      refute Volt.Config.server().watch
     end
 
     test "profile server config takes precedence over global :server" do

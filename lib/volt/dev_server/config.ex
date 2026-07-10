@@ -14,5 +14,6 @@ defmodule Volt.DevServer.Config do
             resolve_dirs: [],
             module_types: %{},
             define: %{},
-            hmr_timeout: 60_000
+            hmr_timeout: 60_000,
+            watcher_opts: nil
 end

@@ -17,7 +17,3 @@ const liveSocket = new LiveSocket('/live', Socket, {
 })
 
 liveSocket.connect()
-
-if (import.meta.hot) {
-  import.meta.hot.accept()
-}
