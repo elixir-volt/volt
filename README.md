@@ -2,7 +2,7 @@
 
 [![Hex.pm](https://img.shields.io/hexpm/v/volt.svg)](https://hex.pm/packages/volt) [![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/volt)
 
-Vite-level frontend tooling that runs inside the BEAM. One dep replaces esbuild, the Tailwind CLI, and Node.js with Rust NIFs powered by [OXC](https://oxc.rs), [LightningCSS](https://lightningcss.dev), and [QuickBEAM](https://github.com/elixir-volt/quickbeam) for embedded JavaScript runtimes.
+Vite-level frontend tooling that runs inside the BEAM. One dep replaces esbuild, the Sass and Tailwind CLIs, and Node.js with Rust NIFs powered by [OXC](https://oxc.rs), [LightningCSS](https://lightningcss.dev), [grass](https://github.com/connorskees/grass), and [QuickBEAM](https://github.com/elixir-volt/quickbeam) for embedded JavaScript runtimes.
 
 ```bash
 mix igniter.install volt

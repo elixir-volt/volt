@@ -156,50 +156,11 @@ end
 console.log(`Build ${__BUILD_HASH__} at ${__BUILD_TIME__}`)
 ```
 
-### Example: CSS compilation
+### CSS compilation
 
-Use `compile/3` to return both a JavaScript module and extracted CSS. Volt will inject the CSS in dev, collect it into the production CSS file, and run parser-backed asset URL rewriting on the final CSS output:
+A plugin's `compile/3` callback can return both a JavaScript module in `:code` and extracted CSS in `:css`. Volt injects that CSS in development, collects it into the production CSS file, and runs parser-backed asset URL rewriting on the final output.
 
-```elixir
-defmodule MyApp.SassPlugin do
-  @behaviour Volt.Plugin
-
-  @impl true
-  def name, do: "sass"
-
-  @impl true
-  def extensions(:compile), do: [".scss"]
-  def extensions(:resolve), do: [".scss"]
-  def extensions(:watch), do: [".scss"]
-  def extensions(_), do: []
-
-  @impl true
-  def resolve(spec, _importer) do
-    if String.ends_with?(spec, ".scss"), do: {:ok, spec}
-  end
-
-  def resolve(_, _), do: nil
-
-  @impl true
-  def compile(path, source, _opts) do
-    if Path.extname(path) == ".scss" do
-      case MyApp.Sass.compile(source, filename: path) do
-        {:ok, css} ->
-          {:ok, %{code: "export default undefined;\n", css: css, sourcemap: nil, hashes: nil}}
-
-        {:error, _} = error ->
-          error
-      end
-    end
-  end
-end
-```
-
-```javascript
-import './theme.scss'
-```
-
-If the generated CSS contains relative asset URLs such as `url('./logo.svg')`, Volt rewrites them through the same asset pipeline as normal CSS files.
+Sass and SCSS do not require a plugin: Volt compiles `.sass`, `.scss`, `.module.sass`, and `.module.scss` files directly through its native Rust pipeline. See [Features](features.md#sass-and-scss).
 
 ### Embedded modules for single-file formats
 
@@ -491,41 +452,41 @@ end
 
 ## JavaScript Runtimes
 
-Plugins can run JavaScript build tools through `Volt.JS.Runtime`, which installs npm packages into Volt's cache and executes them in QuickBEAM without requiring Node.js in the host application. This is useful for CSS preprocessors and other tools that do not have a native Elixir or Rust binding:
+Plugins can run JavaScript build tools through `Volt.JS.Runtime`, which installs npm packages into Volt's cache and executes them in QuickBEAM without requiring Node.js in the host application. This is useful for tools that do not have a native Elixir or Rust binding:
 
 ```elixir
-defmodule MyApp.SassPlugin do
+defmodule MyApp.MarkdownPlugin do
   @behaviour Volt.Plugin
 
   @runtime_name __MODULE__.Runtime
-  @runtime_packages %{"sass" => "^1.80.0"}
+  @runtime_packages %{"marked" => "^16.0.0"}
+  @entry """
+  import { marked } from "marked";
+  export function renderMarkdown(source) { return marked.parse(source); }
+  """
 
   @impl true
-  def name, do: "sass"
+  def name, do: "markdown"
 
   @impl true
-  def extensions(:compile), do: [".scss"]
-  def extensions(:resolve), do: [".scss"]
+  def extensions(:compile), do: [".md"]
+  def extensions(:resolve), do: [".md"]
   def extensions(_), do: []
 
   @impl true
   def compile(path, source, _opts) do
-    if Path.extname(path) == ".scss" do
+    if Path.extname(path) == ".md" do
       runtime =
         Volt.JS.Runtime.ensure!(
           name: @runtime_name,
           packages: @runtime_packages,
-          entry: {:volt_asset, "sass-runtime.ts"},
+          entry: {:source, @entry, "markdown-runtime.ts"},
           bundle: true
         )
 
-      case Volt.JS.Runtime.call(runtime, "compileSass", [source, path]) do
-        {:ok, %{"css" => css}} ->
-          js = "var s = document.createElement('style'); s.textContent = #{Jason.encode!(css)}; document.head.appendChild(s);\n"
-          {:ok, %{code: js, sourcemap: nil, css: css, hashes: nil}}
-
-        {:error, _} = error ->
-          error
+      case Volt.JS.Runtime.call(runtime, "renderMarkdown", [source]) do
+        {:ok, html} -> {:ok, %{code: "export default #{Jason.encode!(html)};\n"}}
+        {:error, _} = error -> error
       end
     end
   end

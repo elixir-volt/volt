@@ -76,6 +76,30 @@ defmodule Volt.Builder.CoreTest do
       assert manifest["styles.css"]["assets"] == ["styles.css"]
     end
 
+    test "builds SCSS style entries with relative partials" do
+      File.write!(Path.join(@fixture_dir, "src/_tokens.scss"), "$brand: #639;")
+
+      File.write!(
+        Path.join(@fixture_dir, "src/styles.scss"),
+        "@use 'tokens' as *; .button { color: $brand; &:hover { opacity: .8; } }"
+      )
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/styles.scss"),
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: false
+        )
+
+      assert result.js == []
+      assert Path.basename(result.css.path) == "styles.css"
+      css = File.read!(result.css.path)
+      assert css =~ "#639"
+      assert css =~ ".button:hover"
+    end
+
     test "single bundle emits JS asset imports and records them in manifest" do
       File.write!(Path.join(@fixture_dir, "src/logo.svg"), "<svg><path /></svg>")
 

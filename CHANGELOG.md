@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- Add built-in Rust-native Sass and SCSS compilation for `.sass`, `.scss`, `.module.sass`, and `.module.scss` files, including relative partial imports and CSS hot replacement.
+
+### Changed
+
+- Upgrade Vize to `~> 0.14.0`.
+
 ## 0.16.0 - 2026-07-10
 
 ### Changed

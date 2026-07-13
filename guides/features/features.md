@@ -48,9 +48,32 @@ Dynamic `import()` calls automatically create separate async chunks. Simple rela
 
 See [Code Splitting](code-splitting.md) for examples and configuration.
 
+## Sass and SCSS
+
+Volt compiles `.scss` and indented `.sass` files through the native Rust `grass` compiler before passing the resulting CSS to LightningCSS. Variables, nesting, mixins, partials, `@use`, and relative imports work without installing Sass or Node.js:
+
+```scss
+/* styles.scss */
+$brand: #663399;
+
+.button {
+  color: $brand;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+```
+
+```javascript
+import './styles.scss'
+```
+
+Sass files participate in development watching, CSS hot replacement, production bundling, minification, and asset URL rewriting like ordinary CSS.
+
 ## CSS Modules
 
-Files ending in `.module.css` get scoped class names via LightningCSS:
+Files ending in `.module.css`, `.module.scss`, or `.module.sass` get scoped class names via LightningCSS after Sass preprocessing:
 
 ```css
 /* button.module.css */

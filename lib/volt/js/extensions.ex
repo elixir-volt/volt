@@ -3,7 +3,7 @@ defmodule Volt.JS.Extensions do
 
   @js ~w(.ts .tsx .js .jsx .mts .mjs)
   @cjs ~w(.cjs .cts)
-  @css ~w(.css)
+  @css ~w(.css .scss .sass)
   @json ~w(.json)
   @template ~w(.ex .heex .eex .leex .sface)
 
@@ -20,7 +20,7 @@ defmodule Volt.JS.Extensions do
   def resolvable_index, do: Enum.map(@js ++ @cjs, &("/index" <> &1))
   def watchable_js(plugins \\ []), do: plugin_exts(plugins, :watch) ++ @js ++ @css
   def template, do: @template
-  def css, do: @css ++ ~w(.scss .sass .less .styl)
+  def css, do: @css
 
   def apply_loader(filename, loaders) do
     ext = Path.extname(filename)

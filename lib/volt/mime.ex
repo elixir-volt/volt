@@ -12,7 +12,7 @@ defmodule Volt.MIME do
   @octet_stream "application/octet-stream"
 
   @non_asset_exts MapSet.new(~w[
-    .css .js .mjs .cjs .ts .mts .cts .jsx .tsx
+    .css .scss .sass .js .mjs .cjs .ts .mts .cts .jsx .tsx
     .json .vue .svelte .html .htm .md
   ])
 

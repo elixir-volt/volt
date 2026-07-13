@@ -1,6 +1,6 @@
 # CSS Modules
 
-Files ending in `.module.css` get scoped class names via LightningCSS.
+Files ending in `.module.css`, `.module.scss`, or `.module.sass` get scoped class names via LightningCSS. Sass and SCSS modules are preprocessed with the native Rust Sass compiler first.
 
 ## Usage
 
@@ -20,7 +20,7 @@ The generated class names are unique per file, preventing style collisions acros
 
 ## How It Works
 
-Volt compiles `.module.css` files into two outputs:
+Volt compiles CSS Module files into two outputs:
 
 1. **JavaScript module** — exports a mapping of original class names to scoped names
 2. **Scoped CSS** — the original CSS with class names rewritten to their scoped equivalents

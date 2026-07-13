@@ -267,6 +267,40 @@ defmodule Volt.PipelineTest do
       refute result.code =~ "\n"
     end
 
+    test "compiles SCSS with native Sass support" do
+      {:ok, result} =
+        Volt.Pipeline.compile(
+          "app.scss",
+          "$brand: #639; .button { color: $brand; &:hover { opacity: .8; } }"
+        )
+
+      assert result.code =~ "#639"
+      assert result.code =~ ".button:hover"
+    end
+
+    test "compiles indented Sass syntax" do
+      source = "$brand: red\n.button\n  color: $brand"
+      assert {:ok, result} = Volt.Pipeline.compile("app.sass", source)
+      assert result.code =~ "color: red"
+    end
+
+    test "resolves SCSS partials relative to the source file" do
+      dir = Path.join(System.tmp_dir!(), "volt-scss-import-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "_tokens.scss"), "$brand: rebeccapurple;")
+      File.write!(Path.join(dir, "app.scss"), "@use 'tokens' as *; .app { color: $brand; }")
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      path = Path.join(dir, "app.scss")
+      assert {:ok, result} = Volt.Pipeline.compile(path, File.read!(path))
+      assert result.code =~ "#639"
+    end
+
+    test "returns Sass compilation errors" do
+      assert {:error, error} = Volt.Pipeline.compile("app.scss", ".app { color: $missing; }")
+      assert error =~ "Undefined variable"
+    end
+
     test "inlines @import from disk" do
       dir = Path.join(System.tmp_dir!(), "volt-css-import-#{System.unique_integer([:positive])}")
       File.mkdir_p!(dir)
@@ -348,6 +382,15 @@ defmodule Volt.PipelineTest do
       assert result.code =~ "export default"
       assert result.css =~ "btn"
       assert result.css =~ "color"
+    end
+
+    test "preprocesses .module.scss before CSS Modules scoping" do
+      source = "$brand: #639; .button { color: $brand; &:hover { opacity: .8; } }"
+      assert {:ok, result} = Volt.Pipeline.compile("button.module.scss", source)
+      assert result.code =~ "export default"
+      assert result.code =~ "button"
+      assert result.css =~ "#639"
+      assert result.css =~ ":hover"
     end
   end
 

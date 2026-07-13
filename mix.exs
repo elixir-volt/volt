@@ -36,7 +36,7 @@ defmodule Volt.MixProject do
       {:reach, "~> 2.6.1", only: [:dev, :test], runtime: false},
       {:glob_ex, "~> 0.1"},
       {:oxc, "~> 0.17.2"},
-      {:vize, "~> 0.13.0"},
+      {:vize, "~> 0.14.0"},
       {:oxide_ex, "~> 0.2.1"},
       {:quickbeam, "~> 0.10.20"},
       {:dotenvy, "~> 1.1"},

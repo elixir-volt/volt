@@ -1,6 +1,6 @@
 defmodule Volt.CSS.Modules do
   @moduledoc """
-  CSS Modules support for `.module.css` files.
+  CSS Modules support for `.module.css`, `.module.scss`, and `.module.sass` files.
 
   Uses LightningCSS (via Vize) for proper CSS parsing and class name scoping.
   LightningCSS handles selectors, keyframes, custom identifiers, `composes`,
@@ -20,7 +20,8 @@ defmodule Volt.CSS.Modules do
 
   @doc "Check if a file path is a CSS Module."
   @spec css_module?(String.t()) :: boolean()
-  def css_module?(path), do: String.ends_with?(path, ".module.css")
+  def css_module?(path),
+    do: String.ends_with?(path, [".module.css", ".module.scss", ".module.sass"])
 
   @doc """
   Compile a CSS Module file.

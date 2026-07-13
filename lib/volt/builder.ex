@@ -761,7 +761,7 @@ defmodule Volt.Builder do
       Enum.map(scripts, &{&1, :script, Path.basename(&1) |> Path.rootname()}) ++
         Enum.map(styles, &{&1, :style, Path.basename(&1) |> Path.rootname()})
     else
-      type = if Path.extname(entry) == ".css", do: :style, else: :script
+      type = if Path.extname(entry) in @css_exts, do: :style, else: :script
       entry_name = override_name || entry |> Path.basename() |> Path.rootname()
       [{entry, type, entry_name}]
     end

@@ -5,6 +5,8 @@ defmodule Volt.CSS.ModulesTest do
     test "identifies .module.css files" do
       assert Volt.CSS.Modules.css_module?("button.module.css")
       assert Volt.CSS.Modules.css_module?("path/to/style.module.css")
+      assert Volt.CSS.Modules.css_module?("button.module.scss")
+      assert Volt.CSS.Modules.css_module?("button.module.sass")
     end
 
     test "rejects non-module CSS" do

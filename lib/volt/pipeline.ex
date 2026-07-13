@@ -13,7 +13,8 @@ defmodule Volt.Pipeline do
 
   @type compiled :: Volt.Pipeline.Result.t()
 
-  @css_exts ~w(.css)
+  @css_exts Volt.JS.Extensions.css()
+  @sass_exts ~w(.scss .sass)
   @json_ext ".json"
 
   @doc """
@@ -181,6 +182,7 @@ defmodule Volt.Pipeline do
 
     result =
       with {:ok, source} <- css_source(path, source),
+           {:ok, source} <- preprocess_css(path, source, minify),
            {:ok, source} <- Volt.CSS.Imports.inline(source, source_path, opts) do
         Vize.CSS.compile(source, minify: minify)
       end
@@ -201,10 +203,32 @@ defmodule Volt.Pipeline do
     if File.regular?(path), do: File.read(path), else: {:ok, source}
   end
 
+  defp preprocess_css(path, source, _minify) do
+    case Path.extname(path) do
+      ext when ext in @sass_exts ->
+        Vize.CSS.compile_sass(source,
+          syntax: if(ext == ".sass", do: :sass, else: :scss),
+          filename: Volt.Plugin.EmbeddedModule.parent_path(path)
+        )
+        |> case do
+          {:ok, %{code: css}} -> {:ok, css}
+          {:error, _} = error -> error
+        end
+
+      _ ->
+        {:ok, source}
+    end
+  end
+
   defp compile_css_module(path, source, opts) do
     minify = Keyword.get(opts, :minify, false)
-    {:ok, js, scoped_css} = Volt.CSS.Modules.compile(source, Path.basename(path), minify: minify)
-    {:ok, compiled(js, css: scoped_css)}
+
+    with {:ok, source} <- css_source(path, source),
+         {:ok, source} <- preprocess_css(path, source, minify),
+         {:ok, js, scoped_css} <-
+           Volt.CSS.Modules.compile(source, Path.basename(path), minify: minify) do
+      {:ok, compiled(js, css: scoped_css)}
+    end
   end
 
   defp compile_json(source) do

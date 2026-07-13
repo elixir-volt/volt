@@ -6,7 +6,7 @@ The file watcher monitors your asset and template directories and pushes updates
 
 | File type | Action |
 | --- | --- |
-| `.ts`, `.tsx`, `.js`, `.jsx`, `.vue`, `.svelte`, `.css` | Recompile, push update over WebSocket |
+| `.ts`, `.tsx`, `.js`, `.jsx`, `.vue`, `.svelte`, `.css`, `.scss`, `.sass` | Recompile, push update over WebSocket |
 | `.ex`, `.heex`, `.eex` | Incremental Tailwind rebuild, CSS hot-swap |
 | `.vue` (style-only change) | CSS hot-swap, no page reload |
 
