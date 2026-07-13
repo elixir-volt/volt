@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.1 - 2026-07-13
+
 ### Fixed
 
 - Execute configured JavaScript test `setup_files` before each test module in both QuickBEAM and browser runners.
