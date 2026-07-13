@@ -92,6 +92,26 @@ defmodule Volt.Test.RunnerTest do
     assert test.status == :passed
   end
 
+  test "loads setup files before the test module", %{tmp_dir: tmp_dir} do
+    setup_path =
+      write!(tmp_dir, "setup.ts", ~TS"""
+      globalThis.setupValue = 42
+      """)
+
+    path =
+      write!(tmp_dir, "setup_file.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+
+      test('uses setup state', () => {
+        expect(globalThis.setupValue).toBe(42)
+      })
+      """)
+
+    config = Volt.Test.Config.read(root: tmp_dir, setup_files: [Path.basename(setup_path)])
+
+    assert {:ok, %Result{status: :passed, total: 1}} = Runner.run_file(path, config: config)
+  end
+
   test "returns structured assertion failures", %{tmp_dir: tmp_dir} do
     path =
       write!(tmp_dir, "failure.test.js", ~JS"""

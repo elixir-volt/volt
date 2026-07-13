@@ -10,10 +10,25 @@ defmodule Volt.Test.Plugin do
 
   @behaviour Volt.Plugin
 
-  @test_modules MapSet.new(["volt:test", "volt:test/browser"])
+  @test_entry "virtual:volt/test-entry"
+  @test_modules %{
+    "volt:test" => "virtual:volt/test",
+    "volt:test/browser" => "virtual:volt/test/browser"
+  }
+  @test_module_ids MapSet.new(Map.values(@test_modules))
+
+  @doc false
+  @spec entry_specifier() :: String.t()
+  def entry_specifier, do: @test_entry
 
   @impl true
   def name, do: "volt-test"
+
+  def resolve(@test_entry, _importer, opts) do
+    if Keyword.has_key?(opts, :test_file), do: {:ok, @test_entry}
+  end
+
+  def resolve(specifier, importer, _opts), do: resolve(specifier, importer)
 
   @impl true
   def resolve("volt:client/" <> relative, _importer) do
@@ -23,12 +38,25 @@ defmodule Volt.Test.Plugin do
   end
 
   def resolve(specifier, _importer) do
-    if MapSet.member?(@test_modules, specifier), do: {:ok, specifier}
+    case @test_modules do
+      %{^specifier => id} -> {:ok, id}
+      _other -> nil
+    end
   end
 
+  def load(@test_entry, opts) do
+    imports =
+      Stream.concat(Keyword.fetch!(opts, :setup_files), [Keyword.fetch!(opts, :test_file)])
+
+    source = Enum.map_join(imports, "\n", &"import #{inspect(&1)};")
+    {:ok, source <> "\n"}
+  end
+
+  def load(specifier, _opts), do: load(specifier)
+
   @impl true
-  def load(specifier) do
-    if MapSet.member?(@test_modules, specifier) do
+  def load(id) do
+    if MapSet.member?(@test_module_ids, id) do
       {:ok, test_api_module()}
     end
   end

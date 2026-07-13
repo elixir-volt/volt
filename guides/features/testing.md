@@ -47,6 +47,16 @@ config :volt, :test,
 
 Use `bundle:` for source-graph concerns and the top-level test options for discovery/execution concerns.
 
+Use `setup_files` for modules that must execute before every test module. Relative paths resolve from the configured test `root`:
+
+```elixir
+config :volt, :test,
+  root: "assets",
+  setup_files: ["test/setup.ts"]
+```
+
+Setup files share the bundled module graph with the test, so they can install globals, register matchers, or import application test support without a separate runtime.
+
 You can also pass options directly from `test/test_helper.exs`, which is useful for package dogfood tests or custom fixture roots:
 
 ```elixir

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- Execute configured JavaScript test `setup_files` before each test module in both QuickBEAM and browser runners.
+- Resolve `volt:test` APIs through true virtual module IDs so they remain resolvable from virtual test entries.
+
 ## 0.17.0 - 2026-07-10
 
 ### Added
