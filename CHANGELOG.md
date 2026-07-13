@@ -2,13 +2,19 @@
 
 ## Unreleased
 
+## 0.17.0 - 2026-07-10
+
 ### Added
 
 - Add built-in Rust-native Sass and SCSS compilation for `.sass`, `.scss`, `.module.sass`, and `.module.scss` files, including relative partial imports and CSS hot replacement.
 
 ### Changed
 
-- Upgrade Vize to `~> 0.14.0`.
+- Upgrade Vize to `~> 0.14.0`, QuickBEAM to `~> 0.10.20`, and JSONCodec to `~> 0.2.3`.
+
+### Fixed
+
+- JavaScript tests that throw ordinary errors without assertion details now return structured failures instead of failing result decoding.
 
 ## 0.16.0 - 2026-07-10
 
