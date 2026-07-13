@@ -46,7 +46,7 @@ defmodule Volt.Test.Result do
             full_name: String.t(),
             status: :passed | :failed | :skipped,
             duration: non_neg_integer(),
-            error: SerializedError.t() | nil,
+            error: Volt.Test.Result.SerializedError.t() | nil,
             skip_reason: String.t() | nil
           }
   end

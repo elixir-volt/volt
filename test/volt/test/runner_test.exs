@@ -109,6 +109,24 @@ defmodule Volt.Test.RunnerTest do
     assert test.error.actual == %{"value" => 1}
   end
 
+  test "returns structured errors without assertion details", %{tmp_dir: tmp_dir} do
+    path =
+      write!(tmp_dir, "error.test.js", ~JS"""
+      test('throws an error', () => {
+        throw new TypeError('not a function')
+      })
+      """)
+
+    assert {:ok, %Result{status: :failed, failed: 1, tests: [test]}} = Runner.run_file(path)
+
+    assert %Result.SerializedError{
+             name: "TypeError",
+             message: "not a function",
+             expected: nil,
+             actual: nil
+           } = test.error
+  end
+
   test "runs tests that import relative modules", %{tmp_dir: tmp_dir} do
     write!(tmp_dir, "math.ts", ~TS"""
     export function add(left: number, right: number) {

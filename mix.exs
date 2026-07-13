@@ -46,7 +46,7 @@ defmodule Volt.MixProject do
       {:websock_adapter, "~> 0.5"},
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:json_codec, "~> 0.1.5"},
+      {:json_codec, "~> 0.2.3"},
       {:igniter, "~> 0.5", optional: true},
       {:npm, "~> 0.7.5"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
