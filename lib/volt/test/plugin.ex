@@ -46,10 +46,15 @@ defmodule Volt.Test.Plugin do
 
   def load(@test_entry, opts) do
     imports =
-      Stream.concat(Keyword.fetch!(opts, :setup_files), [Keyword.fetch!(opts, :test_file)])
+      opts
+      |> Keyword.fetch!(:setup_files)
+      |> Stream.concat([Keyword.fetch!(opts, :test_file)])
+      |> Enum.map(&"import #{inspect(&1)};")
 
-    source = Enum.map_join(imports, "\n", &"import #{inspect(&1)};")
-    {:ok, source <> "\n"}
+    source =
+      Volt.Priv.js!({:volt, "ts"}, "test/entry.ts", [], splices: [imports: imports])
+
+    {:ok, source}
   end
 
   def load(specifier, _opts), do: load(specifier)

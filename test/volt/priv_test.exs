@@ -37,6 +37,17 @@ defmodule Volt.PrivTest do
     refute code =~ "$mod_url"
   end
 
+  test "splices multiple statements into support modules" do
+    code =
+      Volt.Priv.js!(@support_modules, "test/entry.ts", [],
+        splices: [imports: ~s|import "./setup.ts"; import "./test.ts";|]
+      )
+
+    assert code =~ ~s(import "./setup.ts")
+    assert code =~ ~s(import "./test.ts")
+    refute code =~ "$imports"
+  end
+
   test "rejects paths outside priv" do
     assert_raise ArgumentError, fn -> Volt.Priv.path(@support_modules, "../secret.ts") end
     assert_raise ArgumentError, fn -> Volt.Priv.path(@support_modules, "/tmp/secret.ts") end

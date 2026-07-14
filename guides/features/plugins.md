@@ -276,10 +276,32 @@ js =
 ```
 
 `Volt.Priv.js!/3` reads from the OTP application's `priv` directory, binds
-`$placeholder` JavaScript literals with OXC, and emits browser JavaScript. Use `OXC.splice/3`
-directly when a placeholder represents multiple syntax nodes, such as object
-entries or function arguments. Volt uses this pattern internally for
-`import.meta.glob()` output generation.
+`$placeholder` JavaScript literals with OXC, and emits browser JavaScript.
+
+Use the `:splices` option when a placeholder represents statements, object properties,
+or array elements rather than a literal:
+
+```javascript
+// priv/templates/plugin-entry.ts
+$imports
+
+export function install() {
+  $setup
+}
+```
+
+```elixir
+Volt.Priv.js!(@templates, "plugin-entry.ts", [],
+  splices: [
+    imports: [~s|import "./runtime.js";|, ~s|import "./styles.css";|],
+    setup: "registerPlugin(); startRuntime();"
+  ]
+)
+```
+
+Splices use `OXC.splice/3`, so replacements are parsed as JavaScript syntax rather
+than inserted with textual replacement. A replacement can be an AST node, source or
+iodata containing multiple nodes, or a list of those values.
 
 ### Example: AST transform with OXC
 

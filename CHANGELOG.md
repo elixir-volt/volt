@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- `Volt.Priv.js!/4` accepts AST-backed statement, property, and array-element splices for private JavaScript and TypeScript templates.
+
+### Changed
+
+- Generate configured JavaScript test imports from a private TypeScript template instead of concatenating virtual-entry source.
+
 ## 0.17.1 - 2026-07-13
 
 ### Fixed
