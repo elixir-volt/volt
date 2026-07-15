@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- Preserve importer package scopes while resolving transitive package imports.
 - Invalidate cached `Volt.Priv` templates and compiled modules when their source changes.
 - Type-check the private test-entry splice placeholder without changing rendered output.
 
