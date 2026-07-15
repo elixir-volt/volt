@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.2 - 2026-07-13
+
 ### Added
 
 - `Volt.Priv.js!/4` accepts AST-backed statement, property, and array-element splices for private JavaScript and TypeScript templates.
