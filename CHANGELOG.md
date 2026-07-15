@@ -15,7 +15,7 @@
 
 ### Changed
 
-- Verify the documented Elixir 1.17 and Erlang/OTP 27 minimum versions in CI.
+- Require Elixir 1.18 and Erlang/OTP 27, and verify those minimum versions in CI.
 
 ## 0.17.2 - 2026-07-13
 

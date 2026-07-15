@@ -8,7 +8,7 @@ defmodule Volt.MixProject do
     [
       app: :volt,
       version: @version,
-      elixir: "~> 1.17",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
