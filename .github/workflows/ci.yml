@@ -17,4 +17,11 @@ jobs:
       latest-otp: "29"
       min-elixir: "1.17"
       min-otp: "27"
+      deps-command: |
+        sudo apt-get update
+        sudo apt-get install --yes inotify-tools
+        mix deps.get
+        npm ci
+        npx playwright install --with-deps chromium
+      latest-command: MIX_ENV=dev mix lint && MIX_ENV=test mix test
       min-command: mix compile --warnings-as-errors && mix test

@@ -94,6 +94,7 @@ defmodule Volt.Test.ExUnitTest do
     end
   end
 
+  defp test_description(%ExUnit.Test{name: name}), do: Atom.to_string(name)
   defp test_description(test), do: Map.fetch!(test, :description)
   defp test_name(test), do: Map.fetch!(test, :name)
 
