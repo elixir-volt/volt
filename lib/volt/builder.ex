@@ -40,6 +40,8 @@ defmodule Volt.Builder do
     * `:define` — compile-time replacements
     * `:node_modules` — path to node_modules (default: auto-detect)
     * `:resolve_dirs` — additional directories to resolve bare specifiers (e.g. `["deps"]`)
+    * `:package_scopes` — source-root/package-directory pairs. Bare imports originating
+      below a source root resolve from its package directory before global package roots.
     * `:name` — output base name (default: derived from entry filename)
     * `:aliases` — import alias map (e.g. `%{"@" => "assets/src"}`)
     * `:plugins` — list of `Volt.Plugin` modules. Plugin `resolve/2` and `load/1` hooks can provide virtual modules and virtual build entries.
@@ -382,6 +384,7 @@ defmodule Volt.Builder do
         NPM.Resolution.PackageResolver.find_node_modules(entry_base(first_entry))
 
     resolve_dirs = Keyword.get(opts, :resolve_dirs, []) |> Enum.map(&Path.expand/1)
+    package_scopes = opts |> Keyword.get(:package_scopes, []) |> normalize_package_scopes()
     loaders = Keyword.get(opts, :loaders, %{})
     module_types = Keyword.get(opts, :module_types, %{})
     import_source = opts |> Keyword.get(:import_source) |> to_string_or_nil()
@@ -399,6 +402,7 @@ defmodule Volt.Builder do
     ctx = %Volt.Builder.Context{
       node_modules: node_modules,
       resolve_dirs: resolve_dirs,
+      package_scopes: package_scopes,
       aliases: aliases,
       plugins: Keyword.get(opts, :plugins, []),
       external: external_set,
@@ -765,6 +769,14 @@ defmodule Volt.Builder do
       entry_name = override_name || entry |> Path.basename() |> Path.rootname()
       [{entry, type, entry_name}]
     end
+  end
+
+  defp normalize_package_scopes(scopes) when is_map(scopes) or is_list(scopes) do
+    scopes
+    |> Enum.map(fn {source_root, package_dir} ->
+      {Path.expand(source_root), Path.expand(package_dir)}
+    end)
+    |> Enum.sort_by(fn {source_root, _package_dir} -> -byte_size(source_root) end)
   end
 
   defp normalize_external(externals) when is_map(externals) do

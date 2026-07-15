@@ -291,7 +291,7 @@ export function install() {
 ```
 
 ```elixir
-Volt.Priv.js!(@templates, "plugin-entry.ts", [],
+Volt.Priv.render!(@templates, "plugin-entry.ts", [],
   splices: [
     imports: [~s|import "./runtime.js";|, ~s|import "./styles.css";|],
     setup: "registerPlugin(); startRuntime();"
@@ -301,7 +301,9 @@ Volt.Priv.js!(@templates, "plugin-entry.ts", [],
 
 Splices use `OXC.splice/3`, so replacements are parsed as JavaScript syntax rather
 than inserted with textual replacement. A replacement can be an AST node, source or
-iodata containing multiple nodes, or a list of those values.
+iodata containing multiple nodes, or a list of those values. `render!/4` preserves
+TypeScript for the subsequent Volt build; use `js!/4` when the caller needs compiled
+browser JavaScript immediately.
 
 ### Example: AST transform with OXC
 
@@ -516,3 +518,23 @@ end
 ```
 
 The runtime automatically installs npm packages on first use and caches the bundled entry script. Subsequent calls reuse the running QuickBEAM instance.
+
+Frameworks that bundle package-owned browser modules without executing them in
+QuickBEAM can install those dependencies directly and scope them to the framework's
+source root:
+
+```elixir
+packages = Volt.NPM.install!(%{"framework-runtime" => "1.2.3"})
+
+Volt.Builder.build(
+  entry: "assets/app.ts",
+  node_modules: "assets/node_modules",
+  package_scopes: [
+    {Application.app_dir(:my_framework, "priv/ts"), packages.node_modules}
+  ]
+)
+```
+
+An import originating below the scoped source root checks the framework package
+directory first. Imports from application modules continue to resolve from the
+application's `node_modules`, so package names and versions cannot shadow one another.

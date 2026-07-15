@@ -3,6 +3,7 @@ defmodule Volt.Builder.Context do
 
   defstruct node_modules: nil,
             resolve_dirs: [],
+            package_scopes: [],
             aliases: %{},
             plugins: [],
             external: MapSet.new(),

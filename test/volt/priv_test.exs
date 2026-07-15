@@ -15,11 +15,30 @@ defmodule Volt.PrivTest do
     assert code =~ "const proto"
   end
 
+  test "renders TypeScript without compiling it" do
+    code = Volt.Priv.render!(@support_modules, "test/browser.ts")
+
+    assert code =~ "type BrowserPayload"
+    assert code =~ "src: string"
+  end
+
   test "emits browser JavaScript from TypeScript support modules" do
     code = Volt.Priv.js!(@support_modules, "client/hmr.ts")
 
     assert code =~ "const proto"
     refute code =~ "type "
+  end
+
+  test "invalidates cached support modules when their source changes" do
+    relative = "test/cache-#{System.unique_integer([:positive])}.ts"
+    path = Volt.Priv.path(@support_modules, relative)
+    on_exit(fn -> File.rm(path) end)
+
+    File.write!(path, "export const value = 1;")
+    assert Volt.Priv.js!(@support_modules, relative) =~ "value = 1"
+
+    File.write!(path, "export const value = 2;")
+    assert Volt.Priv.js!(@support_modules, relative) =~ "value = 2"
   end
 
   test "binds JavaScript literals and rewrites support imports" do

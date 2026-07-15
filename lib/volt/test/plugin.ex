@@ -52,7 +52,7 @@ defmodule Volt.Test.Plugin do
       |> Enum.map(&"import #{inspect(&1)};")
 
     source =
-      Volt.Priv.js!({:volt, "ts"}, "test/entry.ts", [], splices: [imports: imports])
+      Volt.Priv.render!({:volt, "ts"}, "test/entry.ts", [], splices: [imports: imports])
 
     {:ok, source}
   end

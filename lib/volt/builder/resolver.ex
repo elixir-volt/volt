@@ -59,7 +59,7 @@ defmodule Volt.Builder.Resolver do
         resolve_relative(specifier, importer, ctx)
 
       true ->
-        resolve_bare(specifier, ctx.node_modules, ctx.resolve_dirs, ctx.plugins)
+        resolve_bare(specifier, importer, ctx)
     end
   end
 
@@ -129,15 +129,38 @@ defmodule Volt.Builder.Resolver do
       Enum.any?(external, &String.starts_with?(specifier, &1 <> "/"))
   end
 
-  defp resolve_bare(specifier, node_modules, resolve_dirs, plugins) do
-    dirs = if node_modules, do: [node_modules | resolve_dirs], else: resolve_dirs
+  defp scoped_package_dirs(nil, _scopes), do: []
+
+  defp scoped_package_dirs(importer, scopes) do
+    {importer_path, _query} = Volt.URL.split_query(importer)
+    importer_path = Path.expand(importer_path)
+
+    for {source_root, package_dir} <- scopes,
+        path_within?(importer_path, source_root),
+        do: package_dir
+  end
+
+  defp path_within?(path, root) do
+    relative = Path.relative_to(path, root)
+    Path.type(relative) == :relative and not match?([".." | _rest], Path.split(relative))
+  end
+
+  defp resolve_bare(specifier, importer, ctx) do
+    global_dirs =
+      if ctx.node_modules, do: [ctx.node_modules | ctx.resolve_dirs], else: ctx.resolve_dirs
+
+    dirs =
+      importer
+      |> scoped_package_dirs(ctx.package_scopes)
+      |> Kernel.++(global_dirs)
+      |> Enum.uniq()
 
     case Enum.find_value(dirs, fn dir ->
            {package_name, _subpath} = NPM.Resolution.PackageResolver.split_specifier(specifier)
            package_dir = Path.join(dir, package_name)
 
            if File.dir?(package_dir) do
-             resolve_in_package(specifier, dir, package_dir, plugins) || :unresolved_package
+             resolve_in_package(specifier, dir, package_dir, ctx.plugins) || :unresolved_package
            end
          end) do
       nil -> :skip

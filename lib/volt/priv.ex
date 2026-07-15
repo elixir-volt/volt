@@ -15,13 +15,14 @@ defmodule Volt.Priv do
 
       Volt.Priv.path(assets, "runtime.ts")
       Volt.Priv.read!(assets, "runtime.ts")
+      Volt.Priv.render!(assets, "entry.ts", [], splices: [body: "start();"])
       Volt.Priv.js!(assets, "runtime.ts")
       Volt.Priv.js!(assets, "entry.ts", id: "counter", props: %{count: 1})
 
-  `js!/3` binds `$placeholder` JavaScript literals with OXC before emitting browser
-  JavaScript. `js!/4` also supports statement, property, and array-element splices.
-  That keeps templates valid TypeScript or JavaScript files instead of requiring EEx
-  or textual source replacement.
+  `render!/4` binds and splices templates while preserving TypeScript for a later
+  Volt build. `js!/3` and `js!/4` additionally compile the rendered source to browser
+  JavaScript. This keeps templates valid TypeScript or JavaScript files instead of
+  requiring EEx or textual source replacement.
   """
 
   @type source :: atom() | {atom(), String.t()}
@@ -46,6 +47,23 @@ defmodule Volt.Priv do
     source
     |> path(relative)
     |> File.read!()
+  end
+
+  @doc """
+  Renders a JavaScript or TypeScript template stored under `priv`.
+
+  Literal bindings use `OXC.bind/2`, while the `:splices` option accepts statement,
+  property, and array-element replacements handled by `OXC.splice/3`. The rendered
+  source is not compiled, making this API suitable for virtual modules and generated
+  entries that will subsequently pass through `Volt.Builder`.
+  """
+  @spec render!(source(), String.t()) :: String.t()
+  @spec render!(source(), String.t(), bindings()) :: String.t()
+  @spec render!(source(), String.t(), bindings(), keyword()) :: String.t()
+  def render!(source, relative, bindings \\ [], opts \\ []) when is_binary(relative) do
+    source
+    |> render_source(relative, bindings, Keyword.get(opts, :splices, []))
+    |> rewrite_specifiers(opts[:rewrite_specifiers], relative)
   end
 
   @doc """
@@ -76,39 +94,50 @@ defmodule Volt.Priv do
       cached_js!(source, relative)
     else
       source
-      |> template_ast!(relative)
-      |> OXC.bind(literal_bindings(bindings))
-      |> splice_all(splices)
-      |> OXC.codegen!()
+      |> render_source(relative, bindings, splices)
       |> compile(relative)
     end
   end
 
-  defp cached_js!(source, relative) do
-    key = {__MODULE__, :js, source, relative}
-
-    case :persistent_term.get(key, nil) do
-      nil ->
-        code = source |> read!(relative) |> compile(relative)
-        :persistent_term.put(key, code)
-        code
-
-      code ->
-        code
+  defp render_source(source, relative, bindings, splices) do
+    if empty?(bindings) and empty?(splices) do
+      read!(source, relative)
+    else
+      source
+      |> template_ast!(relative)
+      |> OXC.bind(literal_bindings(bindings))
+      |> splice_all(splices)
+      |> OXC.codegen!()
     end
   end
 
+  defp cached_js!(source, relative) do
+    source_code = read!(source, relative)
+
+    cached_value({__MODULE__, :js, source, relative}, source_code, fn ->
+      compile(source_code, relative)
+    end)
+  end
+
   defp template_ast!(source, relative) do
-    key = {__MODULE__, :template_ast, source, relative}
+    source_code = read!(source, relative)
+
+    cached_value({__MODULE__, :template_ast, source, relative}, source_code, fn ->
+      OXC.parse!(source_code, relative)
+    end)
+  end
+
+  defp cached_value(key, source, build) do
+    fingerprint = {byte_size(source), :erlang.phash2(source)}
 
     case :persistent_term.get(key, nil) do
-      nil ->
-        ast = source |> read!(relative) |> OXC.parse!(relative)
-        :persistent_term.put(key, ast)
-        ast
+      {^fingerprint, value} ->
+        value
 
-      ast ->
-        ast
+      _stale_or_missing ->
+        value = build.()
+        :persistent_term.put(key, {fingerprint, value})
+        value
     end
   end
 

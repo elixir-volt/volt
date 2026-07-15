@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- `Volt.Builder` accepts importer-scoped package directories through `:package_scopes`.
+- `Volt.NPM.install!/2` exposes isolated, npm_ex-backed package acquisition for frameworks and plugins.
+- `Volt.Priv.render!/4` applies literal bindings and AST splices while preserving TypeScript for a subsequent Volt build.
+
+### Fixed
+
+- Invalidate cached `Volt.Priv` templates and compiled modules when their source changes.
+
 ## 0.17.2 - 2026-07-13
 
 ### Added

@@ -84,6 +84,48 @@ defmodule Volt.Builder.ResolutionTest do
       assert js =~ "b-"
     end
 
+    test "resolves bare imports from the importer's scoped package directory" do
+      app_packages = Path.join(@fixture_dir, "node_modules")
+      framework_root = Path.join(@fixture_dir, "framework")
+      framework_packages = Path.join(framework_root, "node_modules")
+
+      for {package_dir, value} <- [
+            {Path.join(app_packages, "shared-pkg"), "app-package"},
+            {Path.join(framework_packages, "shared-pkg"), "framework-package"}
+          ] do
+        File.mkdir_p!(package_dir)
+        File.write!(Path.join(package_dir, "package.json"), ~s({"main":"index.js"}))
+        File.write!(Path.join(package_dir, "index.js"), "export default #{inspect(value)};")
+      end
+
+      File.mkdir_p!(framework_root)
+
+      File.write!(Path.join(framework_root, "runtime.js"), """
+      import value from 'shared-pkg'
+      export const frameworkValue = value
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/scoped_packages_app.js"), """
+      import appValue from 'shared-pkg'
+      import { frameworkValue } from '../framework/runtime.js'
+      console.log(appValue, frameworkValue)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/scoped_packages_app.js"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          node_modules: app_packages,
+          package_scopes: [{framework_root, framework_packages}]
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "app-package"
+      assert js =~ "framework-package"
+    end
+
     test "resolves package imports from nearest package imports map" do
       File.mkdir_p!(Path.join(@fixture_dir, "node_modules/pkg/src/internal"))
 
