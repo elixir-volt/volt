@@ -98,6 +98,16 @@ defmodule Volt.Builder.ResolutionTest do
         File.write!(Path.join(package_dir, "index.js"), "export default #{inspect(value)};")
       end
 
+      framework_dep = Path.join(framework_packages, "framework-dep")
+      File.mkdir_p!(framework_dep)
+      File.write!(Path.join(framework_dep, "package.json"), ~s({"main":"index.js"}))
+      File.write!(Path.join(framework_dep, "index.js"), "export default 'scoped-transitive';")
+
+      File.write!(Path.join(framework_packages, "shared-pkg/index.js"), """
+      import dep from 'framework-dep'
+      export default 'framework-package-' + dep
+      """)
+
       File.mkdir_p!(framework_root)
 
       File.write!(Path.join(framework_root, "runtime.js"), """
@@ -124,6 +134,7 @@ defmodule Volt.Builder.ResolutionTest do
       js = File.read!(result.js.path)
       assert js =~ "app-package"
       assert js =~ "framework-package"
+      assert js =~ "scoped-transitive"
     end
 
     test "resolves package imports from nearest package imports map" do

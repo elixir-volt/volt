@@ -136,7 +136,7 @@ defmodule Volt.Builder.Resolver do
     importer_path = Path.expand(importer_path)
 
     for {source_root, package_dir} <- scopes,
-        path_within?(importer_path, source_root),
+        path_within?(importer_path, source_root) or path_within?(importer_path, package_dir),
         do: package_dir
   end
 
