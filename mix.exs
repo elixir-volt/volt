@@ -1,7 +1,7 @@
 defmodule Volt.MixProject do
   use Mix.Project
 
-  @version "0.17.2"
+  @version "0.17.3"
   @source_url "https://github.com/elixir-volt/volt"
 
   def project do
@@ -136,6 +136,7 @@ defmodule Volt.MixProject do
           Volt.Env,
           Volt.JS.Runtime,
           Volt.JS.Format,
+          Volt.NPM,
           Volt.Priv
         ],
         Formatting: [Volt.Formatter, Volt.Format],

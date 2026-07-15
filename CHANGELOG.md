@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.3 - 2026-07-13
 
 ### Added
 
@@ -11,6 +11,11 @@
 ### Fixed
 
 - Invalidate cached `Volt.Priv` templates and compiled modules when their source changes.
+- Type-check the private test-entry splice placeholder without changing rendered output.
+
+### Changed
+
+- Verify the documented Elixir 1.17 and Erlang/OTP 27 minimum versions in CI.
 
 ## 0.17.2 - 2026-07-13
 

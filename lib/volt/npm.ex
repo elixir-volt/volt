@@ -13,6 +13,16 @@ defmodule Volt.NPM do
   @doc "Install a package map and return its isolated cache directories."
   @spec install!(%{String.t() => String.t()}, keyword()) :: install_result()
   def install!(packages, opts \\ []) when is_map(packages) do
+    Enum.each(packages, fn
+      {name, version}
+      when is_binary(name) and name != "" and is_binary(version) and version != "" ->
+        :ok
+
+      package ->
+        raise ArgumentError,
+              "expected npm packages to contain non-empty string names and versions, got: #{inspect(package)}"
+    end)
+
     Volt.JS.Runtime.Installer.install!(packages, opts)
   end
 end

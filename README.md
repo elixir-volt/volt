@@ -9,7 +9,7 @@ mix igniter.install volt
 mix phx.server
 ```
 
-The installer configures everything. No binaries to download, no extra processes to manage.
+The installer configures everything. No binaries to download, no extra processes to manage. Volt requires Elixir 1.17 or later and Erlang/OTP 27 or later.
 
 ## Why Volt
 
@@ -31,7 +31,7 @@ Or add the dep manually:
 
 ```elixir
 def deps do
-  [{:volt, "~> 0.16"}]
+  [{:volt, "~> 0.17"}]
 end
 ```
 

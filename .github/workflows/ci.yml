@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  elixir:
+    uses: elixir-vibe/actions/.github/workflows/elixir-ci.yml@v1
+    with:
+      latest-elixir: "1.20"
+      latest-otp: "29"
+      min-elixir: "1.17"
+      min-otp: "27"
+      min-command: mix compile --warnings-as-errors && mix test

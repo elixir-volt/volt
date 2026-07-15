@@ -29,18 +29,22 @@ defmodule Volt.Test.ExUnitTest do
     assert Code.ensure_loaded?(module)
 
     test_module = module.__ex_unit__()
-    tests = Enum.sort_by(test_module.tests, & &1.description)
+    tests = Enum.sort_by(test_module.tests, &test_description/1)
 
     assert length(tests) == 2
-    assert Enum.map(tests, & &1.description) == ["test math › adds", "test math › multiplies"]
+
+    assert Enum.map(tests, &test_description/1) == [
+             "test math › adds",
+             "test math › multiplies"
+           ]
 
     for test <- tests do
-      assert test.tags.js == true
-      assert test.tags.volt_file == file
-      assert test.tags.volt_test_id in [1, 2]
-      assert test.tags.file == file
-      assert test.tags.line in [4, 5]
-      assert test.tags.test_type == :test
+      assert test_tag(test, :js) == true
+      assert test_tag(test, :volt_file) == file
+      assert test_tag(test, :volt_test_id) in [1, 2]
+      assert test_tag(test, :file) == file
+      assert test_tag(test, :line) in [4, 5]
+      assert test_tag(test, :test_type) == :test
     end
   end
 
@@ -56,15 +60,15 @@ defmodule Volt.Test.ExUnitTest do
 
     assert [module] = Volt.Test.ExUnit.install(root: tmp_dir, include: ["modifiers.test.ts"])
 
-    tests = Enum.sort_by(module.__ex_unit__().tests, & &1.description)
-    skipped = Enum.find(tests, &(&1.description == "test skipped"))
-    tagged = Enum.find(tests, &(&1.description == "test tagged"))
-    todo = Enum.find(tests, &(&1.description == "test todo"))
+    tests = Enum.sort_by(module.__ex_unit__().tests, &test_description/1)
+    skipped = Enum.find(tests, &(test_description(&1) == "test skipped"))
+    tagged = Enum.find(tests, &(test_description(&1) == "test tagged"))
+    todo = Enum.find(tests, &(test_description(&1) == "test todo"))
 
-    assert skipped.tags.skip == "Skipped"
-    assert todo.tags.skip == "TODO"
-    assert tagged.tags.volt_tags == ["slow", "browser"]
-    assert tagged.tags.volt_file == file
+    assert test_tag(skipped, :skip) == "Skipped"
+    assert test_tag(todo, :skip) == "TODO"
+    assert test_tag(tagged, :volt_tags) == ["slow", "browser"]
+    assert test_tag(tagged, :volt_file) == file
   end
 
   test "generated ExUnit test functions execute a single JS test", %{tmp_dir: tmp_dir} do
@@ -76,9 +80,9 @@ defmodule Volt.Test.ExUnitTest do
       """)
 
     assert [module] = Volt.Test.ExUnit.install(root: tmp_dir, include: ["single.test.ts"])
-    [%ExUnit.Test{name: name}] = module.__ex_unit__().tests
+    [test] = module.__ex_unit__().tests
 
-    assert :ok = apply(module, name, [%{}])
+    assert :ok = apply(module, test_name(test), [%{}])
     assert file
   end
 
@@ -89,6 +93,12 @@ defmodule Volt.Test.ExUnitTest do
       Volt.Test.ExUnit.install(root: tmp_dir, include: ["empty.test.ts"])
     end
   end
+
+  defp test_description(test), do: Map.fetch!(test, :description)
+  defp test_name(test), do: Map.fetch!(test, :name)
+
+  defp test_tag(%{tags: tags}, key), do: Map.fetch!(tags, key)
+  defp test_tag(test, key), do: Map.fetch!(test, key)
 
   defp write!(root, path, contents) do
     path = Path.join(root, path)

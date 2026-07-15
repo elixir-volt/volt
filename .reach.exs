@@ -10,13 +10,14 @@ compat_json = [":json.*"]
 unsafe_runtime_encoding = ["Jason.encode!"]
 unstable_hashing = [":erlang.phash2"]
 builder_runtime = ["Volt.DevServer.*", "Volt.Watcher.*", "Volt.HMR.*"]
-asset_runtime = ["Volt.Assets.*", "Volt.Builder.*", "Volt.DevServer.*", "Volt.JS.*"]
+asset_runtime = ["Volt.Assets.*", "Volt.Builder.*", "Volt.DevServer.*", "Volt.JS.*", "Volt.NPM"]
 ast_side_effects = app_config ++ file_mutation ++ ["System.cmd", "QuickBEAM.*"] ++ builder_runtime
 
 adapter = [
   "Mix.Tasks.Volt.*",
   "Volt",
   "Volt.Formatter",
+  "Volt.NPM",
   "Volt.Test.*"
 ]
 
