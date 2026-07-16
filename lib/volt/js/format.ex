@@ -24,11 +24,12 @@ defmodule Volt.JS.Format do
   }
 
   @atom_values ~w(trailing_comma arrow_parens end_of_line quote_props object_wrap experimental_operator_position embedded_language_formatting)a
+  @discovery_keys ~w(root sources ignore)a
 
   def load_config do
     case Application.get_env(:volt, :format) do
       nil -> load_json_config()
-      opts when is_list(opts) -> opts
+      opts when is_list(opts) -> Keyword.drop(opts, @discovery_keys)
     end
   end
 

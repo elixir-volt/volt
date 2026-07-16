@@ -42,6 +42,21 @@ defmodule Volt.JsCheckTest do
     assert output =~ "broken.ts"
   end
 
+  test "syntax lint recognizes configured globals" do
+    file = Path.join(@tmp_dir, "globals.js")
+    File.write!(file, "knownGlobal(); missingGlobal();\n")
+
+    Application.put_env(:volt, :lint,
+      globals: %{"knownGlobal" => :readonly},
+      rules: %{"no-undef" => :deny}
+    )
+
+    diagnostics = Volt.JS.Check.lint([file])
+
+    assert Enum.any?(diagnostics, &(&1.message =~ "missingGlobal"))
+    refute Enum.any?(diagnostics, &(&1.message =~ "knownGlobal"))
+  end
+
   test "type-aware check reports tsgolint diagnostics" do
     File.write!(Path.join(@tmp_dir, "typed.ts"), "export const value = Promise.resolve(1)\n")
     tsgolint = fake_tsgolint!(@tmp_dir)

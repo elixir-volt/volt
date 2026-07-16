@@ -58,6 +58,7 @@ defmodule Volt.JS.Check do
   defp ast_lint(files, config, rules) do
     plugins = Keyword.get(config, :plugins, [:typescript])
     custom_rules = Keyword.get(config, :custom_rules, [])
+    globals = Keyword.get(config, :globals, %{})
 
     Enum.flat_map(files, fn file ->
       source = File.read!(file)
@@ -65,6 +66,7 @@ defmodule Volt.JS.Check do
       case OXC.Lint.run(source, file,
              plugins: plugins,
              rules: rules,
+             globals: globals,
              custom_rules: custom_rules
            ) do
         {:ok, diagnostics} -> Enum.map(diagnostics, &Map.put(&1, :file, file))

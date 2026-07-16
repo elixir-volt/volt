@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.4 - 2026-07-13
+
+### Added
+
+- Allow formatter and linter file discovery to override build `:root`, `:sources`, and `:ignore` independently.
+
 ## 0.17.3 - 2026-07-13
 
 ### Added

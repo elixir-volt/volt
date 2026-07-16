@@ -36,6 +36,8 @@ config :volt, :format,
 
 All [oxfmt options](https://hexdocs.pm/oxc/OXC.Format.html) are supported. Falls back to `.oxfmtrc.json` if no Elixir config is set.
 
+`:root`, `:sources`, and `:ignore` may also be set under `config :volt, :format` to override the build source set for formatting only.
+
 ## Linting
 
 Lint JS/TS assets using oxlint via NIF — 650+ rules, no Node.js required:
@@ -51,6 +53,9 @@ Available plugins: `react`, `typescript`, `unicorn`, `import`, `jsdoc`, `jest`, 
 
 ```elixir
 config :volt, :lint,
+  sources: ["priv/ts/**/*.ts", "test/javascript/**/*.mjs"],
+  ignore: ["test/javascript/fixtures/**"],
+  globals: %{"describe" => :readonly, "it" => :readonly},
   plugins: [:typescript],
   rules: %{
     "no-debugger" => :deny,
@@ -58,6 +63,8 @@ config :volt, :lint,
     "typescript/no-explicit-any" => :warn
   }
 ```
+
+Lint-specific `:root`, `:sources`, and `:ignore` values override the build source set without changing which files the formatter checks. This is useful when canonical fixtures must be linted but retain their original formatting.
 
 ### Custom Rules
 
