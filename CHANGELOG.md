@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.7 - 2026-07-16
 
 ### Improved
 
