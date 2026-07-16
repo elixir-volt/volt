@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Pass configured Oxlint environments to OXC linting.
+
 ## 0.17.4 - 2026-07-13
 
 ### Added

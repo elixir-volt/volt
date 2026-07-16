@@ -44,9 +44,10 @@ defmodule Volt.JsCheckTest do
 
   test "syntax lint recognizes configured globals" do
     file = Path.join(@tmp_dir, "globals.js")
-    File.write!(file, "knownGlobal(); missingGlobal();\n")
+    File.write!(file, "document; describe; knownGlobal(); missingGlobal();\n")
 
     Application.put_env(:volt, :lint,
+      env: [:browser, :mocha],
       globals: %{"knownGlobal" => :readonly},
       rules: %{"no-undef" => :deny}
     )
@@ -54,6 +55,8 @@ defmodule Volt.JsCheckTest do
     diagnostics = Volt.JS.Check.lint([file])
 
     assert Enum.any?(diagnostics, &(&1.message =~ "missingGlobal"))
+    refute Enum.any?(diagnostics, &(&1.message =~ "document"))
+    refute Enum.any?(diagnostics, &(&1.message =~ "describe"))
     refute Enum.any?(diagnostics, &(&1.message =~ "knownGlobal"))
   end
 
