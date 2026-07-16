@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Improved
+
+- Render splice-only private templates through OXC's native pipeline to avoid repeated ESTree serialization for large generated entries.
+
 ## 0.17.6 - 2026-07-16
 
 ### Fixed

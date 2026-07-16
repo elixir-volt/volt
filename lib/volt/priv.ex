@@ -100,14 +100,23 @@ defmodule Volt.Priv do
   end
 
   defp render_source(source, relative, bindings, splices) do
-    if empty?(bindings) and empty?(splices) do
-      read!(source, relative)
-    else
-      source
-      |> template_ast!(relative)
-      |> OXC.bind(literal_bindings(bindings))
-      |> splice_all(splices)
-      |> OXC.codegen!()
+    cond do
+      empty?(bindings) and empty?(splices) ->
+        read!(source, relative)
+
+      empty?(bindings) ->
+        source
+        |> read!(relative)
+        |> OXC.parse!(relative, :native)
+        |> splice_all(splices)
+        |> OXC.codegen!()
+
+      true ->
+        source
+        |> template_ast!(relative)
+        |> OXC.bind(literal_bindings(bindings))
+        |> splice_all(splices)
+        |> OXC.codegen!()
     end
   end
 
