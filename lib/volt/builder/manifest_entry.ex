@@ -10,6 +10,16 @@ defmodule Volt.Builder.ManifestEntry do
             css: [],
             assets: []
 
+  @type t :: %__MODULE__{
+          file: String.t(),
+          src: String.t(),
+          isEntry: boolean(),
+          imports: [String.t()],
+          dynamicImports: [String.t()],
+          css: [String.t()],
+          assets: [String.t()]
+        }
+
   def js(src, file, opts \\ []) do
     %__MODULE__{src: src, file: file, isEntry: Keyword.get(opts, :entry, false)}
   end

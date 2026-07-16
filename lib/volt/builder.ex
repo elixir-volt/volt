@@ -18,14 +18,6 @@ defmodule Volt.Builder do
   @css_import_noop "data:text/javascript,export{}"
   @dynamic_css_import_noop "Promise.resolve({ default: undefined })"
 
-  @type build_result :: %{
-          js:
-            %{path: String.t(), size: non_neg_integer()}
-            | [%{path: String.t(), size: non_neg_integer()}],
-          css: %{path: String.t(), size: non_neg_integer()} | nil,
-          manifest: %{String.t() => String.t()}
-        }
-
   @doc """
   Build production assets from one or more entry files.
 
@@ -59,7 +51,7 @@ defmodule Volt.Builder do
           external: ["vue", "phoenix"]
           external: %{"vue" => "Vue", "phoenix" => "Phoenix"}
   """
-  @spec build(keyword()) :: {:ok, build_result()} | {:error, term()}
+  @spec build(keyword()) :: {:ok, Volt.Builder.Result.t()} | {:error, term()}
   def build(opts) do
     plugins = Keyword.get(opts, :plugins, [])
 

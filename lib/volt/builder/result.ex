@@ -3,6 +3,13 @@ defmodule Volt.Builder.Result do
 
   defstruct js: [], css: nil, manifest: %{}, chunks: []
 
+  @type t :: %__MODULE__{
+          js: Volt.Builder.OutputFile.t() | [Volt.Builder.OutputFile.t()],
+          css: Volt.Builder.OutputFile.t() | nil,
+          manifest: %{String.t() => Volt.Builder.ManifestEntry.t()},
+          chunks: [Volt.Builder.OutputFile.t()]
+        }
+
   @behaviour Access
 
   @impl Access

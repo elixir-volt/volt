@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Describe production build results with their strict `Volt.Builder.Result`, `ManifestEntry`, and `OutputFile` struct types.
+
 ## 0.17.5 - 2026-07-13
 
 ### Added
