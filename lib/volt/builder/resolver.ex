@@ -16,7 +16,7 @@ defmodule Volt.Builder.Resolver do
     end
   end
 
-  def absolute?(specifier), do: String.starts_with?(specifier, "/")
+  def absolute?(specifier), do: Path.type(specifier) == :absolute
 
   defp do_resolve(specifier, importer, ctx, query) do
     case Volt.PluginRunner.resolve(ctx.plugins, specifier, importer) do

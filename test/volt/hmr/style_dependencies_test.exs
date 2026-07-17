@@ -1,7 +1,7 @@
 defmodule Volt.HMR.StyleDependenciesTest do
   use ExUnit.Case, async: false
 
-  @root Path.join(System.tmp_dir!(), "volt-style-dependencies-test")
+  @root Path.expand("volt-style-dependencies-test", System.tmp_dir!())
 
   setup do
     Volt.HMR.StyleGraph.clear()

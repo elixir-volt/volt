@@ -1,7 +1,7 @@
 defmodule Volt.CSS.AssetURLRewriterTest do
   use ExUnit.Case, async: true
 
-  @fixture_dir Path.join(System.tmp_dir!(), "volt-css-asset-url-rewriter-test")
+  @fixture_dir Path.expand("volt-css-asset-url-rewriter-test", System.tmp_dir!())
   @outdir Path.join(@fixture_dir, "dist")
 
   setup do

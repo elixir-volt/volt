@@ -1,7 +1,7 @@
 defmodule Volt.AssetsTest do
   use ExUnit.Case, async: true
 
-  @fixture_dir Path.join(System.tmp_dir!(), "volt-assets-test")
+  @fixture_dir Path.expand("volt-assets-test", System.tmp_dir!())
 
   setup do
     File.mkdir_p!(@fixture_dir)

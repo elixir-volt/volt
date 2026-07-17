@@ -46,7 +46,9 @@ defmodule Volt.Tailwind.Resolver do
     do: NPM.Resolution.PackageResolver.node_builtin?(specifier)
 
   def relative_specifier?(specifier), do: NPM.Resolution.PackageResolver.relative?(specifier)
-  def absolute_specifier?(specifier), do: String.starts_with?(specifier, "/")
+
+  def absolute_specifier?(specifier),
+    do: Path.type(specifier) in [:absolute, :volumerelative]
 
   defp resolve_bare_path!(id, base, extensions, index_files, kind, runtime_node_modules) do
     {package_name, subpath} = NPM.Resolution.PackageResolver.split_specifier(id)
@@ -75,7 +77,7 @@ defmodule Volt.Tailwind.Resolver do
 
     case resolved do
       {:ok, path} ->
-        path
+        Path.expand(path)
 
       nil ->
         raise "Could not resolve #{kind} #{inspect(id)} from #{inspect(base)}. Add it to node_modules or the Tailwind runtime install."
@@ -115,7 +117,7 @@ defmodule Volt.Tailwind.Resolver do
 
     case try_resolve(target, extensions, index_files) do
       {:ok, path} ->
-        path
+        Path.expand(path)
 
       {:error, reason} ->
         raise "Could not resolve file #{inspect(id)} from #{inspect(base)}: #{inspect(reason)}"

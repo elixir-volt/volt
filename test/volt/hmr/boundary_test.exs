@@ -63,30 +63,30 @@ defmodule Volt.HMR.BoundaryTest do
     end
 
     test "finds dependency-accepting boundary in parent module through HMR module graph" do
+      app = Path.expand("app/App.tsx")
+      button = Path.expand("app/Button.tsx")
+
       Volt.HMR.ModuleGraph.update_module(
         "/assets/App.tsx",
         "/assets/App.tsx",
-        "/app/App.tsx",
+        app,
         ["/assets/Button.tsx"]
       )
 
       Volt.HMR.ModuleGraph.update_module(
         "/assets/Button.tsx",
         "/assets/Button.tsx",
-        "/app/Button.tsx",
+        button,
         []
       )
 
-      read = fn
-        "/app/App.tsx" ->
-          "import Button from './Button'\nif (import.meta.hot) { import.meta.hot.accept('./Button', () => {}) }"
+      sources = %{
+        app =>
+          "import Button from './Button'\nif (import.meta.hot) { import.meta.hot.accept('./Button', () => {}) }",
+        button => "export default function Button() {}"
+      }
 
-        "/app/Button.tsx" ->
-          "export default function Button() {}"
-      end
-
-      assert {:ok, "/app/App.tsx"} =
-               Boundary.find_boundary("/app/Button.tsx", read)
+      assert {:ok, ^app} = Boundary.find_boundary(button, &Map.fetch!(sources, &1))
     end
 
     test "finds boundary in parent module through HMR module graph" do

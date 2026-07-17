@@ -10,10 +10,16 @@ defmodule Volt.Test.Case do
   use ExUnit.CaseTemplate
 
   using opts do
+    browser? = Keyword.get(opts, :browser, false)
+
     quote do
       import ExUnit.Assertions, except: [assert: 1, assert: 2]
       import Volt.Test.Assertions
       import Volt.Test.Sigils
+
+      if unquote(browser?) do
+        @moduletag browser_js: true
+      end
 
       @volt_test_config unquote(opts)
     end

@@ -7,7 +7,7 @@ defmodule Mix.Tasks.Volt.BuildTest do
     Mix.Task.reenable("volt.build")
 
     tmp_dir =
-      Path.join(System.tmp_dir!(), "volt-build-test-#{System.unique_integer([:positive])}")
+      Path.expand("volt-build-test-#{System.unique_integer([:positive])}", System.tmp_dir!())
 
     File.mkdir_p!(Path.join(tmp_dir, "src"))
 

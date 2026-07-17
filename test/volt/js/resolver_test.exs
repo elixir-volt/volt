@@ -3,8 +3,9 @@ defmodule Volt.JS.ResolverTest do
 
   describe "resolve/2" do
     test "resolves exact alias" do
-      aliases = %{"@" => "/app/assets/src"}
-      assert {:ok, "/app/assets/src"} = Volt.JS.Resolver.resolve("@", aliases)
+      target = Path.expand("app/assets/src")
+      aliases = %{"@" => target}
+      assert {:ok, ^target} = Volt.JS.Resolver.resolve("@", aliases)
     end
 
     test "resolves alias with subpath" do

@@ -5,7 +5,10 @@ defmodule Volt.JS.HelpersTest do
 
   setup do
     tmp_dir =
-      Path.join(System.tmp_dir!(), "volt-js-helpers-#{System.unique_integer([:positive])}")
+      Path.expand(
+        "volt-js-helpers-#{System.unique_integer([:positive])}",
+        System.tmp_dir!()
+      )
 
     original_format = Application.get_env(:volt, :format)
     original_lint = Application.get_env(:volt, :lint)

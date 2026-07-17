@@ -306,8 +306,8 @@ defmodule Volt.Builder.PluginsAndVirtualModulesTest do
           plugins: [VirtualModPlugin]
         )
 
-      assert result.manifest["virtual:plain.js"].file == "virtual:plain.js"
-      assert File.read!(Path.join(@outdir, "virtual:plain.js")) =~ "123"
+      assert result.manifest["virtual_plain.js"].file == "virtual_plain.js"
+      assert File.read!(Path.join(@outdir, "virtual_plain.js")) =~ "123"
     end
 
     test "multiple virtual build entries get stable manifest keys" do

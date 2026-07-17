@@ -24,7 +24,7 @@ defmodule Volt.Test.Discovery do
   end
 
   defp discover(%Config{} = config) do
-    root = config.root
+    root = Path.expand(config.root)
 
     matched = expand_patterns(root, config.include)
     ignored = root |> expand_patterns(config.exclude) |> MapSet.new()

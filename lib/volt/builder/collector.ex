@@ -1,7 +1,7 @@
 defmodule Volt.Builder.Collector do
   @moduledoc "Walks the dependency graph from entry files, collecting modules and workers."
 
-  alias Volt.Builder.Resolver
+  alias Volt.Builder.{Naming, Resolver}
 
   @doc """
   Walk the dependency graph from an entry file.
@@ -12,7 +12,7 @@ defmodule Volt.Builder.Collector do
   - `workers` is `%{importer_path => %{specifier => worker_abs_path}}`
   """
   def collect(entry_path, ctx) do
-    label = Path.basename(entry_path)
+    label = entry_path |> Path.basename() |> Naming.file_path()
 
     state = %Volt.Builder.Collector.State{
       ctx: ctx,
@@ -336,12 +336,15 @@ defmodule Volt.Builder.Collector do
       end
       |> with_query_suffix(query)
 
-    cond do
-      Path.extname(label) == ".json" -> Path.rootname(label) <> ".json.js"
-      Path.extname(label) in Volt.JS.Extensions.css() -> label <> ".js"
-      query != "" -> label <> ".js"
-      true -> label
-    end
+    label =
+      cond do
+        Path.extname(label) == ".json" -> Path.rootname(label) <> ".json.js"
+        Path.extname(label) in Volt.JS.Extensions.css() -> label <> ".js"
+        query != "" -> label <> ".js"
+        true -> label
+      end
+
+    Naming.file_path(label)
   end
 
   defp with_query_suffix(label, ""), do: label

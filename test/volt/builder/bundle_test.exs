@@ -5,7 +5,10 @@ defmodule Volt.Builder.BundleTest do
 
   setup do
     tmp_dir =
-      Path.join(System.tmp_dir!(), "volt-builder-bundle-#{System.unique_integer([:positive])}")
+      Path.expand(
+        "volt-builder-bundle-#{System.unique_integer([:positive])}",
+        System.tmp_dir!()
+      )
 
     File.mkdir_p!(tmp_dir)
 

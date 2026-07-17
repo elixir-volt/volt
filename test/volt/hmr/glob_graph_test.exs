@@ -24,9 +24,11 @@ defmodule Volt.HMR.GlobGraphTest do
 
   test "extracts patterns from import.meta.glob source" do
     source = "const pages = import.meta.glob('./pages/*.ts')"
+    importer = Path.expand("src/routes.ts")
+    page = Path.expand("src/pages/home.ts")
 
-    GlobGraph.update_from_source("/src/routes.ts", source)
+    GlobGraph.update_from_source(importer, source)
 
-    assert GlobGraph.dependents("/src/pages/home.ts") == ["/src/routes.ts"]
+    assert GlobGraph.dependents(page) == [importer]
   end
 end

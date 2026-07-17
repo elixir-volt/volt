@@ -186,7 +186,7 @@ defmodule Volt.Test.RunnerTest do
   end
 
   defp write!(root, path, contents) do
-    path = Path.join(root, path)
+    path = Path.expand(path, root)
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, contents)
     path

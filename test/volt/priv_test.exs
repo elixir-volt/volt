@@ -69,6 +69,7 @@ defmodule Volt.PrivTest do
 
   test "rejects paths outside priv" do
     assert_raise ArgumentError, fn -> Volt.Priv.path(@support_modules, "../secret.ts") end
-    assert_raise ArgumentError, fn -> Volt.Priv.path(@support_modules, "/tmp/secret.ts") end
+    outside = Path.expand("secret.ts", System.tmp_dir!())
+    assert_raise ArgumentError, fn -> Volt.Priv.path(@support_modules, outside) end
   end
 end

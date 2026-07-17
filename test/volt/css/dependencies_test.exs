@@ -1,7 +1,7 @@
 defmodule Volt.CSS.DependenciesTest do
   use ExUnit.Case, async: true
 
-  @root Path.join(System.tmp_dir!(), "volt-css-dependencies-test")
+  @root Path.expand("volt-css-dependencies-test", System.tmp_dir!())
 
   setup do
     File.rm_rf!(@root)

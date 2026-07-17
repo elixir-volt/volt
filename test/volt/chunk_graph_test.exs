@@ -135,28 +135,27 @@ defmodule Volt.ChunkGraphTest do
     end
 
     test "records static and dynamic chunk links" do
+      main = Path.expand("app/main.ts")
+      static_vendor = Path.expand("app/static-vendor.ts")
+      lazy = Path.expand("app/lazy.ts")
+
       modules = [
-        {"/app/main.ts", "main.ts", ""},
-        {"/app/static-vendor.ts", "static-vendor.ts", ""},
-        {"/app/lazy.ts", "lazy.ts", ""}
+        {main, "main.ts", ""},
+        {static_vendor, "static-vendor.ts", ""},
+        {lazy, "lazy.ts", ""}
       ]
 
       dep_map = %{
-        "/app/main.ts" => %{
-          static: ["/app/static-vendor.ts"],
-          dynamic: ["/app/lazy.ts"]
-        },
-        "/app/static-vendor.ts" => %{static: [], dynamic: []},
-        "/app/lazy.ts" => %{static: [], dynamic: []}
+        main => %{static: [static_vendor], dynamic: [lazy]},
+        static_vendor => %{static: [], dynamic: []},
+        lazy => %{static: [], dynamic: []}
       }
 
       graph =
-        ChunkGraph.build("/app/main.ts", modules, dep_map,
-          manual_chunks: %{"vendor" => ["/app/static-vendor.ts"]}
-        )
+        ChunkGraph.build(main, modules, dep_map, manual_chunks: %{"vendor" => [static_vendor]})
 
       assert graph.chunks["entry"].imports == ["vendor"]
-      assert graph.chunks["entry"].dynamic_imports == [graph.module_to_chunk["/app/lazy.ts"]]
+      assert graph.chunks["entry"].dynamic_imports == [graph.module_to_chunk[lazy]]
     end
 
     test "module_to_chunk maps dynamic entry to async chunk" do
@@ -232,37 +231,33 @@ defmodule Volt.ChunkGraphTest do
     end
 
     test "path patterns match by directory prefix" do
+      main = Path.expand("app/main.ts")
+      button = Path.expand("app/src/components/Button.ts")
+      modal = Path.expand("app/src/components/Modal.ts")
+      utils = Path.expand("app/src/utils.ts")
+
       modules = [
-        {"/app/main.ts", "main.ts", ""},
-        {"/app/src/components/Button.ts", "Button.ts", ""},
-        {"/app/src/components/Modal.ts", "Modal.ts", ""},
-        {"/app/src/utils.ts", "utils.ts", ""}
+        {main, "main.ts", ""},
+        {button, "Button.ts", ""},
+        {modal, "Modal.ts", ""},
+        {utils, "utils.ts", ""}
       ]
 
       dep_map = %{
-        "/app/main.ts" => %{
-          static: [
-            "/app/src/components/Button.ts",
-            "/app/src/components/Modal.ts",
-            "/app/src/utils.ts"
-          ],
-          dynamic: []
-        },
-        "/app/src/components/Button.ts" => %{static: [], dynamic: []},
-        "/app/src/components/Modal.ts" => %{static: [], dynamic: []},
-        "/app/src/utils.ts" => %{static: [], dynamic: []}
+        main => %{static: [button, modal, utils], dynamic: []},
+        button => %{static: [], dynamic: []},
+        modal => %{static: [], dynamic: []},
+        utils => %{static: [], dynamic: []}
       }
 
       graph =
-        ChunkGraph.build("/app/main.ts", modules, dep_map,
-          manual_chunks: %{"ui" => ["/app/src/components"]}
-        )
+        ChunkGraph.build(main, modules, dep_map, manual_chunks: %{"ui" => [Path.dirname(button)]})
 
       assert graph.chunks["ui"].type == :manual
-      assert "/app/src/components/Button.ts" in graph.chunks["ui"].modules
-      assert "/app/src/components/Modal.ts" in graph.chunks["ui"].modules
+      assert button in graph.chunks["ui"].modules
+      assert modal in graph.chunks["ui"].modules
 
-      refute "/app/src/utils.ts" in graph.chunks["ui"].modules
+      refute utils in graph.chunks["ui"].modules
     end
 
     test "manual chunks coexist with dynamic imports" do

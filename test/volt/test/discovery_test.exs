@@ -22,8 +22,8 @@ defmodule Volt.Test.DiscoveryTest do
     config = %Config{root: tmp_dir, include: ["**/*.{test,spec}.{js,ts}"]}
 
     assert Volt.Test.Discovery.files(config) == [
-             Path.join([tmp_dir, "src", "a.spec.js"]),
-             Path.join([tmp_dir, "src", "b.test.ts"])
+             Path.expand(Path.join([tmp_dir, "src", "a.spec.js"])),
+             Path.expand(Path.join([tmp_dir, "src", "b.test.ts"]))
            ]
   end
 
@@ -38,7 +38,9 @@ defmodule Volt.Test.DiscoveryTest do
       exclude: ["src/generated/**", "node_modules/**"]
     }
 
-    assert Volt.Test.Discovery.files(config) == [Path.join([tmp_dir, "src", "app.test.ts"])]
+    assert Volt.Test.Discovery.files(config) == [
+             Path.expand(Path.join([tmp_dir, "src", "app.test.ts"]))
+           ]
   end
 
   test "reads config when called with profile and overrides", %{tmp_dir: tmp_dir} do
@@ -63,7 +65,7 @@ defmodule Volt.Test.DiscoveryTest do
     )
 
     assert Volt.Test.Discovery.files(:my_app_web, []) == [
-             Path.join([tmp_dir, "app", "app.test.ts"])
+             Path.expand(Path.join([tmp_dir, "app", "app.test.ts"]))
            ]
   end
 

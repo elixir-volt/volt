@@ -2,7 +2,7 @@ defmodule Volt.DevTest do
   use ExUnit.Case, async: false
 
   test "starts one supervised watcher per profile and asset root" do
-    root = Path.join(System.tmp_dir!(), "volt-dev-#{System.unique_integer([:positive])}")
+    root = Path.expand("volt-dev-#{System.unique_integer([:positive])}", System.tmp_dir!())
     File.mkdir_p!(root)
 
     assert :ok = Volt.Dev.ensure_watcher(id: :default, root: root, tailwind: false)

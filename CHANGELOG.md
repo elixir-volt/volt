@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Generate filesystem-safe entry and module labels for virtual modules on Windows.
+- Use platform-aware absolute paths for builder, test discovery, glob transforms, and Tailwind resolution.
+- Make type-aware lint test executables portable across Unix and Windows.
+
 ## 0.17.10 - 2026-07-17
 
 ### Added

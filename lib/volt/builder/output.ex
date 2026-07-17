@@ -1,7 +1,7 @@
 defmodule Volt.Builder.Output do
   @moduledoc "Builds final production output files from compiled module graphs."
 
-  alias Volt.Builder.{Writer, Rewriter}
+  alias Volt.Builder.{Naming, Rewriter, Writer}
 
   @doc "Bundle modules into a single in-memory JS bundle."
   def bundle_single(entry, {js_files, css_parts, assets}, files, build_ctx) do
@@ -13,7 +13,9 @@ defmodule Volt.Builder.Output do
     } = build_ctx
 
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
-    bundle_opts = Keyword.put(bundle_opts, :entry, Path.basename(entry))
+    entry_label = entry |> Path.basename() |> Naming.file_path()
+    entry_name = Path.rootname(entry_label)
+    bundle_opts = Keyword.put(bundle_opts, :entry, entry_label)
 
     case bundle_js_files(js_files, bundle_opts) do
       {:ok, bundle_result} ->
@@ -24,12 +26,12 @@ defmodule Volt.Builder.Output do
           Rewriter.rewrite_worker_urls(
             js_code,
             Rewriter.all_worker_map(ctx),
-            Path.rootname(Path.basename(entry))
+            entry_name
           )
 
         js_code =
           Volt.PluginRunner.render_chunk(ctx.plugins, js_code, %{
-            name: Path.rootname(Path.basename(entry)),
+            name: entry_name,
             type: :entry
           })
 
@@ -66,7 +68,8 @@ defmodule Volt.Builder.Output do
     File.mkdir_p!(outdir)
 
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
-    bundle_opts = Keyword.put(bundle_opts, :entry, Path.basename(entry))
+    entry_label = entry |> Path.basename() |> Naming.file_path()
+    bundle_opts = Keyword.put(bundle_opts, :entry, entry_label)
 
     case bundle_js_files(js_files, bundle_opts) do
       {:ok, bundle_result} ->

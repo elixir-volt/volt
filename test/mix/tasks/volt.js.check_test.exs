@@ -155,46 +155,52 @@ defmodule Volt.JsCheckTest do
   end
 
   defp fake_tsgolint!(dir) do
-    path = Path.join(dir, "tsgolint")
-
-    File.write!(path, """
-    #!/bin/sh
-    elixir -e 'json = ~s({"rule":"no-floating-promises","message":{"description":"floating promise"},"file_path":"typed.ts","range":{"pos":0,"end":5}}); size = byte_size(json); File.write!("/dev/stdout", <<size::32-little, 1, json::binary>>)'
+    fake_executable!(dir, "tsgolint", """
+    json = ~s({"rule":"no-floating-promises","message":{"description":"floating promise"},"file_path":"typed.ts","range":{"pos":0,"end":5}})
+    IO.binwrite(<<byte_size(json)::32-little, 1, json::binary>>)
     """)
-
-    File.chmod!(path, 0o755)
-    path
   end
 
   defp fake_tsgolint_capture!(dir) do
-    path = Path.join(dir, "tsgolint-capture")
     payload_path = Path.join(dir, "payload.json")
 
-    File.write!(path, """
-    #!/bin/sh
-    cat > #{payload_path}
+    fake_executable!(dir, "tsgolint-capture", """
+    File.write!(#{inspect(payload_path)}, IO.binread(:stdio, :eof))
     """)
-
-    File.chmod!(path, 0o755)
-    path
   end
 
   defp fake_tsgolint_unknown_retry!(dir) do
-    path = Path.join(dir, "tsgolint-unknown-retry")
     payload_path = Path.join(dir, "payload.json")
     input_path = Path.join(dir, "payload-attempt.json")
 
-    File.write!(path, """
-    #!/bin/sh
-    cat > #{input_path}
-    if grep -q consistent-type-imports #{input_path}; then
-      echo 'panic: unknown rule: consistent-type-imports [recovered, repanicked]' >&2
-      exit 2
-    fi
-    cp #{input_path} #{payload_path}
-    """)
+    fake_executable!(dir, "tsgolint-unknown-retry", """
+    payload = IO.binread(:stdio, :eof)
+    File.write!(#{inspect(input_path)}, payload)
 
-    File.chmod!(path, 0o755)
-    path
+    if String.contains?(payload, "consistent-type-imports") do
+      IO.puts(:stderr, "panic: unknown rule: consistent-type-imports [recovered, repanicked]")
+      System.halt(2)
+    end
+
+    File.write!(#{inspect(payload_path)}, payload)
+    """)
+  end
+
+  defp fake_executable!(dir, name, code) do
+    script = Path.expand("#{name}.exs", dir)
+    File.write!(script, code)
+
+    case :os.type() do
+      {:win32, _name} ->
+        path = Path.expand("#{name}.cmd", dir)
+        File.write!(path, "@echo off\r\nelixir.bat \"#{script}\"\r\n")
+        path
+
+      _unix ->
+        path = Path.expand(name, dir)
+        File.write!(path, "#!/bin/sh\nexec elixir \"#{script}\"\n")
+        File.chmod!(path, 0o755)
+        path
+    end
   end
 end

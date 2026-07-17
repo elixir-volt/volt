@@ -161,7 +161,7 @@ defmodule Volt.PluginRunnerTest do
     end
 
     test "loads embedded modules by query id" do
-      path = Path.join(System.tmp_dir!(), "volt-plugin-runner-card.box")
+      path = Path.expand("volt-plugin-runner-card.box", System.tmp_dir!())
       File.write!(path, "export const value: number = 1")
 
       id =

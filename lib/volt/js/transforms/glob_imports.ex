@@ -224,6 +224,7 @@ defmodule Volt.JS.Transforms.GlobImports do
   end
 
   defp wildcard(pattern, base_dir, base) do
+    base_dir = Path.expand(base_dir)
     key_base_dir = key_base_dir(base, base_dir)
 
     Path.join(base_dir, pattern)

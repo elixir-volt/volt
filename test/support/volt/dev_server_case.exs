@@ -83,7 +83,7 @@ defmodule Volt.TestSupport.DevServerCase do
 
       alias Volt.TestSupport.DevServerCase.{EmbeddedBoxPlugin, VirtualPlugin}
 
-      @fixture_dir Path.join(System.tmp_dir!(), "volt-dev-server-test")
+      @fixture_dir Path.expand("volt-dev-server-test", System.tmp_dir!())
 
       setup do
         File.mkdir_p!(Path.join(@fixture_dir, "src"))

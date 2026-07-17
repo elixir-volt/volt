@@ -160,7 +160,7 @@ defmodule Volt.Test.ExUnitTest do
   defp test_tag(test, key), do: Map.fetch!(test, key)
 
   defp write!(root, path, contents) do
-    path = Path.join(root, path)
+    path = Path.expand(path, root)
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, contents)
     path

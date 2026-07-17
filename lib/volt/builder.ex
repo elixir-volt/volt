@@ -11,7 +11,7 @@ defmodule Volt.Builder do
   manifest.
   """
 
-  alias Volt.Builder.{Bundle, Collector, Output}
+  alias Volt.Builder.{Bundle, Collector, Naming, Output}
   alias Volt.Paths
 
   @css_exts Volt.JS.Extensions.css()
@@ -789,11 +789,17 @@ defmodule Volt.Builder do
     if Volt.HTMLEntry.html?(entry) do
       {:ok, %{scripts: scripts, styles: styles}} = Volt.HTMLEntry.extract(entry)
 
-      Enum.map(scripts, &{&1, :script, Path.basename(&1) |> Path.rootname()}) ++
-        Enum.map(styles, &{&1, :style, Path.basename(&1) |> Path.rootname()})
+      Enum.map(
+        scripts,
+        &{&1, :script, &1 |> Path.basename() |> Path.rootname() |> Naming.file_path()}
+      ) ++
+        Enum.map(
+          styles,
+          &{&1, :style, &1 |> Path.basename() |> Path.rootname() |> Naming.file_path()}
+        )
     else
       type = if Path.extname(entry) in @css_exts, do: :style, else: :script
-      entry_name = override_name || entry |> Path.basename() |> Path.rootname()
+      entry_name = Naming.file_path(override_name || entry |> Path.basename() |> Path.rootname())
       [{entry, type, entry_name}]
     end
   end
