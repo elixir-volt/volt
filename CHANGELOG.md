@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Allow `Volt.NPM.install!/2` to consume package-owned npm_ex lockfiles for resolver-free deterministic installs.
+
+### Fixed
+
+- Preserve nested dependency versions when generating isolated runtime lockfiles.
+
 ## 0.17.9 - 2026-07-17
 
 ### Added

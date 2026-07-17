@@ -16,12 +16,13 @@ defmodule Volt.JS.Runtime.Installer do
   def install!(packages, opts \\ []) when is_map(packages) do
     Application.ensure_all_started(:req)
 
-    id = install_id(packages)
+    source_lock = read_source_lock!(packages, opts[:lockfile])
+    id = install_id(packages, source_lock)
     install_dir = Keyword.get(opts, :install_dir, default_install_dir(id))
     node_modules = Path.join(install_dir, "node_modules")
     lockfile_path = Path.join(install_dir, "npm.lock")
     metadata_path = Path.join(install_dir, "volt-runtime.json")
-    signature = install_signature(packages)
+    signature = install_signature(packages, source_lock)
 
     with_lock(install_dir, fn ->
       if Keyword.get(opts, :force, false) or metadata_mismatch?(metadata_path, signature) do
@@ -30,7 +31,7 @@ defmodule Volt.JS.Runtime.Installer do
 
       unless install_intact?(lockfile_path, node_modules, metadata_path, signature) do
         File.mkdir_p!(install_dir)
-        resolve_and_link!(packages, node_modules, lockfile_path)
+        install_packages!(packages, source_lock, node_modules, lockfile_path)
         write_metadata!(metadata_path, signature, packages)
       end
     end)
@@ -38,15 +39,30 @@ defmodule Volt.JS.Runtime.Installer do
     %{install_dir: install_dir, node_modules: node_modules}
   end
 
+  defp install_packages!(packages, nil, node_modules, lockfile_path) do
+    resolve_and_link!(packages, node_modules, lockfile_path)
+  end
+
+  defp install_packages!(_packages, source_lock, node_modules, lockfile_path) do
+    File.cp!(source_lock.path, lockfile_path)
+    link!(source_lock.packages, node_modules)
+    warn_ignored_install_scripts(source_lock.packages)
+  end
+
   defp resolve_and_link!(packages, node_modules, lockfile_path) do
     NPM.Resolver.clear_cache()
 
     case NPM.Resolver.resolve(packages) do
       {:ok, resolved} ->
-        {_nested, flat} = Map.pop(resolved, :nested, %{})
-        lockfile = build_lockfile(flat)
+        {nested, flat} = Map.pop(resolved, :nested, %{})
+
+        lockfile =
+          flat
+          |> NPM.Install.LockfileBuilder.build(&ignore_age_warning/3)
+          |> NPM.Install.NestedLockfile.add(nested, &ignore_age_warning/3)
+
         NPM.Lockfile.write(lockfile, lockfile_path)
-        NPM.Install.Linker.link(lockfile, node_modules)
+        link!(lockfile, node_modules)
         warn_ignored_install_scripts(lockfile)
 
       {:error, message} ->
@@ -54,22 +70,14 @@ defmodule Volt.JS.Runtime.Installer do
     end
   end
 
-  defp build_lockfile(resolved) do
-    for {name, version} <- resolved, into: %{} do
-      {:ok, packument} = NPM.Registry.get_packument(name)
-      info = Map.fetch!(packument.versions, version)
-
-      {name,
-       %{
-         version: version,
-         integrity: info.dist.integrity,
-         tarball: info.dist.tarball,
-         dependencies: info.dependencies,
-         optional_dependencies: info.optional_dependencies,
-         has_install_script: info.has_install_script
-       }}
+  defp link!(lockfile, node_modules) do
+    case NPM.Install.Linker.link(lockfile, node_modules) do
+      :ok -> :ok
+      {:error, reason} -> raise "NPM package installation failed: #{inspect(reason)}"
     end
   end
+
+  defp ignore_age_warning(_name, _version, _info), do: :ok
 
   defp warn_ignored_install_scripts(lockfile) do
     packages =
@@ -121,11 +129,102 @@ defmodule Volt.JS.Runtime.Installer do
     File.write!(metadata_path, Jason.encode!(metadata))
   end
 
-  defp install_id(packages), do: install_signature(packages)
+  defp read_source_lock!(_packages, nil), do: nil
 
-  defp install_signature(packages) do
+  defp read_source_lock!(packages, path) when is_binary(path) do
+    path = Path.expand(path)
+    contents = File.read!(path)
+
+    unless NPM.Lockfile.version(path) == 1 do
+      raise ArgumentError, "expected npm lockfile version 1, got: #{inspect(path)}"
+    end
+
+    {:ok, policy} = NPM.Lockfile.read_policy(path)
+
+    unless NPM.Lockfile.policy_matches?(policy) do
+      raise ArgumentError,
+            "npm lockfile security policy does not match current configuration: #{path}"
+    end
+
+    {:ok, lockfile} = NPM.Lockfile.read(path)
+    validate_source_lock!(packages, lockfile, path)
+    validate_lock_entries!(lockfile, lockfile, path)
+
+    %{
+      path: path,
+      packages: lockfile,
+      digest: :crypto.hash(:sha256, contents)
+    }
+  end
+
+  defp read_source_lock!(_packages, path) do
+    raise ArgumentError, "expected :lockfile to be a path, got: #{inspect(path)}"
+  end
+
+  defp validate_source_lock!(packages, lockfile, path) do
+    Enum.each(packages, fn {name, version} ->
+      case lockfile do
+        %{^name => %{version: ^version}} ->
+          :ok
+
+        %{^name => %{version: locked_version}} ->
+          raise ArgumentError,
+                "npm lockfile version mismatch for #{name}: expected #{version}, got #{locked_version} in #{path}"
+
+        _ ->
+          raise ArgumentError, "npm lockfile is missing direct package #{name}: #{path}"
+      end
+    end)
+  end
+
+  defp validate_lock_entries!(entries, root_lockfile, path) do
+    Enum.each(entries, fn {name, entry} ->
+      if entry.integrity == "" or entry.tarball == "" do
+        raise ArgumentError, "npm lockfile has incomplete package metadata for #{name}: #{path}"
+      end
+
+      NPM.Security.RegistryPolicy.validate_url!(entry.tarball)
+
+      Enum.each(entry.dependencies, fn {dependency, requirement} ->
+        nested_entry = Map.get(entry.nested_dependencies, dependency)
+        root_entry = Map.get(root_lockfile, dependency)
+
+        unless locked_requirement?(nested_entry, requirement) or
+                 locked_requirement?(root_entry, requirement) do
+          raise ArgumentError,
+                "npm lockfile does not satisfy #{name} dependency #{dependency}@#{requirement}: #{path}"
+        end
+      end)
+
+      validate_lock_entries!(entry.nested_dependencies, root_lockfile, path)
+    end)
+  end
+
+  defp locked_requirement?(nil, _requirement), do: false
+
+  defp locked_requirement?(entry, requirement) do
+    NPMSemver.matches?(entry.version, requirement)
+  rescue
+    ArgumentError -> false
+  end
+
+  defp install_id(packages, source_lock), do: install_signature(packages, source_lock)
+
+  defp install_signature(packages, nil) do
     packages
     |> Enum.sort()
+    |> hash_install_signature()
+  end
+
+  defp install_signature(packages, source_lock) do
+    packages
+    |> Enum.sort()
+    |> then(&{&1, source_lock.digest})
+    |> hash_install_signature()
+  end
+
+  defp hash_install_signature(value) do
+    value
     |> :erlang.term_to_binary()
     |> :erlang.md5()
     |> Base.encode16(case: :lower)

@@ -524,7 +524,11 @@ QuickBEAM can install those dependencies directly and scope them to the framewor
 source root:
 
 ```elixir
-packages = Volt.NPM.install!(%{"framework-runtime" => "1.2.3"})
+packages =
+  Volt.NPM.install!(
+    %{"framework-runtime" => "1.2.3"},
+    lockfile: Application.app_dir(:my_framework, "priv/npm.lock")
+  )
 
 Volt.Builder.build(
   entry: "assets/app.ts",
@@ -534,6 +538,11 @@ Volt.Builder.build(
   ]
 )
 ```
+
+A package-owned npm_ex lockfile pins the complete transitive graph and lets fresh
+cache installations skip registry resolution. Volt validates its version, security
+policy, direct versions, integrity metadata, and required dependency closure before
+linking packages.
 
 An import originating below the scoped source root checks the framework package
 directory first. Imports from application modules continue to resolve from the

@@ -6,6 +6,14 @@ defmodule Volt.NPM do
   without adding those packages to an application's `node_modules` directory.
   The returned directory is stable for the normalized package set and can be
   passed to `Volt.Builder` as a package directory or scoped package root.
+
+  Pass a package-owned npm_ex lockfile to make fresh installs consume its exact
+  transitive graph without contacting the registry resolver:
+
+      Volt.NPM.install!(packages, lockfile: Volt.Priv.path(:my_app, "npm.lock"))
+
+  The lockfile must use npm_ex lockfile version 1, match the current security
+  policy, and contain every direct package at its declared exact version.
   """
 
   @type install_result :: %{install_dir: String.t(), node_modules: String.t()}
