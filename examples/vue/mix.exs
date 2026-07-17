@@ -43,8 +43,8 @@ defmodule VueExample.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "npm.install", "assets.build"],
-      "assets.build": ["volt.build --tailwind --no-hash --no-minify"],
-      "assets.deploy": ["volt.build --tailwind --no-hash", "phx.digest"],
+      "assets.build": ["volt.build --tailwind --no-minify"],
+      "assets.deploy": ["volt.build --tailwind", "phx.digest"],
       "assets.check": ["volt.js.check"],
       "assets.check.type_aware": ["volt.js.check --type-aware --type-check"],
       precommit: ["compile --warnings-as-errors", "format", "test"]

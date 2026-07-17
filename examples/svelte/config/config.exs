@@ -23,7 +23,6 @@ config :volt,
   sources: ["**/*.{js,ts,jsx,tsx,svelte}"],
   target: :es2022,
   minify: false,
-  hash: false,
   resolve_dirs: ["node_modules", "deps"],
   tailwind: [
     css: "assets/css/app.css",

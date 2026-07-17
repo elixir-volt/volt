@@ -23,7 +23,6 @@ config :volt,
   sources: ["**/*.{js,ts,jsx,tsx}"],
   target: :es2020,
   minify: false,
-  hash: false,
   resolve_dirs: ["node_modules", "deps"],
   plugins: [Volt.Plugin.Solid],
   tailwind: [

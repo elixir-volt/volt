@@ -128,7 +128,7 @@ Use `Volt.static_path/2` in your root layout to link to Volt-managed scripts and
 <img src={Volt.static_path(MyAppWeb.Endpoint, "/assets/images/logo.svg")} />
 ```
 
-In development, JavaScript entries return the source path served by the dev server (e.g. `/assets/js/app.ts`) and other paths are returned unchanged. In production, Volt reads `manifest.json` and returns the content-hashed path for scripts, stylesheets, and emitted image/font assets (e.g. `/assets/js/app-5e6f7a8b.js`, `/assets/css/app-2aa55585.css`, or `/assets/js/logo-a1b2c3d4.svg`).
+In development, JavaScript entries return the source path served by the dev server (e.g. `/assets/js/app.ts`) and other paths are returned unchanged. In production, Volt reads `manifest.json` to find the content-hashed script, stylesheet, or emitted asset and then passes that path through the Phoenix endpoint's `static_path/1`. After `phx.digest`, the returned URL uses Phoenix's final digest and `?vsn=d`; without a Phoenix cache manifest it remains the Volt-hashed path. See [Production Builds](../deployment/production-builds.md#volt-hashes-and-phoenix-digests).
 
 ## Multi-Entry Builds
 

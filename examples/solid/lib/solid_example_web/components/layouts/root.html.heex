@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <.live_title default="Volt Solid Example">Volt Solid Example</.live_title>
-    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
+    <link phx-track-static rel="stylesheet" href={Volt.static_path(SolidExampleWeb.Endpoint, "/assets/css/app.css")} />
     <script defer phx-track-static type="module" src={Volt.entry_path(SolidExampleWeb.Endpoint)}></script>
   </head>
   <body>

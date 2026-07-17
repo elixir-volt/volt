@@ -107,6 +107,16 @@ For code-split builds, the production manifest records static imports, dynamic i
 
 Runtime dynamic imports are rewritten through Volt's preload helper when the async chunk has dependency chunks or CSS. The helper preloads those files before executing `import()`, avoiding extra round trips while keeping async chunks lazy.
 
+## Volt hashes and Phoenix digests
+
+Volt and Phoenix have separate responsibilities in the default deployment pipeline:
+
+1. Volt gives entries, chunks, CSS, and graph assets content-hashed filenames and records their relationships in its `manifest.json`.
+2. `phx.digest` generates Phoenix's cache manifest, compressed copies, and final static filenames.
+3. In production, `Volt.static_path/2` resolves the logical path through Volt's manifest and then passes the result through the Phoenix endpoint's `static_path/1`. With Phoenix's default configuration, the final entry URL therefore includes both hashes and `?vsn=d`.
+
+Keep Volt hashing enabled for code-split builds. Internal static and dynamic imports use Volt's filenames directly, so those hashes provide cache busting independently of Phoenix's entry URL. `--no-hash` is intended for stable-filename builds that deliberately rely on Phoenix as their only digest layer.
+
 ## Deploy Alias
 
 The installer generates an `assets.deploy` alias:
@@ -115,4 +125,4 @@ The installer generates an `assets.deploy` alias:
 "assets.deploy": ["volt.build --tailwind", "phx.digest"]
 ```
 
-This builds assets with content hashes, then generates the Phoenix digest manifest for CDN deployment.
+This builds assets with Volt content hashes, then generates the Phoenix digest manifest and compressed files for deployment. Volt is an explicit asset task rather than a Mix compiler, so a later `mix release` does not rebuild or remove this finalized output.

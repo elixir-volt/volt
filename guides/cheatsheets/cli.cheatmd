@@ -15,7 +15,7 @@ Set up Volt in a Phoenix project.
 
 ```bash
 mix volt.build
-mix volt.build --tailwind --no-hash
+mix volt.build --tailwind
 ```
 
 Build production assets.
