@@ -636,6 +636,41 @@ defmodule Volt.Builder do
   end
 
   defp rewrite_imports_to_labels(code, label_map, from_label, global_map) do
+    case compact_import_label_patches(code, label_map, from_label, global_map) do
+      {:ok, []} -> code
+      {:ok, patches} -> OXC.patch_string(code, patches)
+      :fallback -> rewrite_imports_to_labels_from_ast(code, label_map, from_label, global_map)
+    end
+  end
+
+  defp compact_import_label_patches(code, label_map, from_label, global_map) do
+    with {:ok, imports} <- OXC.select(code, "module.js", :import_sources),
+         {:ok, []} <- OXC.select(code, "module.js", :require_calls),
+         false <- dynamic_css_import?(imports) do
+      patches =
+        Enum.reduce(imports, [], fn %{specifier: specifier, start: start, end: end_offset}, acc ->
+          case rewrite_specifier(specifier, label_map, from_label, global_map) do
+            {:rewrite, replacement} ->
+              [%{start: start, end: end_offset, change: Jason.encode!(replacement)} | acc]
+
+            :keep ->
+              acc
+          end
+        end)
+
+      {:ok, patches}
+    else
+      _unsupported_or_invalid -> :fallback
+    end
+  end
+
+  defp dynamic_css_import?(imports) do
+    Enum.any?(imports, fn import ->
+      import.type == :dynamic and Path.extname(import.specifier) in @css_exts
+    end)
+  end
+
+  defp rewrite_imports_to_labels_from_ast(code, label_map, from_label, global_map) do
     case OXC.parse(code, "module.js") do
       {:ok, ast} ->
         patches = collect_import_label_patches(ast, label_map, from_label, global_map)

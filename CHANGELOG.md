@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Improved
+
+- Rewrite production import labels from compact OXC parser events, avoiding full ESTree serialization for every compiled module.
+
 ## 0.17.7 - 2026-07-16
 
 ### Improved
