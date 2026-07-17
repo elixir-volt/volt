@@ -66,6 +66,14 @@ Volt.Test.ExUnit.install(
 )
 ```
 
+By default, each JavaScript `test(...)` is registered as an individual ExUnit test. Large suites can execute once per file instead:
+
+```elixir
+Volt.Test.ExUnit.install(granularity: :file)
+```
+
+File granularity keeps file-level ExUnit reporting and JavaScript failure details while avoiding a separate bundle and runtime invocation for every test. It also tags browser-backed files with `browser_js: true`.
+
 Profile-specific configuration follows the rest of Volt:
 
 ```elixir

@@ -20,6 +20,11 @@ defmodule Volt.Test.ExUnit do
 
   Pass `browser: true` to execute tests in a real Playwright browser instead
   of QuickBEAM while keeping the same ExUnit registration model.
+
+  By default, each JavaScript test becomes an ExUnit test. Pass
+  `granularity: :file` to register one ExUnit test per file and execute the
+  complete file in one runtime invocation. File granularity is useful for
+  large suites where repeatedly bundling and starting a runtime is too costly.
   """
 
   alias Volt.Test.Config
@@ -39,10 +44,16 @@ defmodule Volt.Test.ExUnit do
     module = module_name(file)
 
     unless Code.ensure_loaded?(module) do
-      tests = collect_tests!(file, profile, config)
+      quoted =
+        case config.granularity do
+          :test ->
+            bridge_module(module, file, profile, config, collect_tests!(file, profile, config))
 
-      [{_compiled_module, _bytecode}] =
-        Code.compile_quoted(bridge_module(module, file, profile, config, tests), file)
+          :file ->
+            file_bridge_module(module, file, profile, config)
+        end
+
+      [{_compiled_module, _bytecode}] = Code.compile_quoted(quoted, file)
     end
 
     module
@@ -69,6 +80,34 @@ defmodule Volt.Test.ExUnit do
         use ExUnit.Case, async: false
 
         unquote_splicing(test_defs)
+      end
+    end
+  end
+
+  defp file_bridge_module(module, file, profile, config) do
+    empty_message = "Volt JS test file #{file} did not define any tests"
+
+    quote do
+      defmodule unquote(module) do
+        use ExUnit.Case, async: false
+
+        @moduletag js: true
+        @moduletag volt_file: unquote(file)
+
+        if unquote(config.browser) do
+          @moduletag browser_js: true
+        end
+
+        test unquote(Path.relative_to(file, config.root)) do
+          assert {:ok, result} =
+                   unquote(runner(config)).run_file(unquote(file),
+                     profile: unquote(profile),
+                     config: unquote(Macro.escape(config))
+                   )
+
+          assert result.total > 0, unquote(empty_message)
+          Volt.Test.Assertions.assert_passed!(result)
+        end
       end
     end
   end

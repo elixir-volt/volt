@@ -26,6 +26,7 @@ defmodule Volt.Test.ConfigTest do
     assert config.include == ["**/*.{test,spec}.{js,ts,jsx,tsx}"]
     assert "node_modules/**" in config.exclude
     assert config.browser == false
+    assert config.granularity == :test
     assert config.browsers == [:chromium]
     assert config.timeout == 30_000
     assert config.bundle == []
@@ -36,6 +37,7 @@ defmodule Volt.Test.ConfigTest do
       root: "frontend",
       include: ["**/*.spec.ts"],
       browser: true,
+      granularity: :file,
       browsers: [:chromium, :firefox],
       timeout: 10_000,
       bundle: [plugins: [Volt.Plugin.React]]
@@ -46,6 +48,7 @@ defmodule Volt.Test.ConfigTest do
     assert config.root == "frontend"
     assert config.include == ["**/*.spec.ts"]
     assert config.browser == true
+    assert config.granularity == :file
     assert config.browsers == [:chromium, :firefox]
     assert config.timeout == 10_000
     assert config.bundle == [plugins: [Volt.Plugin.React]]

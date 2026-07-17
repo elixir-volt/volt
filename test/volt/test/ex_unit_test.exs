@@ -48,6 +48,45 @@ defmodule Volt.Test.ExUnitTest do
     end
   end
 
+  test "file granularity registers and executes one ExUnit test per file", %{tmp_dir: tmp_dir} do
+    file =
+      write!(tmp_dir, "file-granularity.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+
+      test('adds', () => expect(1 + 1).toBe(2))
+      test('multiplies', () => expect(2 * 3).toBe(6))
+      """)
+
+    assert [module] =
+             Volt.Test.ExUnit.install(
+               root: tmp_dir,
+               include: ["file-granularity.test.ts"],
+               granularity: :file
+             )
+
+    assert [test] = module.__ex_unit__().tests
+    assert test_description(test) == "test file-granularity.test.ts"
+    assert test_tag(test, :js) == true
+    assert test_tag(test, :volt_file) == file
+    assert :ok = apply(module, test_name(test), [%{}])
+  end
+
+  test "file granularity tags browser modules", %{tmp_dir: tmp_dir} do
+    file = write!(tmp_dir, "browser-file.test.ts", "test('browser', () => {})\n")
+
+    assert [module] =
+             Volt.Test.ExUnit.install(
+               root: tmp_dir,
+               include: ["browser-file.test.ts"],
+               browser: true,
+               granularity: :file
+             )
+
+    assert [test] = module.__ex_unit__().tests
+    assert test_tag(test, :browser_js) == true
+    assert test_tag(test, :volt_file) == file
+  end
+
   test "install maps JS skip todo and tags to ExUnit tags", %{tmp_dir: tmp_dir} do
     file =
       write!(tmp_dir, "modifiers.test.ts", ~TS"""
@@ -91,6 +130,25 @@ defmodule Volt.Test.ExUnitTest do
 
     assert_raise RuntimeError, ~r/did not define any tests/, fn ->
       Volt.Test.ExUnit.install(root: tmp_dir, include: ["empty.test.ts"])
+    end
+  end
+
+  test "file granularity fails when a discovered JS test file defines no tests", %{
+    tmp_dir: tmp_dir
+  } do
+    write!(tmp_dir, "empty-file.test.ts", "import { test } from 'volt:test'\n")
+
+    assert [module] =
+             Volt.Test.ExUnit.install(
+               root: tmp_dir,
+               include: ["empty-file.test.ts"],
+               granularity: :file
+             )
+
+    [test] = module.__ex_unit__().tests
+
+    assert_raise ExUnit.AssertionError, ~r/did not define any tests/, fn ->
+      apply(module, test_name(test), [%{}])
     end
   end
 

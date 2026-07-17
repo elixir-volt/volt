@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Allow `Volt.Test.ExUnit.install/1` to execute large suites once per file with `granularity: :file`.
+
 ## 0.17.8 - 2026-07-17
 
 ### Improved
