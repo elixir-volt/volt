@@ -789,17 +789,11 @@ defmodule Volt.Builder do
     if Volt.HTMLEntry.html?(entry) do
       {:ok, %{scripts: scripts, styles: styles}} = Volt.HTMLEntry.extract(entry)
 
-      Enum.map(
-        scripts,
-        &{&1, :script, &1 |> Path.basename() |> Path.rootname() |> Naming.file_path()}
-      ) ++
-        Enum.map(
-          styles,
-          &{&1, :style, &1 |> Path.basename() |> Path.rootname() |> Naming.file_path()}
-        )
+      Enum.map(scripts, &{&1, :script, Naming.entry_name(&1)}) ++
+        Enum.map(styles, &{&1, :style, Naming.entry_name(&1)})
     else
       type = if Path.extname(entry) in @css_exts, do: :style, else: :script
-      entry_name = Naming.file_path(override_name || entry |> Path.basename() |> Path.rootname())
+      entry_name = Naming.entry_name(entry, override_name)
       [{entry, type, entry_name}]
     end
   end
@@ -807,26 +801,11 @@ defmodule Volt.Builder do
   defp unique_entry_names(entries) do
     {entries, _used_names} =
       Enum.map_reduce(entries, MapSet.new(), fn {entry, type, name}, used_names ->
-        unique_name = unique_entry_name(name, entry, used_names)
+        unique_name = Naming.unique(name, entry, used_names)
         {{entry, type, unique_name}, MapSet.put(used_names, unique_name)}
       end)
 
     entries
-  end
-
-  defp unique_entry_name(name, entry, used_names) do
-    if MapSet.member?(used_names, name) do
-      digest = :crypto.hash(:sha256, entry) |> Base.encode16(case: :lower) |> binary_part(0, 10)
-      candidate = "#{name}-#{digest}"
-
-      if MapSet.member?(used_names, candidate) do
-        unique_entry_name(candidate, entry, used_names)
-      else
-        candidate
-      end
-    else
-      name
-    end
   end
 
   defp normalize_package_scopes(scopes) when is_map(scopes) or is_list(scopes) do

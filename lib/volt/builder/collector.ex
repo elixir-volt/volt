@@ -305,8 +305,8 @@ defmodule Volt.Builder.Collector do
   end
 
   defp unique_label(_specifier, resolved_path, state) do
-    base_label = module_label(resolved_path, state.root)
-    label = deduplicate_label(base_label, resolved_path, state.used_labels)
+    base_label = Naming.module_label(resolved_path, state.root)
+    label = Naming.unique(base_label, resolved_path, state.used_labels)
 
     state = %{
       state
@@ -315,64 +315,6 @@ defmodule Volt.Builder.Collector do
     }
 
     {label, state}
-  end
-
-  defp module_label(resolved_path, root) do
-    {path, query} = Volt.URL.split_query(resolved_path)
-    [relative_path | rest] = path |> String.split("/node_modules/") |> Enum.reverse()
-
-    label =
-      if rest != [] do
-        relative_path
-      else
-        relative = Path.relative_to(path, root)
-
-        if Path.type(relative) == :absolute do
-          "_external/" <>
-            Path.basename(Path.dirname(path)) <> "/" <> Path.basename(path)
-        else
-          relative
-        end
-      end
-      |> with_query_suffix(query)
-
-    label =
-      cond do
-        Path.extname(label) == ".json" -> Path.rootname(label) <> ".json.js"
-        Path.extname(label) in Volt.JS.Extensions.css() -> label <> ".js"
-        query != "" -> label <> ".js"
-        true -> label
-      end
-
-    Naming.file_path(label)
-  end
-
-  defp with_query_suffix(label, ""), do: label
-
-  defp with_query_suffix(label, query) do
-    suffix =
-      query
-      |> URI.decode_query()
-      |> Map.keys()
-      |> Enum.sort()
-      |> Enum.join("-")
-
-    label <> "." <> suffix
-  end
-
-  defp deduplicate_label(label, resolved_path, used) do
-    if MapSet.member?(used, label) do
-      parent = resolved_path |> Path.dirname() |> Path.basename() |> Naming.file_path()
-      candidate = parent <> "/" <> label
-
-      if MapSet.member?(used, candidate) do
-        deduplicate_label(candidate <> "_2", resolved_path, used)
-      else
-        candidate
-      end
-    else
-      label
-    end
   end
 
   defp split_imports(typed_imports) do
