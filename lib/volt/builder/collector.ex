@@ -362,7 +362,7 @@ defmodule Volt.Builder.Collector do
 
   defp deduplicate_label(label, resolved_path, used) do
     if MapSet.member?(used, label) do
-      parent = resolved_path |> Path.dirname() |> Path.basename()
+      parent = resolved_path |> Path.dirname() |> Path.basename() |> Naming.file_path()
       candidate = parent <> "/" <> label
 
       if MapSet.member?(used, candidate) do

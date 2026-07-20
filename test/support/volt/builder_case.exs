@@ -74,6 +74,8 @@ defmodule Volt.TestSupport.BuilderCase do
     def resolve("virtual:site/entry-a", _), do: {:ok, "virtual:site/entry-a"}
     def resolve("virtual:site/entry-b", _), do: {:ok, "virtual:site/entry-b"}
     def resolve("virtual:site/style-entry", _), do: {:ok, "virtual:site/style-entry"}
+    def resolve("virtual:collision/entry:a", _), do: {:ok, "virtual:collision/entry:a"}
+    def resolve("virtual:collision/entry|a", _), do: {:ok, "virtual:collision/entry|a"}
     def resolve("virtual:plain", _), do: {:ok, "virtual:plain"}
 
     def resolve("./style.css", "virtual:site/style-entry"),
@@ -91,6 +93,8 @@ defmodule Volt.TestSupport.BuilderCase do
     def load("virtual:site/style-entry"),
       do: {:ok, "import './style.css'; console.log('with css');"}
 
+    def load("virtual:collision/entry:a"), do: {:ok, "console.log('colon entry');"}
+    def load("virtual:collision/entry|a"), do: {:ok, "console.log('pipe entry');"}
     def load("virtual:plain"), do: {:ok, "export default 123;"}
 
     def load(_), do: nil

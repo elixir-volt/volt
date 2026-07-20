@@ -327,6 +327,25 @@ defmodule Volt.Builder.PluginsAndVirtualModulesTest do
       assert result.manifest["entry-b.js"].file == "entry-b.js"
     end
 
+    test "virtual entry names remain unique after filesystem sanitization" do
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: ["virtual:collision/entry:a", "virtual:collision/entry|a"],
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          plugins: [VirtualModPlugin]
+        )
+
+      files = result.manifest |> Map.values() |> Enum.map(& &1.file) |> Enum.sort()
+
+      assert length(files) == 2
+      assert Enum.uniq(files) == files
+      assert Enum.any?(files, &(&1 == "entry_a.js"))
+      assert Enum.any?(files, &String.match?(&1, ~r/^entry_a-[0-9a-f]{10}\.js$/))
+    end
+
     test "virtual build entries can import stylesheet dependencies" do
       File.write!(Path.join(@fixture_dir, "src/style.css"), ".foo { color: red }")
 
