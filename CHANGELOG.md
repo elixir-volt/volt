@@ -8,6 +8,7 @@
 - Keep entry and module labels unique when filesystem sanitization produces collisions.
 - Use platform-aware absolute paths for builder, test discovery, glob transforms, and Tailwind resolution.
 - Make type-aware lint test executables portable across Unix and Windows.
+- Update GlobEx for Windows-rooted glob matching.
 
 ## 0.17.10 - 2026-07-17
 

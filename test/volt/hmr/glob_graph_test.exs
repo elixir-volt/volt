@@ -15,6 +15,12 @@ defmodule Volt.HMR.GlobGraphTest do
     assert GlobGraph.dependents("/src/components/home.ts") == []
   end
 
+  test "matches Windows drive letters case-insensitively" do
+    GlobGraph.update("C:/src/routes.ts", ["c:/src/pages/*.ts"])
+
+    assert GlobGraph.dependents("C:/src/pages/home.ts") == ["C:/src/routes.ts"]
+  end
+
   test "honors negated patterns" do
     GlobGraph.update("/src/routes.ts", ["/src/pages/*.ts", "!/src/pages/*.test.ts"])
 

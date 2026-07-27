@@ -34,7 +34,7 @@ defmodule Volt.MixProject do
   defp deps do
     [
       {:reach, "~> 2.6.1", only: [:dev, :test], runtime: false},
-      {:glob_ex, "~> 0.1"},
+      {:glob_ex, "~> 0.1.12"},
       {:oxc, "~> 0.17.7"},
       {:vize, "~> 0.14.0"},
       {:oxide_ex, "~> 0.2.1"},
