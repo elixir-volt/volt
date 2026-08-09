@@ -5,7 +5,10 @@ defmodule Volt.Plugin.Svelte do
 
   @behaviour Volt.Plugin
 
-  @runtime_packages %{"svelte" => "^5.0.0"}
+  alias Volt.JS.Runtime.PackageSet
+
+  @runtime_packages %{"svelte" => "5.56.8"}
+  @runtime_package_set PackageSet.bundled(:volt, :svelte, @runtime_packages)
   @runtime_name __MODULE__.Runtime
   @resolve_extensions Volt.JS.Extensions.node_resolvable()
 
@@ -37,7 +40,7 @@ defmodule Volt.Plugin.Svelte do
   def resolve(_, _), do: nil
 
   defp resolve_svelte(specifier, _importer) do
-    install = Volt.JS.Runtime.Installer.install!(@runtime_packages)
+    install = PackageSet.install!(@runtime_package_set)
 
     case NPM.Resolution.PackageResolver.resolve(specifier, install.install_dir,
            extensions: @resolve_extensions,
@@ -77,17 +80,19 @@ defmodule Volt.Plugin.Svelte do
   end
 
   def runtime_packages, do: @runtime_packages
+  def runtime_package_set, do: @runtime_package_set
 
   defp do_compile(path, source, opts, plugin_opts) do
     runtime =
-      Volt.JS.Runtime.ensure!(
+      PackageSet.runtime_opts(
+        @runtime_package_set,
         name: @runtime_name,
-        packages: @runtime_packages,
         apis: [:browser, :node],
         entry: {:volt_asset, "compilers/svelte.ts"},
         bundle: true,
         max_stack_size: 16 * 1024 * 1024
       )
+      |> Volt.JS.Runtime.ensure!()
 
     compile_options =
       path

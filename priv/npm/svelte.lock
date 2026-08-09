@@ -1,0 +1,205 @@
+{
+  "lockfileVersion": 1,
+  "packages": {
+    "@jridgewell/gen-mapping": {
+      "dependencies": {
+        "@jridgewell/sourcemap-codec": "^1.5.0",
+        "@jridgewell/trace-mapping": "^0.3.24"
+      },
+      "has_install_script": false,
+      "integrity": "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz",
+      "version": "0.3.13"
+    },
+    "@jridgewell/remapping": {
+      "dependencies": {
+        "@jridgewell/gen-mapping": "^0.3.5",
+        "@jridgewell/trace-mapping": "^0.3.24"
+      },
+      "has_install_script": false,
+      "integrity": "sha512-LI9u/+laYG4Ds1TDKSJW2YPrIlcVYOwi2fUC6xB43lueCjgxV4lffOCZCtYFiH6TNOX+tQKXx97T4IKHbhyHEQ==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/@jridgewell/remapping/-/remapping-2.3.5.tgz",
+      "version": "2.3.5"
+    },
+    "@jridgewell/resolve-uri": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz",
+      "version": "3.1.2"
+    },
+    "@jridgewell/sourcemap-codec": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.5.tgz",
+      "version": "1.5.5"
+    },
+    "@jridgewell/trace-mapping": {
+      "dependencies": {
+        "@jridgewell/resolve-uri": "^3.1.0",
+        "@jridgewell/sourcemap-codec": "^1.4.14"
+      },
+      "has_install_script": false,
+      "integrity": "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz",
+      "version": "0.3.31"
+    },
+    "@sveltejs/acorn-typescript": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-J1jNYG23QWd67UfrQSFHtjhV37r9mVi0gdc12A3MWPldOjRK35Xk+um+qACPVjgw3AleiqoyEAhok8Wm3q46NA==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/@sveltejs/acorn-typescript/-/acorn-typescript-1.0.12.tgz",
+      "version": "1.0.12"
+    },
+    "@types/estree": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/@types/estree/-/estree-1.0.9.tgz",
+      "version": "1.0.9"
+    },
+    "@types/trusted-types": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/@types/trusted-types/-/trusted-types-2.0.7.tgz",
+      "version": "2.0.7"
+    },
+    "acorn": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/acorn/-/acorn-8.18.0.tgz",
+      "version": "8.18.0"
+    },
+    "aria-query": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-Z/ZeOgVl7bcSYZ/u/rh0fOpvEpq//LZmdbkXyc7syVzjPAhfOa9ebsdTSjEBDU4vs5nC98Kfduj1uFo0qyET3g==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/aria-query/-/aria-query-5.3.1.tgz",
+      "version": "5.3.1"
+    },
+    "axobject-query": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/axobject-query/-/axobject-query-4.1.0.tgz",
+      "version": "4.1.0"
+    },
+    "clsx": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz",
+      "version": "2.1.1"
+    },
+    "devalue": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-RWrqdArjvPbsATEhOPUo6Wndc/iWnkWKlhIrdlF3zMMYo/c3CVtoaVAyLtWxz5h8nSlkHzxnzV2uLydPXmtF+A==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/devalue/-/devalue-5.9.0.tgz",
+      "version": "5.9.0"
+    },
+    "esm-env": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2+TUbmDcmuilbP1TmXHA==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/esm-env/-/esm-env-1.2.2.tgz",
+      "version": "1.2.2"
+    },
+    "esrap": {
+      "dependencies": {
+        "@jridgewell/sourcemap-codec": "^1.4.15"
+      },
+      "has_install_script": false,
+      "integrity": "sha512-40GyiEJevYKXzYTHtZkFqAgTjLOuFcaXMao8TPyOlnWTlkHDlvZ6mPMJaJyOqVwrVCgomEG1WhJd81w0X+IcCw==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/esrap/-/esrap-2.3.2.tgz",
+      "version": "2.3.2"
+    },
+    "is-reference": {
+      "dependencies": {
+        "@types/estree": "^1.0.6"
+      },
+      "has_install_script": false,
+      "integrity": "sha512-ixkJoqQvAP88E6wLydLGGqCJsrFUnqoH6HnaczB8XmDH1oaWU+xxdptvikTgaEhtZ53Ky6YXiBuUI2WXLMCwjw==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/is-reference/-/is-reference-3.0.3.tgz",
+      "version": "3.0.3"
+    },
+    "locate-character": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/locate-character/-/locate-character-3.0.0.tgz",
+      "version": "3.0.0"
+    },
+    "magic-string": {
+      "dependencies": {
+        "@jridgewell/sourcemap-codec": "^1.5.5"
+      },
+      "has_install_script": false,
+      "integrity": "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz",
+      "version": "0.30.21"
+    },
+    "svelte": {
+      "dependencies": {
+        "@jridgewell/remapping": "^2.3.4",
+        "@jridgewell/sourcemap-codec": "^1.5.0",
+        "@sveltejs/acorn-typescript": "^1.0.10",
+        "@types/estree": "^1.0.5",
+        "@types/trusted-types": "^2.0.7",
+        "acorn": "^8.12.1",
+        "aria-query": "5.3.1",
+        "axobject-query": "^4.1.0",
+        "clsx": "^2.1.1",
+        "devalue": "^5.8.1",
+        "esm-env": "^1.2.1",
+        "esrap": "^2.2.12",
+        "is-reference": "^3.0.3",
+        "locate-character": "^3.0.0",
+        "magic-string": "^0.30.11",
+        "zimmerframe": "^1.1.2"
+      },
+      "has_install_script": false,
+      "integrity": "sha512-PY8LOw7xP6c8IOiVqdo0sbbZVYhXRSfklOQLAUyGBKqjTX0wx/z4l/9J+PmBpmlLnxzEb1NqltxQ5/wZme/Cmg==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/svelte/-/svelte-5.56.8.tgz",
+      "version": "5.56.8"
+    },
+    "zimmerframe": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/zimmerframe/-/zimmerframe-1.1.4.tgz",
+      "version": "1.1.4"
+    }
+  },
+  "policy": {
+    "allow_registry_redirects": false,
+    "allowed_registries": [
+      "https://registry.npmjs.org"
+    ],
+    "block_exotic_subdeps": true,
+    "exotic_deps": []
+  }
+}

@@ -11,10 +11,13 @@ defmodule Volt.Plugin.Solid do
 
   @behaviour Volt.Plugin
 
+  alias Volt.JS.Runtime.PackageSet
+
   @runtime_packages %{
-    "@babel/standalone" => "^7.0.0",
-    "babel-preset-solid" => "^1.9.0"
+    "@babel/standalone" => "7.29.8",
+    "babel-preset-solid" => "1.9.12"
   }
+  @runtime_package_set PackageSet.bundled(:volt, :solid, @runtime_packages)
 
   @runtime_name __MODULE__.Runtime
   @jsx_exts ~w(.jsx .tsx)
@@ -61,12 +64,13 @@ defmodule Volt.Plugin.Solid do
   def prebundle_entry(_specifier), do: nil
 
   def runtime_packages, do: @runtime_packages
+  def runtime_package_set, do: @runtime_package_set
 
   defp do_compile(source, filename, opts, plugin_opts) do
     runtime =
-      Volt.JS.Runtime.ensure!(
+      PackageSet.runtime_opts(
+        @runtime_package_set,
         name: @runtime_name,
-        packages: @runtime_packages,
         apis: [:browser, :node],
         entry: {:volt_asset, "compilers/solid.ts"},
         bundle: true,
@@ -75,6 +79,7 @@ defmodule Volt.Plugin.Solid do
         ],
         max_stack_size: 32 * 1024 * 1024
       )
+      |> Volt.JS.Runtime.ensure!()
 
     compile_options =
       filename

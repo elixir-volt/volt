@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Install built-in Svelte, Solid, and Tailwind runtimes from package-owned npm_ex lockfiles, and include each lock digest in the named runtime signature.
+
 ## 0.17.10 - 2026-07-17
 
 ### Added
