@@ -1,5 +1,5 @@
 defmodule Volt.JS.Runtime.PackageSetTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Volt.JS.Runtime.PackageSet
 
@@ -35,6 +35,27 @@ defmodule Volt.JS.Runtime.PackageSetTest do
     assert opts[:packages] == %{"fixture" => "1.0.0"}
     assert opts[:lockfile] == PackageSet.lockfile_path(set)
     assert opts[:bundle]
+  end
+
+  test "built-in package sets use configured resolution when the bundled lock policy is incompatible" do
+    registry = "https://npm.example.test"
+    env = ~w(NPM_REGISTRY NPM_MIRROR NPM_EX_ALLOWED_REGISTRIES)
+    previous = Map.new(env, &{&1, System.get_env(&1)})
+
+    Enum.each(env, &System.put_env(&1, registry))
+
+    on_exit(fn ->
+      Enum.each(previous, fn
+        {name, nil} -> System.delete_env(name)
+        {name, value} -> System.put_env(name, value)
+      end)
+    end)
+
+    set = Volt.Plugin.Svelte.runtime_package_set()
+    opts = PackageSet.runtime_opts(set)
+
+    assert opts[:packages] == %{"svelte" => "5.56.8"}
+    refute Keyword.has_key?(opts, :lockfile)
   end
 
   @tag :integration

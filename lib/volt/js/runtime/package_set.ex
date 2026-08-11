@@ -36,8 +36,20 @@ defmodule Volt.JS.Runtime.PackageSet do
   end
 
   defp lock_opts(set, opts) do
-    opts
-    |> Keyword.delete(:packages)
-    |> Keyword.put(:lockfile, lockfile_path(set))
+    lockfile = lockfile_path(set)
+    opts = opts |> Keyword.delete(:packages) |> Keyword.delete(:lockfile)
+
+    if use_bundled_lock?(lockfile) do
+      Keyword.put(opts, :lockfile, lockfile)
+    else
+      opts
+    end
+  end
+
+  defp use_bundled_lock?(lockfile) do
+    case NPM.Lockfile.read_policy(lockfile) do
+      {:ok, policy} when is_map(policy) -> NPM.Lockfile.policy_matches?(policy)
+      _ -> true
+    end
   end
 end
