@@ -76,8 +76,8 @@ defmodule Volt.Tailwind do
 
   defp ensure_runtime(%{runtime: nil} = state) do
     runtime =
-      Volt.JS.Runtime.ensure!(
-        packages: Volt.Tailwind.Loader.runtime_packages(),
+      Volt.JS.Runtime.PackageSet.runtime_opts(
+        Volt.Tailwind.Loader.runtime_package_set(),
         apis: [:browser, :node],
         handlers: fn runtime -> Volt.Tailwind.Loader.handlers(runtime.node_modules) end,
         define: fn runtime ->
@@ -88,6 +88,7 @@ defmodule Volt.Tailwind do
         end,
         entry: {:volt_asset, "compilers/tailwind.ts"}
       )
+      |> Volt.JS.Runtime.ensure!()
 
     %{state | runtime: runtime, scanner: build_scanner(state.sources)}
   end

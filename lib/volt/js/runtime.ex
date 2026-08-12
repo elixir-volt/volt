@@ -267,10 +267,22 @@ defmodule Volt.JS.Runtime do
 
   defp runtime_signature(opts) do
     opts
-    |> Keyword.take([:packages, :install_dir, :entry, :bundle])
+    |> Keyword.take([:packages, :install_dir, :entry, :bundle, :lockfile])
+    |> digest_lockfile()
     |> Enum.sort()
     |> :erlang.term_to_binary()
     |> :erlang.md5()
+  end
+
+  defp digest_lockfile(opts) do
+    case Keyword.fetch(opts, :lockfile) do
+      {:ok, path} when is_binary(path) ->
+        digest = path |> File.read!() |> then(&:crypto.hash(:sha256, &1))
+        Keyword.put(opts, :lockfile, {:sha256, digest})
+
+      _ ->
+        opts
+    end
   end
 
   defp maybe_put(opts, _key, nil), do: opts
