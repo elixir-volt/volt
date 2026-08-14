@@ -309,7 +309,7 @@ npm install --save-dev playwright
 npx playwright install chromium
 ```
 
-By default Volt uses `node_modules/.bin/playwright` when present, otherwise `playwright` from `PATH`. Pass PlaywrightEx supervisor options with `playwright: [...]` if your executable lives elsewhere.
+By default Volt uses `node_modules/playwright/cli.js` when present, otherwise `playwright` from `PATH`. Pass PlaywrightEx supervisor options with `playwright: [...]` if your executable lives elsewhere.
 
 ## ExUnit integration
 

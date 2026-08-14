@@ -7,8 +7,9 @@
 - Generate filesystem-safe entry and module labels for virtual modules on Windows.
 - Keep entry and module labels unique when filesystem sanitization produces collisions.
 - Use platform-aware absolute paths for builder, test discovery, glob transforms, and Tailwind resolution.
-- Make type-aware lint test executables portable across Unix and Windows.
+- Make type-aware lint test executables and development dependency installation portable across Unix and Windows.
 - Update GlobEx for Windows-rooted glob matching.
+- Update QuickBEAM, OXC, Vize, Oxide, npm_ex, and ZiglerPrecompiled to their Windows-enabled releases.
 
 ## 0.17.10 - 2026-07-17
 

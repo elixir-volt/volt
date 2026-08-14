@@ -5,6 +5,6 @@
     "playwright": "1.61.1"
   },
   "scripts": {
-    "postinstall": "chmod +x node_modules/@oxlint-tsgolint/*/tsgolint 2>/dev/null || true"
+    "postinstall": "node scripts/postinstall.mjs"
   }
 }

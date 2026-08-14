@@ -87,7 +87,7 @@ defmodule Volt.Integration.HMRTest do
   end
 
   defp playwright_executable do
-    local = Path.expand("node_modules/.bin/playwright")
+    local = Path.expand("node_modules/playwright/cli.js")
     if File.exists?(local), do: local, else: "playwright"
   end
 
