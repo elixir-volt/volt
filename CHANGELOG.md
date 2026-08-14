@@ -11,6 +11,8 @@
 - Update GlobEx for Windows-rooted glob matching.
 - Update QuickBEAM, OXC, Vize, Oxide, npm_ex, and ZiglerPrecompiled to their Windows-enabled releases.
 - Update Bandit to resolve its fragmented WebSocket message denial-of-service advisory.
+- Install built-in Svelte, Solid, and Tailwind runtimes from package-owned npm_ex lockfiles, and include each lock digest in the named runtime signature.
+- Preserve private and corporate npm registry compatibility by resolving exact built-in runtime packages through the configured registry when a packaged lock policy is incompatible.
 
 ## 0.17.10 - 2026-07-17
 

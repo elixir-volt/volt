@@ -1,16 +1,18 @@
 defmodule Volt.Tailwind.Loader do
   @moduledoc "Handles Tailwind module loading, prebundling CJS graphs via OXC, and stylesheet resolution."
 
+  alias Volt.JS.Runtime.PackageSet
   alias Volt.JS.Transforms.Specifiers
   alias Volt.Tailwind.Resolver
 
-  @tailwind_install_spec "^4.3.0"
   @tailwind_runtime_deps %{
-    "tailwindcss" => @tailwind_install_spec,
-    "@tailwindcss/typography" => "*"
+    "tailwindcss" => "4.3.3",
+    "@tailwindcss/typography" => "0.5.20"
   }
+  @runtime_package_set PackageSet.bundled(:volt, :tailwind, @tailwind_runtime_deps)
 
   def runtime_packages, do: @tailwind_runtime_deps
+  def runtime_package_set, do: @runtime_package_set
 
   def handlers(runtime_node_modules) do
     %{
