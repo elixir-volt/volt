@@ -10,6 +10,7 @@
 - Make type-aware lint test executables and development dependency installation portable across Unix and Windows.
 - Update GlobEx for Windows-rooted glob matching.
 - Update QuickBEAM, OXC, Vize, Oxide, npm_ex, and ZiglerPrecompiled to their Windows-enabled releases.
+- Update Bandit to resolve its fragmented WebSocket message denial-of-service advisory.
 
 ## 0.17.10 - 2026-07-17
 
