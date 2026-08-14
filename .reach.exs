@@ -65,6 +65,7 @@ model = [
 logic = [
   "Volt.Assets",
   "Volt.Assets.Query",
+  "Volt.Builder.Naming",
   "Volt.Builder.Resolver",
   "Volt.ChunkGraph",
   "Volt.CSS.AST",
