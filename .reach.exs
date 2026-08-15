@@ -133,6 +133,7 @@ infrastructure = [
   "Volt.JS.Runtime.Entry",
   "Volt.JS.Runtime.Error",
   "Volt.JS.Runtime.Installer",
+  "Volt.JS.Runtime.PackageSet",
   "Volt.Tailwind.Loader"
 ]
 
