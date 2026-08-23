@@ -92,6 +92,21 @@ defmodule Volt.Test.RunnerTest do
     assert test.status == :passed
   end
 
+  test "keeps durations monotonic when a test replaces Date.now", %{tmp_dir: tmp_dir} do
+    path =
+      write!(tmp_dir, "fake_clock.test.js", ~JS"""
+      test('replaces the wall clock', () => {
+        Date.now = () => 0
+      })
+      """)
+
+    assert {:ok, %Result{duration: duration, tests: [%Result.Test{duration: test_duration}]}} =
+             Runner.run_file(path)
+
+    assert duration >= 0
+    assert test_duration >= 0
+  end
+
   test "loads setup files before the test module", %{tmp_dir: tmp_dir} do
     setup_path =
       write!(tmp_dir, "setup.ts", ~TS"""

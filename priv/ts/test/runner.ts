@@ -2,6 +2,8 @@ import { SkipError, serializeError } from './errors'
 import { expect } from './matchers'
 import { reset, state } from './state'
 
+const now = Date.now.bind(Date)
+
 export async function __voltCollectTestModule(code: string, file: string) {
   loadTestModule(code, file)
 
@@ -32,12 +34,12 @@ export async function __voltRunLoadedTestModule(
 
 async function runLoadedTests(file: string, onlyId?: number) {
   const results: Volt.Test.Result[] = []
-  const startedAt = Date.now()
+  const startedAt = now()
   const tests =
     onlyId === undefined ? state.tests : state.tests.filter((test) => test.id === onlyId)
 
   for (const registered of tests) {
-    const testStartedAt = Date.now()
+    const testStartedAt = now()
 
     if (registered.mode !== 'run') {
       results.push(result(registered, 'skipped', testStartedAt, undefined, registered.skipReason))
@@ -65,7 +67,7 @@ async function runLoadedTests(file: string, onlyId?: number) {
   return {
     file,
     status: failed === 0 ? 'passed' : 'failed',
-    duration: Date.now() - startedAt,
+    duration: now() - startedAt,
     total: results.length,
     failed,
     skipped,
@@ -127,7 +129,7 @@ function result(
     name: registered.name,
     fullName: fullName(registered),
     status,
-    duration: Date.now() - startedAt,
+    duration: now() - startedAt,
     ...(error ? { error } : {}),
     ...(skipReason ? { skipReason } : {})
   }
