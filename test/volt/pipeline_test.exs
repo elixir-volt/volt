@@ -152,6 +152,38 @@ defmodule Volt.PipelineTest do
       {:ok, result} = Volt.Pipeline.compile("App.vue", source)
       assert is_binary(result.css)
     end
+
+    test "returns authored SFC source maps when enabled" do
+      source = """
+      <template><div>{{ message }}</div></template>
+      <script setup>
+      const message = "mapped"
+      </script>
+      """
+
+      {:ok, mapped} = Volt.Pipeline.compile("src/App.vue", source, sourcemap: true)
+      assert is_binary(mapped.sourcemap)
+      assert mapped.sourcemap =~ "src/App.vue"
+
+      {:ok, unmapped} = Volt.Pipeline.compile("src/App.vue", source, sourcemap: false)
+      assert unmapped.sourcemap == nil
+    end
+
+    test "rewrites template assets to imports and reports their dependencies" do
+      source = """
+      <template><img src="./logo.png"><svg><use href="@/icons.svg#check" /></svg></template>
+      """
+
+      {:ok, result} = Volt.Pipeline.compile("src/App.vue", source)
+
+      assert result.code =~ ~s(import _imports_0 from "./logo.png")
+      assert result.code =~ ~s(import _imports_1 from "@/icons.svg")
+      assert result.code =~ ~s(_imports_1 + "#check")
+
+      assert {:ok, imports} = Volt.Plugin.Vue.extract_imports("src/App.vue", source, [])
+      assert {:static, "./logo.png"} in imports.imports
+      assert {:static, "@/icons.svg"} in imports.imports
+    end
   end
 
   describe "compile/3 with Svelte" do

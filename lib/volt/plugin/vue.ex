@@ -23,28 +23,30 @@ defmodule Volt.Plugin.Vue do
 
     if query == "" and Path.extname(base_path) == ".vue" do
       sfc_opts = [
-        filename: Path.basename(path),
+        filename: base_path,
         vapor: Keyword.get(opts, :vapor, false),
         strip_types: true,
-        custom_renderer: Keyword.get(opts, :custom_renderer, false)
+        custom_renderer: Keyword.get(opts, :custom_renderer, false),
+        source_map: Keyword.get(opts, :sourcemap, true)
       ]
 
-      case Vize.compile_sfc(source, sfc_opts) do
-        {:ok, result} ->
-          {:ok,
-           %Volt.Pipeline.Result{
-             code: maybe_append_style_imports(result.code, path, source, opts),
-             sourcemap: nil,
-             css: result.css,
-             hashes: %Volt.Pipeline.Result.Hashes{
-               template: result.template_hash,
-               style: result.style_hash,
-               script: result.script_hash
-             }
-           }}
-
-        {:error, reason} ->
-          {:error, reason}
+      with {:ok, assets} <- Vize.SFC.collect_template_assets(source, filename: base_path),
+           {:ok, result} <- Vize.compile_sfc(source, sfc_opts) do
+        {:ok,
+         %Volt.Pipeline.Result{
+           code:
+             result.code
+             |> Vize.SFC.rewrite_asset_references(assets)
+             |> append_template_asset_imports(assets)
+             |> maybe_append_style_imports(path, source, opts),
+           sourcemap: result.source_map,
+           css: result.css,
+           hashes: %Volt.Pipeline.Result.Hashes{
+             template: result.template_hash,
+             style: result.style_hash,
+             script: result.script_hash
+           }
+         }}
       end
     end
   end
@@ -52,11 +54,13 @@ defmodule Volt.Plugin.Vue do
   @impl true
   def extract_imports(path, source, _opts) do
     if Path.extname(path) == ".vue" do
-      {:ok,
-       %Volt.JS.ImportExtractor.Result{
-         imports: source |> imports() |> Enum.map(&{:static, &1}),
-         workers: []
-       }}
+      with {:ok, assets} <- Vize.SFC.collect_template_assets(source, filename: path) do
+        {:ok,
+         %Volt.JS.ImportExtractor.Result{
+           imports: source |> imports(assets) |> Enum.map(&{:static, &1}),
+           workers: []
+         }}
+      end
     end
   end
 
@@ -84,6 +88,20 @@ defmodule Volt.Plugin.Vue do
     end
   end
 
+  defp append_template_asset_imports(code, assets) do
+    imports = Enum.map(assets, &template_asset_import/1)
+    IO.iodata_to_binary([code | imports])
+  end
+
+  defp template_asset_import(asset) do
+    "import $name from \"__specifier__\";"
+    |> OXC.parse!("vue-template-asset-import.ts")
+    |> OXC.bind(name: asset.binding)
+    |> Volt.JS.AST.replace_literal("__specifier__", asset_specifier(asset))
+    |> OXC.codegen!()
+    |> then(&["\n", String.trim(&1)])
+  end
+
   defp style_import(path, module) do
     specifier = Volt.Plugin.EmbeddedModule.specifier(path, module)
 
@@ -94,7 +112,12 @@ defmodule Volt.Plugin.Vue do
     |> then(&["\n", String.trim(&1)])
   end
 
-  defp imports(source), do: source |> scripts() |> Enum.flat_map(&script_imports/1)
+  defp imports(source, assets) do
+    script_imports = source |> scripts() |> Enum.flat_map(&script_imports/1)
+    script_imports ++ Enum.map(assets, &asset_specifier/1)
+  end
+
+  defp asset_specifier(asset), do: asset.url |> String.split("#", parts: 2) |> hd()
 
   defp scripts(source) do
     case Vize.parse_sfc(source) do
