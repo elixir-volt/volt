@@ -61,6 +61,72 @@ defmodule Volt.WatcherTest do
     GenServer.stop(pid)
   end
 
+  test "ignores configured watcher paths", %{watch_dir: watch_dir} do
+    generated_dir = Path.join(watch_dir, ".generated")
+    entry = Path.join(generated_dir, "entry.ts")
+    File.mkdir_p!(generated_dir)
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: watch_dir,
+        watch_ignored: [Path.join(generated_dir, "**")],
+        name: :test_watcher_ignored
+      )
+
+    state = send_file_event(pid, entry)
+
+    refute Map.has_key?(state.pending, entry)
+    GenServer.stop(pid)
+  end
+
+  test "does not ignore sibling watcher paths", %{watch_dir: watch_dir} do
+    generated_dir = Path.join(watch_dir, ".generated")
+    source_file = Path.join([watch_dir, "source", "entry.ts"])
+    File.mkdir_p!(Path.dirname(source_file))
+    File.write!(source_file, "export const value = 1")
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: watch_dir,
+        watch_ignored: [Path.join(generated_dir, "**")],
+        name: :test_watcher_ignored_sibling
+      )
+
+    state = send_file_event(pid, source_file)
+
+    assert Map.has_key?(state.pending, source_file)
+    Process.cancel_timer(state.pending[source_file])
+    GenServer.stop(pid)
+  end
+
+  test "supports relative watcher ignore globs", %{watch_dir: watch_dir} do
+    entry = Path.join([watch_dir, ".generated", "entry.ts"])
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: watch_dir,
+        watch_ignored: ["**/.generated/**"],
+        name: :test_watcher_relative_ignore
+      )
+
+    state = send_file_event(pid, entry)
+
+    refute Map.has_key?(state.pending, entry)
+    GenServer.stop(pid)
+  end
+
+  test "ignores dependency directories by default", %{watch_dir: watch_dir} do
+    entry = Path.join([watch_dir, "node_modules", "example", "index.ts"])
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(root: watch_dir, name: :test_watcher_default_ignored)
+
+    state = send_file_event(pid, entry)
+
+    refute Map.has_key?(state.pending, entry)
+    GenServer.stop(pid)
+  end
+
   test "detects asset changes and broadcasts reload update", %{watch_dir: watch_dir} do
     Registry.register(Volt.HMR.Registry, :clients, nil)
 
@@ -221,5 +287,14 @@ defmodule Volt.WatcherTest do
     assert css =~ "tailwindcss"
 
     GenServer.stop(pid)
+  end
+
+  defp send_file_event(pid, path) do
+    :sys.replace_state(pid, fn state ->
+      send(pid, {:file_event, self(), {path, [:created]}})
+      state
+    end)
+
+    :sys.get_state(pid)
   end
 end

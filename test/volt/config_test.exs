@@ -124,6 +124,12 @@ defmodule Volt.ConfigTest do
       refute Volt.Config.server().watch
     end
 
+    test "watcher ignore patterns are configurable" do
+      Application.put_env(:volt, :server, watch_ignored: ["**/.generated/**"])
+
+      assert Volt.Config.server().watch_ignored == ["**/.generated/**"]
+    end
+
     test "profile server config takes precedence over global :server" do
       Application.put_env(:volt, :my_app,
         entry: "my_app/js/app.ts",

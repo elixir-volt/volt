@@ -240,6 +240,14 @@ config :volt, :server, watch_dirs: ["lib/", "assets/"]
 
 Additional directories to watch for Tailwind rebuilds. The asset root is watched automatically.
 
+### Watch Ignored
+
+```elixir
+config :volt, :server, watch_ignored: ["**/.generated/**"]
+```
+
+GlobEx patterns excluded from watcher events. Patterns are relative to each watched root.
+
 ### Automatic Watcher
 
 ```elixir

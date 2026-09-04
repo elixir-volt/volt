@@ -19,6 +19,8 @@ defmodule Volt.Watcher do
       (e.g. `["lib/"]` for `.ex`/`.heex` templates)
     * `:reload_dirs` — additional directories whose changes trigger a full
       browser reload without being compiled by Volt
+    * `:watch_ignored` — paths or glob patterns excluded from watcher events
+      (default: common VCS, dependency, test-output, cache, and build directories)
     * `:tailwind` — enable Tailwind CSS rebuilds (default: `false`)
     * `:tailwind_css` — custom Tailwind input CSS (default: Tailwind base)
     * `:target` — JS downlevel target
@@ -49,7 +51,8 @@ defmodule Volt.Watcher do
     tailwind_full?: false,
     tailwind_outdir: nil,
     tailwind_dirs: [],
-    reload_dirs: []
+    reload_dirs: [],
+    watch_ignored: []
   ]
 
   def start_link(opts) do
@@ -68,10 +71,18 @@ defmodule Volt.Watcher do
 
     config =
       opts
-      |> Keyword.drop([:root, :name, :watch_dirs, :reload_dirs, :tailwind_outdir])
+      |> Keyword.drop([
+        :root,
+        :name,
+        :watch_dirs,
+        :reload_dirs,
+        :watch_ignored,
+        :tailwind_outdir
+      ])
       |> Map.new()
 
     all_dirs = Enum.uniq([root | watch_dirs ++ reload_dirs ++ tailwind_colocated_dirs(config)])
+    watch_ignored = Volt.Watcher.Ignore.compile(Keyword.get(opts, :watch_ignored, []), all_dirs)
 
     fs_pids =
       Enum.map(all_dirs, fn dir ->
@@ -86,7 +97,8 @@ defmodule Volt.Watcher do
       config: config,
       tailwind_outdir: tailwind_outdir,
       tailwind_dirs: all_dirs,
-      reload_dirs: reload_dirs
+      reload_dirs: reload_dirs,
+      watch_ignored: watch_ignored
     }
 
     if config[:tailwind] do
@@ -131,7 +143,9 @@ defmodule Volt.Watcher do
 
   @impl true
   def handle_info({:file_event, _pid, {path, events}}, state) do
-    if relevant_write_event?(events) do
+    path = Volt.Watcher.Path.normalize_from_roots(path, state.tailwind_dirs)
+
+    if relevant_write_event?(events) and not ignored_path?(path, state) do
       ext = Path.extname(path)
 
       cond do
@@ -191,6 +205,10 @@ defmodule Volt.Watcher do
 
   defp relevant_write_event?(events) do
     Enum.any?(@write_events, &(&1 in events))
+  end
+
+  defp ignored_path?(path, state) do
+    Enum.any?(state.watch_ignored, &GlobEx.match?(&1, path))
   end
 
   defp schedule_rebuild(state, path) do

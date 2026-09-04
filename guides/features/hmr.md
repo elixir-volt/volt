@@ -58,6 +58,23 @@ mix volt.dev --reload-dir content --reload-dir layouts
 
 This is intentionally generic: Volt does not parse those files or assign site semantics to them.
 
+## Ignoring watcher paths
+
+Exclude generated or otherwise irrelevant files before Volt schedules compilation or HMR work:
+
+```elixir
+config :volt, :server,
+  watch_ignored: ["**/.generated/**", "vendor/cache/**"]
+```
+
+Patterns use GlobEx syntax and are resolved relative to each watched root. The same option is available from the CLI:
+
+```bash
+mix volt.dev --watch-ignore "**/.generated/**"
+```
+
+Volt ignores `.git`, `node_modules`, `test-results`, `_build`, and `deps` directories by default. Ignoring a path affects file watching only; it does not prevent the dev server from serving an explicitly requested module.
+
 ## `import.meta.hot`
 
 Each module served in dev mode includes an `import.meta.hot` object for granular HMR:

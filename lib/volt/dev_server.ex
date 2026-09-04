@@ -70,6 +70,7 @@ defmodule Volt.DevServer do
           root: expanded_root,
           watch_dirs: watch_dirs,
           reload_dirs: server_config.reload_dirs,
+          watch_ignored: server_config.watch_ignored,
           tailwind: tailwind_config != [],
           tailwind_css: tailwind_config[:css],
           tailwind_outdir: Path.join(to_string(config.outdir), "css"),

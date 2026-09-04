@@ -33,7 +33,9 @@ orchestrator = [
   "Volt.JS.Vendor",
   "Volt.Pipeline",
   "Volt.Tailwind",
-  "Volt.Watcher"
+  "Volt.Watcher",
+  "Volt.Watcher.Ignore",
+  "Volt.Watcher.Path"
 ]
 
 model = [

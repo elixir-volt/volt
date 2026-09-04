@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+## 0.17.11 - 2026-09-04
+
+### Added
+
+- Add Vite-style watcher ignore patterns through `config :volt, :server`, `Volt.Watcher`, and `mix volt.dev`, with default exclusions for common generated and dependency directories.
+
 ### Fixed
+
+- Normalize filesystem aliases before routing watcher events so macOS events retain root-relative HMR paths.
 
 - Generate filesystem-safe entry and module labels for virtual modules on Windows.
 - Keep entry and module labels unique when filesystem sanitization produces collisions.

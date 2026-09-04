@@ -15,6 +15,7 @@ defmodule Mix.Tasks.Volt.Dev do
     * `--root` — asset source directory (default from config or `"assets"`)
     * `--watch-dir` — additional directory to watch for Tailwind scanning (repeatable)
     * `--reload-dir` — additional directory whose changes trigger a full browser reload (repeatable)
+    * `--watch-ignore` — path or glob pattern excluded from watcher events (repeatable)
     * `--tailwind` — enable Tailwind CSS rebuilds
     * `--tailwind-css` — custom Tailwind input CSS file
     * `--tailwind-outdir` — directory to write rebuilt CSS (default: `"priv/static/assets/css"`)
@@ -35,6 +36,7 @@ defmodule Mix.Tasks.Volt.Dev do
           root: :string,
           watch_dir: [:string, :keep],
           reload_dir: [:string, :keep],
+          watch_ignore: [:string, :keep],
           tailwind: :boolean,
           tailwind_css: :string,
           tailwind_outdir: :string,
@@ -56,6 +58,7 @@ defmodule Mix.Tasks.Volt.Dev do
 
     cli_watch_dirs = Keyword.get_values(parsed, :watch_dir)
     cli_reload_dirs = Keyword.get_values(parsed, :reload_dir)
+    cli_watch_ignored = Keyword.get_values(parsed, :watch_ignore)
 
     watch_dirs =
       case cli_watch_dirs do
@@ -66,6 +69,12 @@ defmodule Mix.Tasks.Volt.Dev do
     reload_dirs =
       case cli_reload_dirs do
         [] -> server_config.reload_dirs
+        list -> list
+      end
+
+    watch_ignored =
+      case cli_watch_ignored do
+        [] -> server_config.watch_ignored
         list -> list
       end
 
@@ -81,6 +90,7 @@ defmodule Mix.Tasks.Volt.Dev do
       root: root,
       watch_dirs: watch_dirs,
       reload_dirs: reload_dirs,
+      watch_ignored: watch_ignored,
       tailwind: tailwind?,
       tailwind_css: tailwind_css,
       tailwind_outdir: Keyword.get(parsed, :tailwind_outdir, Paths.static_css()),
@@ -97,6 +107,10 @@ defmodule Mix.Tasks.Volt.Dev do
 
     if reload_dirs != [] do
       Mix.shell().info("[Volt] Full reload dirs: #{Enum.join(reload_dirs, ", ")}")
+    end
+
+    if watch_ignored != [] do
+      Mix.shell().info("[Volt] Ignored watcher paths: #{Enum.join(watch_ignored, ", ")}")
     end
 
     unless iex_running?() do
