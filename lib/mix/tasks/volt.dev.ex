@@ -52,9 +52,14 @@ defmodule Mix.Tasks.Volt.Dev do
     root = Keyword.get(parsed, :root) || to_string(config.root)
     target = Keyword.get(parsed, :target) || to_string(config.target)
 
+    tailwind_root =
+      tailwind_config
+      |> Keyword.put(:css, Keyword.get(parsed, :tailwind_css) || tailwind_config[:css])
+      |> Volt.Config.Tailwind.new()
+
     tailwind? =
       Keyword.get(parsed, :tailwind) ||
-        (tailwind_config != [] and Keyword.get(parsed, :tailwind, true))
+        (Volt.Config.Tailwind.enabled?(tailwind_config) and Keyword.get(parsed, :tailwind, true))
 
     cli_watch_dirs = Keyword.get_values(parsed, :watch_dir)
     cli_reload_dirs = Keyword.get_values(parsed, :reload_dir)
@@ -80,10 +85,10 @@ defmodule Mix.Tasks.Volt.Dev do
 
     watch_dirs = if tailwind? and watch_dirs == [], do: [Paths.lib()], else: watch_dirs
 
-    tailwind_css = Keyword.get(parsed, :tailwind_css) || tailwind_config[:css]
+    tailwind_css = tailwind_root.css
 
     if tailwind? do
-      initial_build(tailwind_config, tailwind_css, parsed)
+      initial_build(tailwind_root, parsed, profile)
     end
 
     opts = [
@@ -91,8 +96,12 @@ defmodule Mix.Tasks.Volt.Dev do
       watch_dirs: watch_dirs,
       reload_dirs: reload_dirs,
       watch_ignored: watch_ignored,
+      tailwind_key: tailwind_key(profile, tailwind_root),
       tailwind: tailwind?,
       tailwind_css: tailwind_css,
+      tailwind_name: tailwind_root.name,
+      tailwind_sources: tailwind_root.sources,
+      tailwind_url: tailwind_root.dev_url,
       tailwind_outdir: Keyword.get(parsed, :tailwind_outdir, Paths.static_css()),
       target: target
     ]
@@ -118,25 +127,21 @@ defmodule Mix.Tasks.Volt.Dev do
     end
   end
 
-  defp initial_build(tailwind_config, tailwind_css, parsed) do
-    sources =
-      tailwind_config[:sources] ||
-        [
-          %{base: Paths.lib(), pattern: "**/*.{ex,heex,eex}"},
-          %{base: Paths.assets_dir(), pattern: "**/*.{vue,ts,tsx,js,jsx}"}
-        ]
+  defp initial_build(root, parsed, profile) do
+    css_input = if root.css, do: File.read!(root.css)
+    css_base = if root.css, do: Path.dirname(root.css), else: File.cwd!()
+    key = tailwind_key(profile, root)
 
-    {css_input, css_base} =
-      case tailwind_css do
-        nil -> {nil, File.cwd!()}
-        path -> {File.read!(path), Path.dirname(path)}
-      end
-
-    case Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
+    case Volt.Tailwind.build(
+           key: key,
+           sources: root.sources,
+           css: css_input,
+           css_base: css_base
+         ) do
       {:ok, css} ->
         outdir = Keyword.get(parsed, :tailwind_outdir, Paths.static_css())
         File.mkdir_p!(outdir)
-        File.write!(Path.join(outdir, "app.css"), css)
+        File.write!(Path.join(outdir, "#{root.name}.css"), css)
 
         Mix.shell().info(
           "[Volt] Initial Tailwind build: #{Volt.Format.format_size(byte_size(css))}"
@@ -146,6 +151,9 @@ defmodule Mix.Tasks.Volt.Dev do
         Mix.shell().error("[Volt] Tailwind build failed: #{inspect(reason)}")
     end
   end
+
+  defp tailwind_key(profile, root),
+    do: {:profile, profile || :default, root.css || root.name}
 
   defp parse_profile(args), do: Volt.Config.Profile.from_args(args)
 

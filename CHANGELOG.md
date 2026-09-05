@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+
+- Add `Volt.build/1` as the library API for complete frontend builds with one typed result and merged manifest for scripts, styles, chunks, and emitted assets.
+- Isolate Tailwind scanner and CSS state by profile and stylesheet root while sharing one supervised compiler runtime.
+- Allow Tailwind roots to configure their logical output name, development URL, and source globs.
+
+### Changed
+
+- Write one production manifest at the configured asset output root instead of separate JavaScript and Tailwind manifests.
+- Make `mix volt.build` a thin adapter over `Volt.build/1`.
+- Emit Tailwind development artifacts atomically and skip style HMR broadcasts when generated CSS is unchanged.
+- Normalize in-memory build manifests and emitted asset metadata to typed structs before JSON serialization.
+
+### Fixed
+
+- Handle filesystem watcher events for the watched root itself when normalizing macOS path aliases.
+
 ## 0.17.11 - 2026-09-04
 
 ### Added

@@ -95,7 +95,7 @@ defmodule Volt.Assets do
 
   @doc "Generate a JS module for an asset and return emitted asset metadata."
   @spec emit_js_module(String.t(), keyword()) ::
-          {:ok, %{code: String.t(), assets: [String.t() | map()]}} | {:error, term()}
+          {:ok, %{code: String.t(), assets: [Volt.Builder.Asset.t()]}} | {:error, term()}
   def emit_js_module(path, opts \\ []) do
     cond do
       Keyword.get(opts, :raw, false) ->
@@ -147,9 +147,9 @@ defmodule Volt.Assets do
   end
 
   @doc "Build manifest metadata for an emitted asset."
-  @spec manifest_asset(String.t(), String.t(), keyword()) :: map()
+  @spec manifest_asset(String.t(), String.t(), keyword()) :: Volt.Builder.Asset.t()
   def manifest_asset(source_path, filename, opts \\ []) do
-    %{
+    %Volt.Builder.Asset{
       src: source_path |> asset_src(Keyword.get(opts, :root)) |> String.trim_leading("/"),
       file: filename
     }

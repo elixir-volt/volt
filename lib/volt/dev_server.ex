@@ -54,12 +54,16 @@ defmodule Volt.DevServer do
     module_types = config.module_types
     tailwind_config = Config.tailwind(profile)
 
+    tailwind_root =
+      if Volt.Config.Tailwind.enabled?(tailwind_config),
+        do: Volt.Config.Tailwind.new(tailwind_config)
+
     prebundle_vendor(expanded_root, node_modules, plugins, config.resolve_dirs, module_types)
 
     watcher_opts =
       if server_config.watch do
         watch_dirs =
-          if tailwind_config != [] and server_config.watch_dirs == [] do
+          if tailwind_root && server_config.watch_dirs == [] do
             [Volt.Paths.lib()]
           else
             server_config.watch_dirs
@@ -71,8 +75,12 @@ defmodule Volt.DevServer do
           watch_dirs: watch_dirs,
           reload_dirs: server_config.reload_dirs,
           watch_ignored: server_config.watch_ignored,
-          tailwind: tailwind_config != [],
-          tailwind_css: tailwind_config[:css],
+          tailwind_key: tailwind_key(profile, tailwind_root),
+          tailwind: not is_nil(tailwind_root),
+          tailwind_css: tailwind_root && tailwind_root.css,
+          tailwind_name: tailwind_root && tailwind_root.name,
+          tailwind_sources: tailwind_root && tailwind_root.sources,
+          tailwind_url: tailwind_root && tailwind_root.dev_url,
           tailwind_outdir: Path.join(to_string(config.outdir), "css"),
           target: config.target,
           import_source: config.import_source,
@@ -106,6 +114,9 @@ defmodule Volt.DevServer do
       watcher_opts: watcher_opts
     }
   end
+
+  defp tailwind_key(_profile, nil), do: nil
+  defp tailwind_key(profile, root), do: {:profile, profile || :default, root.css || root.name}
 
   @impl true
   def call(conn, config) do

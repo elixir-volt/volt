@@ -50,11 +50,12 @@ defmodule Volt.Builder.Writer do
 
       manifest =
         %{
-          "#{name}.css" => %{
-            "file" => css_filename,
-            "src" => "#{name}.css",
-            "assets" => css_assets(css_filename, css_result)
-          }
+          "#{name}.css" =>
+            Volt.Builder.ManifestEntry.css(
+              "#{name}.css",
+              css_filename,
+              css_assets(css_filename, css_result)
+            )
         }
         |> add_asset_entries(css_result.assets)
 
@@ -118,8 +119,7 @@ defmodule Volt.Builder.Writer do
   def asset_files(assets) do
     assets
     |> Enum.map(fn
-      %{file: file} -> file
-      %{"file" => file} -> file
+      %Volt.Builder.Asset{file: file} -> file
       file when is_binary(file) -> file
     end)
     |> Enum.uniq()
@@ -127,10 +127,7 @@ defmodule Volt.Builder.Writer do
 
   def add_asset_entries(manifest, assets) do
     Enum.reduce(assets, manifest, fn
-      %{src: src, file: file}, acc ->
-        Map.put_new(acc, src, Volt.Builder.ManifestEntry.asset(src, file))
-
-      %{"src" => src, "file" => file}, acc ->
+      %Volt.Builder.Asset{src: src, file: file}, acc ->
         Map.put_new(acc, src, Volt.Builder.ManifestEntry.asset(src, file))
 
       _file, acc ->

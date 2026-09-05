@@ -8,7 +8,7 @@ defmodule Volt.CSS.AssetURLRewriter do
 
   @type rewrite_result :: {:ok, String.t()} | {:error, term()}
   @type rewrite_assets_result ::
-          {:ok, %{code: String.t(), assets: [String.t() | map()]}} | {:error, term()}
+          {:ok, %{code: String.t(), assets: [Volt.Builder.Asset.t()]}} | {:error, term()}
 
   @doc "Rewrite relative CSS asset URLs to hashed output URLs."
   @spec rewrite(String.t(), String.t() | nil, String.t(), keyword()) :: rewrite_result()

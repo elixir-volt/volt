@@ -5,13 +5,11 @@ mix volt.build
 ```
 
 ```text
-Building Tailwind CSS...
-  app-1a2b3c4d.css  23.9 KB
-Built Tailwind in 43ms
-Building "assets/js/app.ts"...
+Building ["assets/js/app.ts"]...
   app-5e6f7a8b.js  128.4 KB
+  app-1a2b3c4d.css  23.9 KB
   manifest.json  2 entries
-Built in 15ms
+Built in 58ms
 ```
 
 Reads configuration from `config :volt`. CLI flags override config values.
@@ -25,7 +23,7 @@ Production builds run the same framework/plugin compilation pipeline as the dev 
 - rewrites relative CSS `url(...)` asset references through the asset pipeline
 - copies JavaScript- and CSS-referenced assets with content hashes
 - tree-shakes, minifies, and optionally code-splits JavaScript
-- writes a manifest that Phoenix can use for digested asset paths and chunk preload metadata
+- writes one manifest at `priv/static/assets/manifest.json` for scripts, styles, emitted assets, and chunk preload metadata
 - optionally copies a Vite-style public directory to the static root without transforming files
 
 ## Public files in Phoenix apps
@@ -102,7 +100,7 @@ Or per-build: `mix volt.build --external phoenix --external phoenix_html`
 For code-split builds, the production manifest records static imports, dynamic imports, chunk-local CSS, and emitted assets. Use `Volt.Preload.tags/2` in your layout to preload the entry and its static chunk dependencies:
 
 ```heex
-<%= Volt.Preload.tags("priv/static/assets/js/manifest.json", "/assets/js", entry: "app.js") %>
+<%= Volt.Preload.tags("priv/static/assets/manifest.json", "/assets", entry: "app.js") %>
 ```
 
 Runtime dynamic imports are rewritten through Volt's preload helper when the async chunk has dependency chunks or CSS. The helper preloads those files before executing `import()`, avoiding extra round trips while keeping async chunks lazy.

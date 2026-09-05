@@ -41,6 +41,42 @@ defmodule Volt.DevServer.BasicTest do
       end)
     end
 
+    test "normalizes configured Tailwind root into watcher options" do
+      previous = Application.get_env(:volt, :tailwind)
+      css = Path.join(@fixture_dir, "src/site.css")
+
+      Application.put_env(:volt, :tailwind,
+        css: css,
+        name: "site",
+        dev_url: "/assets/css/site.css",
+        sources: [%{base: @fixture_dir, pattern: "**/*.html"}]
+      )
+
+      on_exit(fn ->
+        if previous,
+          do: Application.put_env(:volt, :tailwind, previous),
+          else: Application.delete_env(:volt, :tailwind)
+      end)
+
+      opts =
+        Volt.DevServer.init(
+          root: Path.join(@fixture_dir, "src"),
+          prefix: "/assets",
+          watch: true
+        )
+
+      assert opts.watcher_opts[:tailwind]
+      assert opts.watcher_opts[:tailwind_css] == Path.expand(css)
+      assert opts.watcher_opts[:tailwind_name] == "site"
+
+      assert opts.watcher_opts[:tailwind_sources] == [
+               %{base: @fixture_dir, pattern: "**/*.html"}
+             ]
+
+      assert opts.watcher_opts[:tailwind_url] == "/assets/css/site.css"
+      assert opts.watcher_opts[:tailwind_key] == {:profile, :default, Path.expand(css)}
+    end
+
     test "passes through non-asset requests for downstream HTML plugs" do
       opts = Volt.DevServer.init(root: Path.join(@fixture_dir, "src"), prefix: "/assets")
 

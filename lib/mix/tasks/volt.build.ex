@@ -78,10 +78,6 @@ defmodule Mix.Tasks.Volt.Build do
       Keyword.get(parsed, :tailwind) ||
         (tailwind_config != [] and Keyword.get(parsed, :tailwind, true))
 
-    if tailwind? do
-      build_tailwind(parsed, tailwind_config, outdir, minify, config.hash, config.root)
-    end
-
     entries =
       case cli_entries do
         [] -> List.wrap(config.entry)
@@ -102,7 +98,7 @@ defmodule Mix.Tasks.Volt.Build do
 
     opts = [
       entry: if(length(entries) == 1, do: hd(entries), else: entries),
-      outdir: Path.join(outdir, "js"),
+      outdir: outdir,
       public_dir: Keyword.get(parsed, :public_dir) || config.public_dir,
       asset_url_prefix: Keyword.get(parsed, :asset_url_prefix) || config.asset_url_prefix,
       target: Keyword.get(parsed, :target) || to_string(config.target),
@@ -122,23 +118,27 @@ defmodule Mix.Tasks.Volt.Build do
       import_source: config.import_source,
       module_types: config.module_types,
       root: config.root,
-      name: parsed[:name]
+      name: parsed[:name],
+      profile: profile,
+      tailwind: if(tailwind?, do: tailwind_config, else: []),
+      tailwind_css: parsed[:tailwind_css],
+      tailwind_sources: tailwind_sources(parsed, tailwind_config)
     ]
 
     opts = if opts[:name], do: opts, else: Keyword.delete(opts, :name)
 
-    build_js(opts)
+    build_all(opts)
   end
 
-  defp build_js(opts) do
+  defp build_all(opts) do
     Mix.shell().info("Building #{inspect(opts[:entry])}...")
 
-    {us, result} = :timer.tc(fn -> Volt.Builder.build(opts) end)
+    {us, result} = :timer.tc(fn -> Volt.build(opts) end)
     ms = div(us, 1000)
 
     case result do
-      {:ok, %{js: js, css: css, manifest: manifest} = result} ->
-        case js do
+      {:ok, %Volt.Build.Result{assets: assets, styles: styles, manifest: manifest}} ->
+        case assets.js do
           %{path: path} ->
             Mix.shell().info("  #{Path.basename(path)}  #{format_file(path)}")
 
@@ -146,14 +146,12 @@ defmodule Mix.Tasks.Volt.Build do
             :ok
         end
 
-        if chunks = result[:chunks] do
-          for chunk <- chunks, chunk.type != :entry do
-            Mix.shell().info("  #{Path.basename(chunk.path)}  #{format_file(chunk.path)}")
-          end
+        for chunk <- assets.chunks, chunk.type != :entry do
+          Mix.shell().info("  #{Path.basename(chunk.path)}  #{format_file(chunk.path)}")
         end
 
-        if css do
-          Mix.shell().info("  #{Path.basename(css.path)}  #{format_file(css.path)}")
+        for style <- styles do
+          Mix.shell().info("  #{Path.basename(style.path)}  #{format_file(style.path)}")
         end
 
         Mix.shell().info("  manifest.json  #{map_size(manifest)} entries")
@@ -165,66 +163,10 @@ defmodule Mix.Tasks.Volt.Build do
     end
   end
 
-  defp build_tailwind(parsed, tailwind_config, outdir, minify, config_hash, root) do
-    cli_sources = Keyword.get_values(parsed, :tailwind_source)
-    hash = Keyword.get(parsed, :hash, config_hash)
-
-    sources =
-      case cli_sources do
-        [] ->
-          tailwind_config[:sources] ||
-            [
-              %{base: Volt.Paths.lib(), pattern: "**/*.{ex,heex}"},
-              %{base: Volt.Paths.assets_dir(), pattern: "**/*.{vue,ts,tsx,js,jsx}"}
-            ]
-
-        list ->
-          Enum.map(list, &%{base: &1, pattern: "**/*"})
-      end
-
-    {css_input, css_base} =
-      case Keyword.get(parsed, :tailwind_css) || tailwind_config[:css] do
-        nil -> {nil, File.cwd!()}
-        path -> {File.read!(path), Path.dirname(path)}
-      end
-
-    Mix.shell().info("Building Tailwind CSS...")
-
-    {us, result} =
-      :timer.tc(fn ->
-        with {:ok, css} <-
-               Volt.Tailwind.build(
-                 sources: sources,
-                 css: css_input,
-                 css_base: css_base,
-                 minify: false
-               ) do
-          Volt.Builder.Writer.build_style_entry(
-            "app",
-            css,
-            Path.join(outdir, "css"),
-            hash,
-            nil,
-            minify: minify,
-            root: root
-          )
-        end
-      end)
-
-    ms = div(us, 1000)
-
-    case result do
-      {:ok, %{css: %{path: path, size: size}, manifest: manifest}} ->
-        css_outdir = Path.dirname(path)
-        Volt.Builder.Writer.write_manifest(css_outdir, manifest)
-
-        Mix.shell().info("  #{Path.basename(path)}  #{Volt.Format.format_size(size)}")
-        Mix.shell().info("  manifest.json  #{map_size(manifest)} entries")
-        Mix.shell().info("Built Tailwind in #{ms}ms")
-
-      {:error, reason} ->
-        Mix.shell().error("Tailwind build failed: #{inspect(reason)}")
-        exit({:shutdown, 1})
+  defp tailwind_sources(parsed, tailwind_config) do
+    case Keyword.get_values(parsed, :tailwind_source) do
+      [] -> tailwind_config[:sources]
+      list -> Enum.map(list, &%{base: &1, pattern: "**/*"})
     end
   end
 

@@ -188,10 +188,9 @@ defmodule Volt.WatcherTest do
         name: :test_watcher_reload_dirs
       )
 
-    Process.sleep(100)
-    File.write!(page, "# Updated")
+    send_file_event(pid, page)
 
-    assert_receive {:volt_hmr, :update, %{path: path, changes: ["full"]}}, 2000
+    assert_receive {:volt_hmr, :update, %{path: path, changes: ["full"]}}
     assert path == Path.relative_to_cwd(page)
 
     GenServer.stop(pid)
@@ -220,7 +219,7 @@ defmodule Volt.WatcherTest do
 
     refute_receive {:volt_hmr, :update, %{path: "app.css", changes: [:style]}}, 50
 
-    assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+    assert_receive {:volt_hmr, :update, %{path: "/assets/css/app.css", changes: [:style]}},
                    3000
 
     assert File.regular?(Path.join(outdir, "app.css"))
@@ -249,7 +248,7 @@ defmodule Volt.WatcherTest do
     Process.sleep(100)
     File.write!(imported_css, ".imported-card { color: rgb(239 68 68); }")
 
-    assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+    assert_receive {:volt_hmr, :update, %{path: "/assets/css/app.css", changes: [:style]}},
                    3000
 
     css = File.read!(Path.join(outdir, "app.css"))
@@ -279,7 +278,7 @@ defmodule Volt.WatcherTest do
     Process.sleep(100)
     File.write!(heex_file, ~s(<div class="flex mt-4 bg-blue-500">hi</div>))
 
-    assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+    assert_receive {:volt_hmr, :update, %{path: "/assets/css/app.css", changes: [:style]}},
                    3000
 
     assert File.exists?(Path.join(outdir, "app.css"))

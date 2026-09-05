@@ -22,6 +22,7 @@ adapter = [
 ]
 
 orchestrator = [
+  "Volt.Build",
   "Volt.Builder",
   "Volt.Builder.Collector",
   "Volt.Builder.Compiler",
@@ -33,6 +34,7 @@ orchestrator = [
   "Volt.JS.Vendor",
   "Volt.Pipeline",
   "Volt.Tailwind",
+  "Volt.Tailwind.Build",
   "Volt.Watcher",
   "Volt.Watcher.Ignore",
   "Volt.Watcher.Path"
@@ -40,6 +42,7 @@ orchestrator = [
 
 model = [
   "Volt.Builder.BuildContext",
+  "Volt.Builder.Asset",
   "Volt.Builder.Bundle",
   "Volt.Builder.Collector.State",
   "Volt.Builder.Context",
@@ -48,6 +51,8 @@ model = [
   "Volt.Builder.OutputContext",
   "Volt.Builder.OutputFile",
   "Volt.Builder.Result",
+  "Volt.Build.Result",
+  "Volt.Config.Tailwind",
   "Volt.ChunkGraph.Chunk",
   "Volt.Config",
   "Volt.Config.*",
@@ -61,7 +66,8 @@ model = [
   "Volt.JS.TSConfig",
   "Volt.MIME",
   "Volt.Paths",
-  "Volt.Pipeline.Result.Hashes"
+  "Volt.Pipeline.Result.Hashes",
+  "Volt.Tailwind.State"
 ]
 
 logic = [
@@ -136,7 +142,11 @@ infrastructure = [
   "Volt.JS.Runtime.Error",
   "Volt.JS.Runtime.Installer",
   "Volt.JS.Runtime.PackageSet",
-  "Volt.Tailwind.Loader"
+  "Volt.Tailwind.Artifact",
+  "Volt.Tailwind.Loader",
+  "Volt.Tailwind.Runtime",
+  "Volt.Tailwind.Supervisor",
+  "Volt.Tailwind.Worker"
 ]
 
 plugin = [

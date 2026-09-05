@@ -81,7 +81,7 @@ defmodule Mix.Tasks.Volt.BuildTest do
     ])
 
     js_path = Path.join([outdir, "js", "app.js"])
-    assert File.read!(js_path) =~ ~r(/cdn/assets/logo-[a-f0-9]{8}\.svg)
+    assert File.read!(js_path) =~ ~r(/cdn/assets/js/logo-[a-f0-9]{8}\.svg)
   end
 
   test "--sourcemap false disables production sourcemaps", %{tmp_dir: tmp_dir} do
@@ -142,11 +142,10 @@ defmodule Mix.Tasks.Volt.BuildTest do
 
     Mix.Tasks.Volt.Build.run(["--tailwind"])
 
-    css_manifest = outdir |> Path.join("css/manifest.json") |> File.read!() |> Jason.decode!()
+    manifest = outdir |> Path.join("manifest.json") |> File.read!() |> Jason.decode!()
 
-    assert File.regular?(Path.join([outdir, "css", "app.css"]))
-    assert File.regular?(Path.join([outdir, "js", "app.js"]))
-    assert css_manifest["app.css"]["file"] == "app.css"
+    assert manifest["app.css"]["file"] == "css/app.css"
+    assert manifest["app.js"]["file"] == "js/app.js"
 
     refute outdir
            |> Path.join("css")

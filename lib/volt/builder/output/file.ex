@@ -10,7 +10,7 @@ defmodule Volt.Builder.OutputFile do
   @type t :: %__MODULE__{
           path: String.t(),
           size: non_neg_integer(),
-          assets: [term()],
+          assets: [Volt.Builder.Asset.t()],
           chunk_id: String.t() | nil,
           type: :entry | :chunk | nil
         }

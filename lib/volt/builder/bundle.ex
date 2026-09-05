@@ -17,6 +17,6 @@ defmodule Volt.Builder.Bundle do
           sourcemap: String.t() | nil,
           files: [Path.t()],
           css: String.t() | nil,
-          assets: [term()]
+          assets: [Volt.Builder.Asset.t()]
         }
 end

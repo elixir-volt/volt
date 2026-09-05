@@ -23,6 +23,9 @@ defmodule Volt.Watcher do
       (default: common VCS, dependency, test-output, cache, and build directories)
     * `:tailwind` — enable Tailwind CSS rebuilds (default: `false`)
     * `:tailwind_css` — custom Tailwind input CSS (default: Tailwind base)
+    * `:tailwind_sources` — source globs scanned for Tailwind candidates
+    * `:tailwind_name` — logical Tailwind output name (default: input basename)
+    * `:tailwind_url` — browser URL broadcast for Tailwind style updates
     * `:target` — JS downlevel target
     * `:import_source` — JSX import source
     * `:vapor` — Vue Vapor mode
@@ -68,6 +71,10 @@ defmodule Volt.Watcher do
     watch_dirs = Keyword.get(opts, :watch_dirs, []) |> Enum.map(&Path.expand/1)
     reload_dirs = Keyword.get(opts, :reload_dirs, []) |> Enum.map(&Path.expand/1)
     tailwind_outdir = Keyword.get(opts, :tailwind_outdir) |> maybe_expand()
+    tailwind_name = Keyword.get(opts, :tailwind_name, "app")
+    tailwind_url = Keyword.get(opts, :tailwind_url, "/assets/css/#{tailwind_name}.css")
+    tailwind_key = Keyword.get(opts, :tailwind_key, {:watcher, root})
+    configured_tailwind_sources = Keyword.get(opts, :tailwind_sources)
 
     config =
       opts
@@ -77,11 +84,16 @@ defmodule Volt.Watcher do
         :watch_dirs,
         :reload_dirs,
         :watch_ignored,
+        :tailwind_key,
+        :tailwind_name,
+        :tailwind_sources,
+        :tailwind_url,
         :tailwind_outdir
       ])
       |> Map.new()
 
     all_dirs = Enum.uniq([root | watch_dirs ++ reload_dirs ++ tailwind_colocated_dirs(config)])
+    tailwind_sources = configured_tailwind_sources || watcher_sources(all_dirs)
     watch_ignored = Volt.Watcher.Ignore.compile(Keyword.get(opts, :watch_ignored, []), all_dirs)
 
     fs_pids =
@@ -90,6 +102,13 @@ defmodule Volt.Watcher do
         FileSystem.subscribe(pid)
         pid
       end)
+
+    config =
+      config
+      |> Map.put(:tailwind_key, tailwind_key)
+      |> Map.put(:tailwind_name, tailwind_name)
+      |> Map.put(:tailwind_sources, tailwind_sources)
+      |> Map.put(:tailwind_url, tailwind_url)
 
     state = %__MODULE__{
       root: root,
@@ -102,14 +121,22 @@ defmodule Volt.Watcher do
     }
 
     if config[:tailwind] do
-      initial_tailwind_build(all_dirs, config[:tailwind_css], tailwind_outdir)
+      initial_tailwind_build(
+        tailwind_sources,
+        config[:tailwind_css],
+        tailwind_outdir,
+        tailwind_key,
+        tailwind_name
+      )
     end
 
     {:ok, state}
   end
 
-  defp initial_tailwind_build(dirs, css_path, outdir) do
-    case build_tailwind(dirs, css_path, outdir) do
+  defp watcher_sources(dirs), do: Enum.map(dirs, &%{base: &1, pattern: "**/*"})
+
+  defp initial_tailwind_build(sources, css_path, outdir, key, name) do
+    case build_tailwind(sources, css_path, outdir, key, name) do
       {:ok, css} ->
         Logger.debug("[Volt] Initial Tailwind build: #{byte_size(css)} bytes")
 
@@ -118,16 +145,16 @@ defmodule Volt.Watcher do
     end
   end
 
-  defp build_tailwind(dirs, css_path, outdir) do
-    sources = Enum.map(dirs, &%{base: &1, pattern: "**/*"})
-
+  defp build_tailwind(sources, css_path, outdir, key, name) do
     with {:ok, {css_input, css_base}} <- read_tailwind_css(css_path),
-         {:ok, css} <- Volt.Tailwind.build(sources: sources, css: css_input, css_base: css_base) do
-      if outdir do
-        File.mkdir_p!(outdir)
-        File.write!(Path.join(outdir, "app.css"), css)
-      end
-
+         {:ok, css} <-
+           Volt.Tailwind.build(
+             key: key,
+             sources: sources,
+             css: css_input,
+             css_base: css_base
+           ) do
+      Volt.Tailwind.Artifact.write(outdir, name, css)
       {:ok, css}
     end
   end
@@ -386,9 +413,15 @@ defmodule Volt.Watcher do
   end
 
   defp handle_tailwind_rebuild(_changed_paths, true, state) do
-    case build_tailwind(state.tailwind_dirs, state.config[:tailwind_css], state.tailwind_outdir) do
+    case build_tailwind(
+           state.config.tailwind_sources,
+           state.config[:tailwind_css],
+           state.tailwind_outdir,
+           state.config.tailwind_key,
+           state.config.tailwind_name
+         ) do
       {:ok, css} ->
-        HMR.broadcast(:update, %{path: "assets/css/app.css", changes: [:style]})
+        HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]})
         Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
 
       {:error, reason} ->
@@ -404,13 +437,15 @@ defmodule Volt.Watcher do
       end)
 
     with {:ok, {css_input, css_base}} <- read_tailwind_css(state.config[:tailwind_css]),
-         {:ok, css} <- Volt.Tailwind.rebuild(changed, css: css_input, css_base: css_base) do
-      if outdir = state.tailwind_outdir do
-        File.mkdir_p!(outdir)
-        File.write!(Path.join(outdir, "app.css"), css)
-      end
+         {:ok, css} <-
+           Volt.Tailwind.rebuild(changed,
+             key: state.config.tailwind_key,
+             css: css_input,
+             css_base: css_base
+           ) do
+      Volt.Tailwind.Artifact.write(state.tailwind_outdir, state.config.tailwind_name, css)
 
-      HMR.broadcast(:update, %{path: "assets/css/app.css", changes: [:style]})
+      HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]})
       Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
     else
       :unchanged ->

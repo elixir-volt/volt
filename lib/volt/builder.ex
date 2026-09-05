@@ -45,6 +45,7 @@ defmodule Volt.Builder do
     * `:chunks` — manual chunk definitions, map of chunk name to list of patterns:
 
           chunks: %{"vendor" => ["vue", "vue-router"], "ui" => ["assets/src/components"]}
+    * `:write_manifest` — write `manifest.json` after building (default: `true`)
     * `:external` — specifiers to exclude from the bundle and access as globals.
       Accepts a list (global name auto-derived) or a map of `specifier => global_name`:
 
@@ -73,9 +74,17 @@ defmodule Volt.Builder do
         build_isolated_entries(expanded_entries, ctx, build_ctx)
       end
 
-    with {:ok, result} <- finalize_build_results(results) do
-      Volt.Builder.Writer.write_manifest(build_ctx.outdir, result.manifest)
+    with {:ok, result} <- finalize_build_results(results),
+         :ok <- maybe_write_manifest(build_ctx.outdir, result.manifest, opts) do
       {:ok, result}
+    end
+  end
+
+  defp maybe_write_manifest(outdir, manifest, opts) do
+    if Keyword.get(opts, :write_manifest, true) do
+      Volt.Builder.Writer.write_manifest(outdir, manifest)
+    else
+      :ok
     end
   end
 

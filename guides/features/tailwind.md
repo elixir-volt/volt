@@ -20,6 +20,20 @@ config :volt,
 - `css` — path to your Tailwind input CSS file (with `@import "tailwindcss"`)
 - `sources` — list of `%{base, pattern}` maps defining where to scan for class names
 
+## Build Lifecycle
+
+`Volt.build/1` is the public API for complete frontend builds. It composes the configured Tailwind root with the ordinary JavaScript/CSS module graph, returns a typed `%Volt.Build.Result{}`, and writes one merged manifest at the configured asset output root. `mix volt.build` is a CLI adapter around that API.
+
+```elixir
+{:ok, result} = Volt.build()
+
+result.styles
+result.assets
+result.manifest
+```
+
+Tailwind output is isolated per profile and CSS root. Root workers retain independent Oxide scanners and generated CSS state while sharing one supervised QuickBEAM compiler runtime.
+
 ## Plugins and Config Files
 
 Tailwind `@plugin` and `@config` directives are resolved and bundled automatically:

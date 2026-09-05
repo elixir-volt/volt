@@ -29,7 +29,7 @@ defmodule Volt.Watcher.Path do
     case File.stat(path) do
       {:ok, path_stat} ->
         if same_file?(path_stat, root_stat) do
-          {:ok, Path.join(parts)}
+          {:ok, join_parts(parts)}
         else
           continue_to_parent(path, root_stat, parts)
         end
@@ -48,6 +48,9 @@ defmodule Volt.Watcher.Path do
       relative_to_physical_root(parent, root_stat, [Path.basename(path) | parts])
     end
   end
+
+  defp join_parts([]), do: "."
+  defp join_parts(parts), do: Path.join(parts)
 
   defp same_file?(left, right) do
     left.major_device == right.major_device and left.minor_device == right.minor_device and
