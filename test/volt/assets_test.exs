@@ -9,6 +9,24 @@ defmodule Volt.AssetsTest do
     :ok
   end
 
+  @tag :tmp_dir
+  test "prepares a URL module without writing its referenced asset", %{tmp_dir: root} do
+    source = Path.join(root, "logo.svg")
+    outdir = Path.join(root, "output")
+    File.write!(source, "<svg/>")
+    opts = [url: true, root: root, outdir: outdir, prefix: "https://cdn.example/assets"]
+
+    assert {:ok, prepared} = Volt.Assets.prepare_js_module(source, opts)
+    assert [%Volt.Builder.Artifact{file: file, content: "<svg/>"}] = prepared.artifacts
+    assert [%Volt.Builder.Asset{src: "logo.svg", file: ^file}] = prepared.assets
+    assert prepared.code =~ "https://cdn.example/assets/#{file}"
+    refute File.exists?(outdir)
+
+    assert {:ok, emitted} = Volt.Assets.emit_js_module(source, opts)
+    assert emitted == Map.take(prepared, [:code, :assets])
+    assert File.read!(Path.join(outdir, file)) == "<svg/>"
+  end
+
   describe "asset?/1" do
     test "recognizes image types" do
       assert Volt.Assets.asset?("photo.jpg")

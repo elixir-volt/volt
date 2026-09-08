@@ -36,6 +36,8 @@ defmodule Volt.CSS.Imports do
          {:ok, imported_css} <- File.read(resolved),
          {:ok, imported_css} <-
            do_inline(imported_css, resolved, opts, MapSet.put(seen, resolved)),
+         {:ok, imported_css} <-
+           Volt.CSS.AssetURLRewriter.rebase(imported_css, resolved, Path.dirname(source_path)),
          {:ok, {rule_start, rule_end}} <- import_rule_bounds(css, dependency) do
       {:ok, replace_range(css, rule_start, rule_end, imported_css <> "\n")}
     else

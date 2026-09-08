@@ -1,18 +1,12 @@
 defmodule Volt.HMR.ModuleGraph do
-  @moduledoc """
-  ETS-backed dev-server module graph.
+  @moduledoc "Session-scoped module graph indexed by URL, resolved identity, and source file."
 
-  The graph is keyed by served URL, resolved module id, and source file. It is
-  the primary source for HMR boundary lookup: served modules record their
-  resolved imports, importers, query variants, and whether the module accepts
-  itself with `import.meta.hot.accept()`.
-  """
+  alias Volt.ETS
 
   @table :volt_hmr_module_graph
 
   defmodule Node do
-    @moduledoc "A dev-server module graph node."
-
+    @moduledoc "A served browser module."
     defstruct url: nil,
               id: nil,
               file: nil,
@@ -23,134 +17,118 @@ defmodule Volt.HMR.ModuleGraph do
               last_invalidated_at: nil
   end
 
-  @doc "Create the module graph ETS table."
-  def create_table do
-    :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
-    :ok
-  end
+  def create_table, do: ETS.create_named_set(@table)
 
-  @doc "Upsert a module and update importer links for its resolved imports."
   def update_module(url, id, file, imports, opts \\ []) do
-    old_node = get_by_id(id)
-    remove_old_importer_links(old_node, id)
+    session = Keyword.get(opts, :session, :default)
+    old = get_by_id(id, session)
+    unlink_imports(old, session)
+    if old && old.url != url, do: ETS.delete(@table, {session, {:url, old.url}})
+    if old && old.file != file, do: unlink_file(old, session)
+
+    importers =
+      for node <- nodes(session),
+          MapSet.member?(node.imports, id),
+          into: MapSet.new(),
+          do: node.id
 
     node = %Node{
       url: url,
       id: id,
       file: file,
-      type: Keyword.get(opts, :type, module_type(url)),
       imports: MapSet.new(imports),
-      importers: existing_importers(id, old_node),
+      importers: importers,
+      type: Keyword.get(opts, :type, module_type(url)),
       self_accepting: Keyword.get(opts, :self_accepting, false)
     }
 
-    put_node(node)
-    Enum.each(node.imports, &put_importer_link(&1, id))
+    put_node(node, session)
+
+    Enum.each(node.imports, fn imported_id ->
+      if imported = get_by_id(imported_id, session) do
+        put_node(%{imported | importers: MapSet.put(imported.importers, id)}, session)
+      end
+    end)
+
     :ok
   end
 
-  def get_by_url(url), do: lookup({:url, url})
-  def get_by_id(id), do: lookup({:id, id})
-
-  def get_by_file(file) do
-    case :ets.lookup(@table, {:file, file}) do
-      [{_, ids}] -> Enum.flat_map(ids, &List.wrap(get_by_id(&1)))
-      [] -> []
+  def get_by_url(url, session \\ :default) do
+    case lookup({:url, url}, session) do
+      nil -> nil
+      id -> get_by_id(id, session)
     end
   end
 
-  @doc "Mark every graph node for a file as invalidated and return affected nodes."
-  def invalidate_file(file, timestamp \\ System.system_time(:millisecond)) do
-    nodes = get_by_file(file)
+  def get_by_id(id, session \\ :default), do: lookup({:id, id}, session)
 
-    Enum.each(nodes, fn node ->
-      put_node(%{node | last_invalidated_at: timestamp})
-    end)
+  def get_by_file(file, session \\ :default) do
+    (lookup({:file, file}, session) || MapSet.new())
+    |> Enum.flat_map(&List.wrap(get_by_id(&1, session)))
+  end
 
+  def invalidate_file(file, timestamp \\ System.system_time(:millisecond), session \\ :default) do
+    nodes = get_by_file(file, session)
+    Enum.each(nodes, &put_node(%{&1 | last_invalidated_at: timestamp}, session))
     nodes
   end
 
-  @doc "Remove all nodes for a file and unlink them from importers/imports."
-  def remove_file(file) do
-    file
-    |> get_by_file()
-    |> Enum.each(&remove_node/1)
+  def remove_file(file, session \\ :default) do
+    Enum.each(get_by_file(file, session), fn node ->
+      unlink_imports(node, session)
 
-    :ets.delete(@table, {:file, file})
-    :ok
-  end
+      Enum.each(node.importers, fn id ->
+        if importer = get_by_id(id, session) do
+          put_node(%{importer | imports: MapSet.delete(importer.imports, node.id)}, session)
+        end
+      end)
 
-  def clear do
-    :ets.delete_all_objects(@table)
-    :ok
-  end
-
-  defp put_node(node) do
-    :ets.insert(@table, {{:url, node.url}, node.id})
-    :ets.insert(@table, {{:id, node.id}, node})
-    :ets.insert(@table, {{:file, node.file}, file_ids(node.file, node.id)})
-  end
-
-  defp existing_importers(id, nil), do: existing_importers(id, %Node{})
-
-  defp existing_importers(id, old_node) do
-    @table
-    |> :ets.tab2list()
-    |> Enum.reduce(old_node.importers, fn
-      {{:id, importer_id}, %Node{imports: imports}}, acc when importer_id != id ->
-        if MapSet.member?(imports, id), do: MapSet.put(acc, importer_id), else: acc
-
-      _entry, acc ->
-        acc
+      ETS.delete(@table, {session, {:url, node.url}})
+      ETS.delete(@table, {session, {:id, node.id}})
     end)
+
+    ETS.delete(@table, {session, {:file, file}})
   end
 
-  defp put_importer_link(import_id, importer_id) do
-    case get_by_id(import_id) do
-      nil -> :ok
-      node -> put_node(%{node | importers: MapSet.put(node.importers, importer_id)})
-    end
+  def clear, do: ETS.clear(@table)
+  def clear_session(session), do: ETS.clear_session(@table, session)
+
+  defp nodes(session) do
+    :ets.foldl(
+      fn
+        {{^session, {:id, _}}, node}, acc -> [node | acc]
+        _, acc -> acc
+      end,
+      [],
+      @table
+    )
   end
 
-  defp remove_old_importer_links(nil, _id), do: :ok
+  defp put_node(node, session) do
+    ids = lookup({:file, node.file}, session) || MapSet.new()
+    ETS.put(@table, {{session, {:url, node.url}}, node.id})
+    ETS.put(@table, {{session, {:id, node.id}}, node})
+    ETS.put(@table, {{session, {:file, node.file}}, MapSet.put(ids, node.id)})
+  end
 
-  defp remove_old_importer_links(node, id) do
-    Enum.each(node.imports, fn import_id ->
-      case get_by_id(import_id) do
-        nil -> :ok
-        imported -> put_node(%{imported | importers: MapSet.delete(imported.importers, id)})
+  defp unlink_file(node, session) do
+    ids = lookup({:file, node.file}, session) || MapSet.new()
+    ETS.put(@table, {{session, {:file, node.file}}, MapSet.delete(ids, node.id)})
+  end
+
+  defp unlink_imports(nil, _session), do: :ok
+
+  defp unlink_imports(node, session) do
+    Enum.each(node.imports, fn id ->
+      if imported = get_by_id(id, session) do
+        put_node(%{imported | importers: MapSet.delete(imported.importers, node.id)}, session)
       end
     end)
   end
 
-  defp remove_node(node) do
-    remove_old_importer_links(node, node.id)
-
-    Enum.each(node.importers, fn importer_id ->
-      case get_by_id(importer_id) do
-        nil -> :ok
-        importer -> put_node(%{importer | imports: MapSet.delete(importer.imports, node.id)})
-      end
-    end)
-
-    :ets.delete(@table, {:url, node.url})
-    :ets.delete(@table, {:id, node.id})
-  end
-
-  defp file_ids(file, id) do
-    existing =
-      case :ets.lookup(@table, {:file, file}) do
-        [{_, ids}] -> ids
-        [] -> MapSet.new()
-      end
-
-    MapSet.put(existing, id)
-  end
-
-  defp lookup(key) do
-    case :ets.lookup(@table, key) do
-      [{_, %Node{} = node}] -> node
-      [{_, id}] when elem(key, 0) == :url -> get_by_id(id)
+  defp lookup(key, session) do
+    case :ets.lookup(@table, {session, key}) do
+      [{_, value}] -> value
       [] -> nil
     end
   end

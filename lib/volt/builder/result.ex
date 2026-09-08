@@ -1,11 +1,12 @@
 defmodule Volt.Builder.Result do
   @moduledoc "Production build result returned from `Volt.Builder`."
 
-  defstruct js: [], css: nil, manifest: %{}, chunks: []
+  defstruct js: [], css: nil, styles: [], manifest: %{}, chunks: []
 
   @type t :: %__MODULE__{
           js: Volt.Builder.OutputFile.t() | [Volt.Builder.OutputFile.t()],
           css: Volt.Builder.OutputFile.t() | nil,
+          styles: [Volt.Builder.OutputFile.t()],
           manifest: %{String.t() => Volt.Builder.ManifestEntry.t()},
           chunks: [Volt.Builder.OutputFile.t()]
         }

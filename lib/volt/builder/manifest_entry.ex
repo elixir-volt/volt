@@ -20,6 +20,13 @@ defmodule Volt.Builder.ManifestEntry do
           assets: [String.t()]
         }
 
+  @doc "Return conflicting identities; identical shared entries are permitted."
+  def conflicts(left, right) do
+    for {key, entry} <- left,
+        Map.has_key?(right, key) and right[key] != entry,
+        do: key
+  end
+
   def js(src, file, opts \\ []) do
     %__MODULE__{src: src, file: file, isEntry: Keyword.get(opts, :entry, false)}
   end
@@ -27,14 +34,12 @@ defmodule Volt.Builder.ManifestEntry do
   def css(src, file, assets), do: %__MODULE__{src: src, file: file, assets: assets}
   def asset(src, file), do: %__MODULE__{src: src, file: file}
 
-  @doc "Prefix every emitted path in a manifest entry."
+  @doc "Prefix emitted paths, preserving imports and dynamicImports as manifest keys."
   @spec prefix_paths(t(), String.t()) :: t()
   def prefix_paths(%__MODULE__{} = entry, prefix) do
     %{
       entry
       | file: prefix_path(entry.file, prefix),
-        imports: Enum.map(entry.imports, &prefix_path(&1, prefix)),
-        dynamicImports: Enum.map(entry.dynamicImports, &prefix_path(&1, prefix)),
         css: Enum.map(entry.css, &prefix_path(&1, prefix)),
         assets: Enum.map(entry.assets, &prefix_path(&1, prefix))
     }

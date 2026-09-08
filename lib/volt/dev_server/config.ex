@@ -15,5 +15,6 @@ defmodule Volt.DevServer.Config do
             module_types: %{},
             define: %{},
             hmr_timeout: 60_000,
+            session: :default,
             watcher_opts: nil
 end

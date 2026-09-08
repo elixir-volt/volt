@@ -14,6 +14,21 @@ defmodule Volt.Tailwind.Runtime do
     GenServer.call(@name, {:compile, css, candidates, css_base}, :infinity)
   end
 
+  @doc "Compile once in an isolated runtime, releasing it when compilation finishes."
+  @spec compile_once(String.t() | nil, [String.t()], String.t()) ::
+          {:ok, String.t()} | {:error, term()}
+  def compile_once(css, candidates, css_base, scan \\ nil) do
+    runtime = start_runtime()
+
+    try do
+      runtime
+      |> Volt.JS.Runtime.call("compileTailwindCss", [css, candidates, css_base, scan])
+      |> normalize_result()
+    after
+      if Process.alive?(runtime.pid), do: Volt.JS.Runtime.stop(runtime)
+    end
+  end
+
   @impl true
   def init(:ok), do: {:ok, nil}
 

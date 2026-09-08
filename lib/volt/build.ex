@@ -13,21 +13,44 @@ defmodule Volt.Build do
     tailwind = Keyword.get(opts, :tailwind, Volt.Config.tailwind(profile))
     entries = List.wrap(config.entry)
     root_outdir = to_string(config.outdir)
+    layout = Volt.Build.Layout.new(config.output_layout, config.assets_dir)
 
-    with {:ok, tailwind_result} <- build_tailwind(tailwind, config, opts, profile),
-         {:ok, asset_result} <- build_assets(entries, config, opts) do
-      tailwind_result = prefix_manifest(tailwind_result, "css")
-      asset_result = prefix_manifest(asset_result, "js")
-      result = build_result(tailwind_result, asset_result)
-      :ok = write_manifest(root_outdir, result.manifest)
-      {:ok, result}
+    with {:ok, tailwind_result, tailwind_plan} <-
+           build_tailwind(tailwind, config, opts, layout),
+         {:ok, asset_result, asset_plan} <- build_assets(entries, config, opts, layout) do
+      tailwind_result = prefix_manifest(tailwind_result, layout.styles)
+      asset_result = prefix_manifest(asset_result, layout.scripts)
+
+      artifacts =
+        prefix_artifacts(tailwind_plan, layout.styles) ++
+          prefix_artifacts(asset_plan, layout.scripts)
+
+      with {:ok, result} <- build_result(tailwind_result, asset_result),
+           {:ok, plan} <-
+             Volt.Builder.Plan.new(artifacts ++ manifest_artifacts(result.manifest, opts)),
+           :ok <- Volt.Builder.Plan.validate_manifest(plan, result.manifest),
+           {:ok, destination, plan} <-
+             Volt.PublicDir.prepare_output(
+               plan,
+               root_outdir,
+               Volt.PublicDir.resolve(config.public_dir),
+               root_outdir
+             ),
+           :ok <- Volt.Builder.Writer.write_plan(destination, plan) do
+        {:ok, result}
+      end
     end
   end
 
-  defp build_tailwind([], _config, _opts, _profile), do: {:ok, %Volt.Builder.Result{}}
-  defp build_tailwind(nil, _config, _opts, _profile), do: {:ok, %Volt.Builder.Result{}}
+  defp build_tailwind(false, _config, _opts, _layout), do: empty_plan()
+  defp build_tailwind(true, config, opts, layout), do: prepare_tailwind([], config, opts, layout)
+  defp build_tailwind([], _config, _opts, _layout), do: empty_plan()
+  defp build_tailwind(nil, _config, _opts, _layout), do: empty_plan()
 
-  defp build_tailwind(tailwind, config, opts, profile) do
+  defp build_tailwind(tailwind, config, opts, layout),
+    do: prepare_tailwind(tailwind, config, opts, layout)
+
+  defp prepare_tailwind(tailwind, config, opts, layout) do
     overrides =
       []
       |> put_present(:css, opts[:tailwind_css])
@@ -36,23 +59,20 @@ defmodule Volt.Build do
 
     root = Volt.Config.Tailwind.new(tailwind, overrides)
 
-    css_key = root.css || {:default_css, root.name}
-
-    Volt.Tailwind.Build.build(root,
-      key: {:build, profile || :default, css_key},
-      outdir: Path.join(to_string(config.outdir), "css"),
+    Volt.Tailwind.Build.prepare(root,
+      outdir: Path.join(to_string(config.outdir), layout.styles),
       hash: config.hash,
       minify: config.minify,
       root: to_string(config.root),
-      asset_url_prefix: Volt.URL.join(config.asset_url_prefix, "css")
+      asset_url_prefix: Volt.URL.join(config.asset_url_prefix, layout.styles)
     )
   end
 
-  defp build_assets([], _config, _opts), do: {:ok, %Volt.Builder.Result{}}
+  defp build_assets([], _config, _opts, _layout), do: empty_plan()
 
-  defp build_assets(entries, config, opts) do
-    builder_outdir = Path.join(to_string(config.outdir), "js")
-    asset_url_prefix = Volt.URL.join(config.asset_url_prefix, "js")
+  defp build_assets(entries, config, opts, layout) do
+    builder_outdir = Path.join(to_string(config.outdir), layout.scripts)
+    asset_url_prefix = Volt.URL.join(config.asset_url_prefix, layout.scripts)
 
     config
     |> Map.from_struct()
@@ -62,21 +82,44 @@ defmodule Volt.Build do
     |> Map.put(:write_manifest, false)
     |> Map.merge(Map.new(Keyword.take(opts, [:name])))
     |> Map.to_list()
-    |> Volt.Builder.build()
+    |> Volt.Builder.prepare()
   end
 
-  defp write_manifest(root_outdir, manifest) do
-    File.mkdir_p!(root_outdir)
-    Volt.Builder.Writer.write_manifest(root_outdir, manifest)
+  defp empty_plan, do: {:ok, %Volt.Builder.Result{}, %Volt.Builder.Plan{artifacts: []}}
+
+  defp prefix_artifacts(plan, ""), do: plan.artifacts
+
+  defp prefix_artifacts(plan, prefix) do
+    Enum.map(plan.artifacts, fn artifact ->
+      %{artifact | file: Path.join(prefix, artifact.file)}
+    end)
+  end
+
+  defp manifest_artifacts(manifest, opts) do
+    if Keyword.get(opts, :write_manifest, true),
+      do: [%Volt.Builder.Artifact{file: "manifest.json", content: Jason.encode!(manifest)}],
+      else: []
   end
 
   defp build_result(styles_result, assets_result) do
-    %Volt.Build.Result{
-      assets: assets_result,
-      styles: List.wrap(styles_result.css) ++ List.wrap(assets_result.css),
-      manifest: Map.merge(styles_result.manifest, assets_result.manifest)
-    }
+    collisions =
+      Volt.Builder.ManifestEntry.conflicts(styles_result.manifest, assets_result.manifest)
+
+    case Enum.sort(collisions) do
+      [] ->
+        {:ok,
+         %Volt.Build.Result{
+           assets: assets_result,
+           styles: styles_result.styles ++ assets_result.styles,
+           manifest: Map.merge(styles_result.manifest, assets_result.manifest)
+         }}
+
+      keys ->
+        {:error, {:manifest_collision, keys}}
+    end
   end
+
+  defp prefix_manifest(result, ""), do: result
 
   defp prefix_manifest(result, prefix) do
     manifest =

@@ -13,6 +13,8 @@ defmodule Mix.Tasks.Volt.Build do
   ## Options
 
     * `--entry` — entry file (repeatable, default from config or `"assets/js/app.ts"`)
+    * `--assets-dir` — relative compiled-asset directory inside the output root
+    * `--output-layout` — `flat` or `split`
     * `--outdir` — output directory (default: `"priv/static/assets"`)
     * `--public-dir` — optional Vite-style public directory copied to the static root as-is
     * `--asset-url-prefix` — public URL prefix for production asset references (default: `"/assets"`)
@@ -44,6 +46,8 @@ defmodule Mix.Tasks.Volt.Build do
         strict: [
           entry: [:string, :keep],
           outdir: :string,
+          assets_dir: :string,
+          output_layout: :string,
           public_dir: :string,
           asset_url_prefix: :string,
           target: :string,
@@ -74,9 +78,17 @@ defmodule Mix.Tasks.Volt.Build do
     outdir = Keyword.get(parsed, :outdir) || to_string(config.outdir)
     minify = Keyword.get(parsed, :minify, config.minify)
 
-    tailwind? =
-      Keyword.get(parsed, :tailwind) ||
-        (tailwind_config != [] and Keyword.get(parsed, :tailwind, true))
+    tailwind =
+      case Keyword.fetch(parsed, :tailwind) do
+        {:ok, false} ->
+          false
+
+        {:ok, true} ->
+          if(tailwind_config == [], do: true, else: tailwind_config)
+
+        :error ->
+          if parsed[:tailwind_css] && tailwind_config == [], do: true, else: tailwind_config
+      end
 
     entries =
       case cli_entries do
@@ -99,6 +111,8 @@ defmodule Mix.Tasks.Volt.Build do
     opts = [
       entry: if(length(entries) == 1, do: hd(entries), else: entries),
       outdir: outdir,
+      assets_dir: Keyword.get(parsed, :assets_dir, config.assets_dir),
+      output_layout: parse_layout(Keyword.get(parsed, :output_layout), config.output_layout),
       public_dir: Keyword.get(parsed, :public_dir) || config.public_dir,
       asset_url_prefix: Keyword.get(parsed, :asset_url_prefix) || config.asset_url_prefix,
       target: Keyword.get(parsed, :target) || to_string(config.target),
@@ -120,7 +134,7 @@ defmodule Mix.Tasks.Volt.Build do
       root: config.root,
       name: parsed[:name],
       profile: profile,
-      tailwind: if(tailwind?, do: tailwind_config, else: []),
+      tailwind: tailwind,
       tailwind_css: parsed[:tailwind_css],
       tailwind_sources: tailwind_sources(parsed, tailwind_config)
     ]
@@ -129,6 +143,13 @@ defmodule Mix.Tasks.Volt.Build do
 
     build_all(opts)
   end
+
+  defp parse_layout(nil, default), do: default
+  defp parse_layout("flat", _default), do: :flat
+  defp parse_layout("split", _default), do: :split
+
+  defp parse_layout(other, _default),
+    do: Mix.raise("Invalid output layout: #{inspect(other)}; expected flat or split")
 
   defp build_all(opts) do
     Mix.shell().info("Building #{inspect(opts[:entry])}...")

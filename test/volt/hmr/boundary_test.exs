@@ -3,6 +3,38 @@ defmodule Volt.HMR.BoundaryTest do
 
   alias Volt.HMR.Boundary
 
+  test "boundary lookup isolates both served and fallback import graphs" do
+    alias Volt.HMR.{ImportGraph, ModuleGraph}
+    a = make_ref()
+    b = make_ref()
+
+    on_exit(fn ->
+      for session <- [a, b] do
+        ImportGraph.clear_session(session)
+        ModuleGraph.clear_session(session)
+      end
+    end)
+
+    child = "/session/child.js"
+    parent = "/session/parent.js"
+
+    read = fn path ->
+      if path == parent, do: "import.meta.hot.accept()", else: "export default 1"
+    end
+
+    ImportGraph.update(parent, ["./child.js"], a)
+    assert Boundary.find_boundary(child, read, a) == {:ok, parent}
+    assert Boundary.find_boundary(child, read, b) == :full_reload
+    ModuleGraph.update_module("/child.js", child, child, [], session: a)
+    ModuleGraph.update_module("/parent.js", parent, parent, [child], session: a)
+    ModuleGraph.update_module("/child.js", child, child, [], session: b)
+    assert Boundary.find_boundary(child, read, a) == {:ok, parent}
+    assert Boundary.find_boundary(child, read, b) == :full_reload
+    ModuleGraph.invalidate_file(child, 123, a)
+    assert ModuleGraph.get_by_id(child, a).last_invalidated_at == 123
+    assert ModuleGraph.get_by_id(child, b).last_invalidated_at == nil
+  end
+
   describe "self_accepting?/1" do
     test "detects import.meta.hot.accept()" do
       assert Boundary.self_accepting?("""

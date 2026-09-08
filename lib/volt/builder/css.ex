@@ -1,6 +1,42 @@
 defmodule Volt.Builder.CSS do
   @moduledoc false
 
+  def prepare_parts(css_parts, bundle_opts) do
+    css_parts
+    |> Enum.reduce_while({:ok, []}, fn part, {:ok, acc} ->
+      case prepare_part(part, bundle_opts) do
+        {:ok, prepared} -> {:cont, {:ok, [prepared | acc]}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, reversed} ->
+        parts = Enum.reverse(reversed)
+
+        {:ok,
+         %Volt.Builder.CSS.Prepared{
+           code: Enum.map_join(parts, "\n", & &1.code),
+           assets: parts |> Enum.flat_map(& &1.assets) |> Enum.uniq(),
+           artifacts: Enum.flat_map(parts, & &1.artifacts)
+         }}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  def prepare_part({source_path, css}, bundle_opts) do
+    with {:ok, css} <- Volt.CSS.Imports.inline(css, source_path, bundle_opts) do
+      Volt.CSS.AssetURLRewriter.prepare(css, source_path,
+        prefix: Keyword.get(bundle_opts, :asset_url_prefix, Volt.Paths.prefix()),
+        root: Keyword.get(bundle_opts, :root)
+      )
+    end
+  end
+
+  def prepare_part(css, _bundle_opts),
+    do: {:ok, %Volt.Builder.CSS.Prepared{code: css, assets: [], artifacts: []}}
+
   def bundle_parts(css_parts, fun) when is_function(fun, 1) do
     css_parts
     |> Enum.reduce_while({:ok, [], []}, fn css_part, {:ok, code_parts, assets} ->

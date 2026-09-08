@@ -14,6 +14,47 @@ Built in 58ms
 
 Reads configuration from `config :volt`. CLI flags override config values.
 
+## Publication guarantees
+
+Volt prepares and validates compiled assets and public files before publication.
+It stages file contents beside the destination, installs assets, then installs the
+manifest last. Compilation, validation, and staging failures leave previous output
+untouched. Ordinary failures clean up staging files.
+
+Publication is **not a whole-directory transaction**. An installation failure may
+leave some new assets in place; unhashed URLs can then expose a mixed generation.
+An error is returned and later files are not installed. Existing unrelated files
+are preserved. Replacement behavior depends on the host filesystem; crash durability
+and cross-platform atomic replacement are not guaranteed.
+
+Publications to the same expanded destination are serialized within one BEAM node.
+This does not coordinate separate OS processes, symlink aliases, overlapping output
+roots, or build preparation order. Deployments needing an atomic site switch should
+publish to a fresh release directory and switch releases at the deployment layer.
+
+## Publication root and asset directory
+
+For `Volt.build/1`, `outdir` is the publication root: public files and the manifest
+are placed there. `assets_dir` is a relative subdirectory for compiled output
+(default: `""`, preserving Volt's existing output locations). It applies equally
+to flat and split layouts. For example, `outdir: "dist", assets_dir: "assets"`
+places public files in `dist/` and compiled output under `dist/assets/`.
+`asset_url_prefix` identifies the publication root's browser URL; the asset directory
+and layout suffixes are appended when generating URLs.
+
+The released lower-level `Volt.Builder.build/1` retains its asset-directory semantics:
+its `outdir` contains compiled files and public files go to the parent. This is a
+boundary adapter, not another independently configurable output root.
+
+## Output layout
+
+`Volt.build/1` accepts `output_layout: :split` (the default) or `:flat`.
+Split builds put module-graph output in `js/` and Tailwind output in `css/`.
+Flat builds emit both into the asset directory (`outdir` when `assets_dir` is empty).
+Both layouts write one root `manifest.json`; emitted file paths and asset URLs
+are calculated for the selected layout before writing, never relocated afterward.
+Conflicting manifest identities fail the build instead of silently replacing entries.
+
 ## What production builds do
 
 Production builds run the same framework/plugin compilation pipeline as the dev server, then apply build-only graph and output steps:

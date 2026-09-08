@@ -71,6 +71,7 @@ defmodule Volt.DevServer do
 
         [
           id: profile || :default,
+          session: Keyword.get(opts, :session, :default),
           root: expanded_root,
           watch_dirs: watch_dirs,
           reload_dirs: server_config.reload_dirs,
@@ -111,6 +112,7 @@ defmodule Volt.DevServer do
       define:
         Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix),
       hmr_timeout: server_config.hmr_timeout,
+      session: Keyword.get(opts, :session, :default),
       watcher_opts: watcher_opts
     }
   end
@@ -126,7 +128,9 @@ defmodule Volt.DevServer do
 
   defp do_call(%Conn{request_path: "/@volt/ws"} = conn, config) do
     conn
-    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [], timeout: config.hmr_timeout)
+    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [session: config.session],
+      timeout: config.hmr_timeout
+    )
     |> Conn.halt()
   end
 
@@ -221,7 +225,7 @@ defmodule Volt.DevServer do
         mod_url = virtual_url(id)
         code = code_for_request(result, mod_url, content_type, false)
 
-        update_module_graph(mod_url, id, id, code, source, content_type)
+        update_module_graph(mod_url, id, id, code, source, content_type, config.session)
 
         send_compiled(conn, code, result.sourcemap, content_type)
 
@@ -286,7 +290,7 @@ defmodule Volt.DevServer do
     content_type = content_type_for(module_id, css_import?)
     cache_key = cache_key_for(module_id, css_import?)
 
-    case Volt.Cache.get(cache_key, mtime) do
+    case Volt.Cache.get(cache_key, mtime, config.session) do
       %{code: code, sourcemap: sourcemap} ->
         send_compiled(conn, code, sourcemap, content_type)
 
@@ -319,15 +323,24 @@ defmodule Volt.DevServer do
 
     case Volt.Pipeline.compile(module_id, source, pipeline_opts(config, module_id)) do
       {:ok, result} ->
-        Volt.HMR.GlobGraph.update_from_source(file_path, source)
-        Volt.HMR.ImportGraph.update_from_compiled(file_path, result.code)
-        Volt.HMR.StyleDependencies.update_from_compile(file_path, source, result)
+        Volt.HMR.GlobGraph.update_from_source(file_path, source, config.session)
+        Volt.HMR.ImportGraph.update_from_compiled(file_path, result.code, config.session)
+        Volt.HMR.StyleDependencies.update_from_compile(file_path, source, result, config.session)
 
         result = rewrite_dev_css_urls(result, file_path, config)
         mod_url = Volt.URL.join(config.prefix, relative)
         code = code_for_request(result, mod_url, content_type, css_import?)
         graph_url = if css_import?, do: URL.append_query(mod_url, "import"), else: mod_url
-        update_module_graph(graph_url, graph_url, file_path, code, source, content_type)
+
+        update_module_graph(
+          graph_url,
+          graph_url,
+          file_path,
+          code,
+          source,
+          content_type,
+          config.session
+        )
 
         entry = %Volt.DevServer.CacheEntry{
           code: code,
@@ -337,7 +350,7 @@ defmodule Volt.DevServer do
           content_type: content_type
         }
 
-        Volt.Cache.put(cache_key, mtime, entry)
+        Volt.Cache.put(cache_key, mtime, entry, config.session)
         send_compiled(conn, code, result.sourcemap, content_type)
 
       {:error, errors} ->
@@ -364,7 +377,7 @@ defmodule Volt.DevServer do
     ]
   end
 
-  defp update_module_graph(mod_url, cache_key, file_path, code, source, content_type) do
+  defp update_module_graph(mod_url, cache_key, file_path, code, source, content_type, session) do
     imports =
       case OXC.select(code, Path.basename(file_path), :import_specifiers) do
         {:ok, imports} -> Enum.map(imports, &normalize_module_graph_import(&1, mod_url))
@@ -372,6 +385,7 @@ defmodule Volt.DevServer do
       end
 
     Volt.HMR.ModuleGraph.update_module(mod_url, cache_key, file_path, imports,
+      session: session,
       type: module_graph_type(content_type),
       self_accepting: Volt.HMR.Boundary.self_accepting?(source)
     )

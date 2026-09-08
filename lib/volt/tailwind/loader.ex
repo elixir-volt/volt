@@ -16,8 +16,16 @@ defmodule Volt.Tailwind.Loader do
 
   def handlers(runtime_node_modules) do
     %{
-      "tailwind.load_stylesheet" => fn [id, base] ->
-        load_stylesheet(id, base, runtime_node_modules)
+      "tailwind.scan" => fn [sources] ->
+        sources
+        |> Enum.map(fn %{"base" => base, "pattern" => pattern, "negated" => negated} ->
+          %Oxide.Source{base: Path.expand(base), pattern: pattern, negated: negated}
+        end)
+        |> then(&Oxide.new(sources: &1))
+        |> Oxide.scan()
+      end,
+      "tailwind.load_stylesheet" => fn [id, base, output_base] ->
+        load_stylesheet(id, base, output_base, runtime_node_modules)
       end,
       "tailwind.load_module" => fn [id, base, kind] ->
         load_module(id, base, kind, runtime_node_modules)
@@ -25,12 +33,14 @@ defmodule Volt.Tailwind.Loader do
     }
   end
 
-  defp load_stylesheet(id, base, runtime_node_modules) do
+  defp load_stylesheet(id, base, output_base, runtime_node_modules) do
     path = Resolver.resolve_stylesheet_path!(id, base, runtime_node_modules)
+    {:ok, content} = Volt.CSS.AssetURLRewriter.rebase(File.read!(path), path, output_base)
 
     %{
+      path: path,
       base: Path.dirname(path),
-      content: File.read!(path)
+      content: content
     }
   end
 

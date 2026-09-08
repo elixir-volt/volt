@@ -3,7 +3,9 @@ defmodule Volt.Config.Build do
 
   defstruct entry: Volt.Paths.entry(),
             outdir: Volt.Paths.static(),
+            output_layout: :split,
             public_dir: false,
+            assets_dir: "",
             target: :es2020,
             minify: true,
             sourcemap: true,

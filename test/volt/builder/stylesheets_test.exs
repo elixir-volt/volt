@@ -1,4 +1,4 @@
-defmodule Volt.Builder.Output.CSSTest do
+defmodule Volt.Builder.StylesheetsTest do
   use ExUnit.Case, async: false
 
   @fixture_dir Path.expand("volt-builder-css-test", System.tmp_dir!())
@@ -16,6 +16,56 @@ defmodule Volt.Builder.Output.CSSTest do
   end
 
   describe "CSS production builds" do
+    @tag :tmp_dir
+    test "emits assets from nested local and package imports", %{tmp_dir: root} do
+      File.mkdir_p!(Path.join(root, "nested"))
+      package = Path.join(root, "node_modules/theme")
+      File.mkdir_p!(package)
+
+      File.write!(
+        Path.join(package, "package.json"),
+        ~s({"name":"theme","exports":{".":"./index.css"}})
+      )
+
+      File.write!(
+        Path.join(package, "index.css"),
+        "@font-face { font-family: Test; src: url('./font.woff2') }"
+      )
+
+      File.write!(Path.join(package, "font.woff2"), <<0, 1, 2>>)
+
+      File.write!(
+        Path.join(root, "nested/theme.css"),
+        ".logo { background: url('./logo.svg?v=1#mark') }"
+      )
+
+      File.write!(Path.join(root, "nested/logo.svg"), "<svg/>")
+      entry = Path.join(root, "app.css")
+      File.write!(entry, "@import './nested/theme.css'; @import 'theme';")
+      output = Path.join(root, "dist")
+
+      assert {:ok, result} =
+               Volt.Builder.build(
+                 entry: entry,
+                 root: root,
+                 outdir: output,
+                 node_modules: Path.join(root, "node_modules"),
+                 hash: false,
+                 minify: false,
+                 asset_url_prefix: "https://cdn.example/assets"
+               )
+
+      css = File.read!(result.css.path)
+
+      for source <- ["nested/logo.svg", "node_modules/theme/font.woff2"] do
+        file = Map.fetch!(result.manifest, source).file
+        assert File.regular?(Path.join(output, file))
+        assert css =~ "https://cdn.example/assets/#{file}"
+      end
+
+      assert css =~ "?v=1#mark"
+    end
+
     test "CSS-only JS entry builds with sourcemap enabled" do
       File.write!(Path.join(@fixture_dir, "src/styles.css"), "body { color: red; }")
       File.write!(Path.join(@fixture_dir, "src/css_only.js"), "import './styles.css'")

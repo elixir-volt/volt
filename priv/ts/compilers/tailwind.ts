@@ -5,20 +5,29 @@ type BeamModuleSpec = {
   format: 'cjs' | 'json'
 }
 
+type Source = { base: string; pattern: string; negated: boolean }
+
 type TailwindCompiler = {
   compile: (
     css: string,
     options: {
       base: string
       from: string
-      loadStylesheet: (id: string, base?: string) => Promise<{ base: string; content: string }>
+      loadStylesheet: (
+        id: string,
+        base?: string
+      ) => Promise<{ path: string; base: string; content: string }>
       loadModule: (
         id: string,
         base?: string,
         type?: string
-      ) => Promise<{ module: unknown; base: string }>
+      ) => Promise<{ path: string; module: unknown; base: string }>
     }
-  ) => Promise<{ build: (candidates: string[]) => string }>
+  ) => Promise<{
+    build: (candidates: string[]) => string
+    root: null | 'none' | { base: string; pattern: string }
+    sources: Source[]
+  }>
   Features?: unknown
 }
 
@@ -69,7 +78,8 @@ const tailwindExports = requireResolvedModule(tailwindRuntimeSpec, new Map()) as
 async function compileTailwindCss(
   inputCss: string | null,
   candidates: string[] | null,
-  base: string | null
+  base: string | null,
+  scan: { base: string; sources: Source[] } | null = null
 ) {
   const moduleCache = new Map<string, { exports: unknown }>()
   const rootBase = normalizeBase(base, TAILWIND_DEFAULT_BASE)
@@ -81,6 +91,7 @@ async function compileTailwindCss(
     loadStylesheet: async (id, currentBase) => {
       if (id === 'tailwindcss') {
         return {
+          path: path.join(TAILWIND_ROOT, 'index.css'),
           base: rootBase,
           content:
             '@import "tailwindcss/theme.css" layer(theme);\n@import "tailwindcss/preflight.css" layer(base);\n@import "tailwindcss/utilities.css" layer(utilities);'
@@ -89,24 +100,34 @@ async function compileTailwindCss(
 
       if (id === 'tailwindcss/theme.css') {
         return {
+          path: themeCssPath,
           base: rootBase,
           content: tailwindExports.Features ? fs.readFileSync(themeCssPath, 'utf8') : ''
         }
       }
 
       if (id === 'tailwindcss/preflight.css') {
-        return { base: rootBase, content: fs.readFileSync(preflightCssPath, 'utf8') }
+        return {
+          path: preflightCssPath,
+          base: rootBase,
+          content: fs.readFileSync(preflightCssPath, 'utf8')
+        }
       }
 
       if (id === 'tailwindcss/utilities.css') {
-        return { base: rootBase, content: fs.readFileSync(utilitiesCssPath, 'utf8') }
+        return {
+          path: utilitiesCssPath,
+          base: rootBase,
+          content: fs.readFileSync(utilitiesCssPath, 'utf8')
+        }
       }
 
       return Beam.callSync(
         'tailwind.load_stylesheet',
         id,
-        normalizeBase(currentBase, rootBase)
-      ) as { base: string; content: string }
+        normalizeBase(currentBase, rootBase),
+        rootBase
+      ) as { path: string; base: string; content: string }
     },
     loadModule: async (id, currentBase, type) => {
       const spec = Beam.callSync(
@@ -117,10 +138,23 @@ async function compileTailwindCss(
       ) as BeamModuleSpec
 
       const mod = requireResolvedModule(spec, moduleCache)
-      return { module: unwrapModule(mod), base: spec.base }
+      return { path: spec.path, module: unwrapModule(mod), base: spec.base }
     }
   })
 
+  if (scan) {
+    let automatic: Source[] = []
+    if (compiler.root === null) {
+      automatic = [{ base: scan.base, pattern: '**/*', negated: false }]
+    } else if (compiler.root !== 'none') {
+      automatic = [{ ...compiler.root, negated: false }]
+    }
+    candidates = Beam.callSync('tailwind.scan', [
+      ...automatic,
+      ...scan.sources,
+      ...compiler.sources
+    ]) as string[]
+  }
   return compiler.build(candidates ?? [])
 }
 

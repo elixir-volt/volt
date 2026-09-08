@@ -6,6 +6,42 @@ defmodule Volt.HMRTest do
     :ok
   end
 
+  test "scoped broadcasts do not reach other sessions or default subscribers" do
+    parent = self()
+
+    clients =
+      for session <- [:site_a, :site_b] do
+        pid =
+          spawn_link(fn ->
+            {:ok, _} = Volt.HMR.Socket.init(session: session)
+            send(parent, {:ready, self()})
+
+            receive do
+              :inspect -> send(parent, {:messages, self(), Process.info(self(), :messages)})
+            end
+          end)
+
+        assert_receive {:ready, ^pid}
+        {session, pid}
+      end
+
+    Volt.HMR.style_update("/assets/app.css", session: :site_a)
+    for {_session, pid} <- clients, do: send(pid, :inspect)
+
+    for {session, pid} <- clients do
+      assert_receive {:messages, ^pid, {:messages, messages}}
+
+      expected =
+        if session == :site_a,
+          do: [{:volt_hmr, :update, %{path: "/assets/app.css", changes: ["style"]}}],
+          else: []
+
+      assert messages == expected
+    end
+
+    refute_received {:volt_hmr, _, _}
+  end
+
   test "broadcast sends HMR messages to connected clients" do
     assert :ok = Volt.HMR.broadcast(:update, %{path: "index.html", changes: ["full"]})
 

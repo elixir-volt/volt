@@ -37,6 +37,44 @@ defmodule Volt.PublicDir do
     :ok
   end
 
+  @doc "Read public files into artifacts relative to the static root without copying them."
+  def prepare(nil), do: []
+
+  def prepare(public_dir) do
+    if File.dir?(public_dir) do
+      Enum.map(files(public_dir), fn path ->
+        %Volt.Builder.Artifact{
+          file: Path.relative_to(path, public_dir),
+          content: File.read!(path)
+        }
+      end)
+    else
+      []
+    end
+  end
+
+  @doc "Combine asset output and public files in a validated static-root plan."
+  def prepare_output(plan, outdir, public_dir, publication_root) do
+    outdir = Path.expand(outdir)
+    static_root = Path.expand(publication_root)
+    prefix = Path.relative_to(outdir, static_root)
+
+    if outdir == static_root or Volt.Path.inside?(outdir, static_root) do
+      assets =
+        Enum.map(plan.artifacts, fn artifact ->
+          if prefix == ".",
+            do: artifact,
+            else: %{artifact | file: Path.join(prefix, artifact.file)}
+        end)
+
+      with {:ok, combined} <- Volt.Builder.Plan.new(assets ++ prepare(public_dir)) do
+        {:ok, static_root, combined}
+      end
+    else
+      {:error, {:invalid_publication_root, static_root, outdir}}
+    end
+  end
+
   @doc """
   Resolves a root-relative request path inside `public_dir`.
 

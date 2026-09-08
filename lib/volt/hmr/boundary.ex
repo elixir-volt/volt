@@ -33,18 +33,18 @@ defmodule Volt.HMR.Boundary do
   """
   @spec find_boundary(String.t(), (String.t() -> String.t() | nil)) ::
           {:ok, String.t()} | :full_reload
-  def find_boundary(changed_path, read_source) do
+  def find_boundary(changed_path, read_source, session \\ :default) do
     source = read_source.(changed_path)
 
     cond do
       source && self_accepting?(source) ->
         {:ok, changed_path}
 
-      graph_boundary = find_graph_boundary(changed_path, read_source) ->
+      graph_boundary = find_graph_boundary(changed_path, read_source, session) ->
         graph_boundary
 
       true ->
-        walk_up(changed_path, changed_path, read_source, MapSet.new([changed_path]))
+        walk_up(changed_path, changed_path, read_source, MapSet.new([changed_path]), session)
     end
   end
 
@@ -127,9 +127,9 @@ defmodule Volt.HMR.Boundary do
     resolved == changed_path or Path.rootname(resolved) == Path.rootname(changed_path)
   end
 
-  defp find_graph_boundary(changed_path, read_source) do
+  defp find_graph_boundary(changed_path, read_source, session) do
     changed_path
-    |> Volt.HMR.ModuleGraph.get_by_file()
+    |> Volt.HMR.ModuleGraph.get_by_file(session)
     |> case do
       [] ->
         nil
@@ -139,12 +139,13 @@ defmodule Volt.HMR.Boundary do
           nodes,
           changed_path,
           read_source,
-          MapSet.new(Enum.map(nodes, & &1.id))
+          MapSet.new(Enum.map(nodes, & &1.id)),
+          session
         )
     end
   end
 
-  defp find_graph_boundary_in_nodes(nodes, changed_path, read_source, visited) do
+  defp find_graph_boundary_in_nodes(nodes, changed_path, read_source, visited, session) do
     Enum.find_value(nodes, :full_reload, fn node ->
       cond do
         graph_accepts_update?(node, changed_path, read_source) ->
@@ -155,12 +156,13 @@ defmodule Volt.HMR.Boundary do
 
         true ->
           node.importers
-          |> Enum.flat_map(&List.wrap(Volt.HMR.ModuleGraph.get_by_id(&1)))
+          |> Enum.flat_map(&List.wrap(Volt.HMR.ModuleGraph.get_by_id(&1, session)))
           |> Enum.reject(&MapSet.member?(visited, &1.id))
           |> find_graph_boundary_in_nodes(
             changed_path,
             read_source,
-            MapSet.union(visited, node.importers)
+            MapSet.union(visited, node.importers),
+            session
           )
           |> case do
             :full_reload -> nil
@@ -180,47 +182,50 @@ defmodule Volt.HMR.Boundary do
     end
   end
 
-  defp walk_up(path, changed_path, read_source, visited) do
-    case find_importers(path) do
+  defp walk_up(path, changed_path, read_source, visited, session) do
+    case find_importers(path, session) do
       [] -> :full_reload
-      parents -> find_boundary_in_parents(parents, changed_path, read_source, visited)
+      parents -> find_boundary_in_parents(parents, changed_path, read_source, visited, session)
     end
   end
 
-  defp find_boundary_in_parents(parents, changed_path, read_source, visited) do
+  defp find_boundary_in_parents(parents, changed_path, read_source, visited, session) do
     Enum.find_value(parents, :full_reload, fn parent ->
       if MapSet.member?(visited, parent) do
         nil
       else
-        visit_parent(parent, changed_path, read_source, MapSet.put(visited, parent))
+        visit_parent(parent, changed_path, read_source, MapSet.put(visited, parent), session)
       end
     end)
   end
 
-  defp visit_parent(parent, changed_path, read_source, visited) do
+  defp visit_parent(parent, changed_path, read_source, visited, session) do
     source = read_source.(parent)
 
     if source != nil and
          (self_accepting?(source) or dependency_accepting?(source, parent, changed_path)) do
       {:ok, parent}
     else
-      case walk_up(parent, changed_path, read_source, visited) do
+      case walk_up(parent, changed_path, read_source, visited, session) do
         {:ok, _} = found -> found
         :full_reload -> nil
       end
     end
   end
 
-  defp find_importers(path) do
+  defp find_importers(path, session) do
     basename = Path.basename(path)
     rootname = Path.rootname(basename)
 
-    Volt.HMR.ImportGraph.dependents_matching(fn specifier ->
-      spec_base = specifier |> String.split("/") |> List.last()
+    Volt.HMR.ImportGraph.dependents_matching(
+      fn specifier ->
+        spec_base = specifier |> String.split("/") |> List.last()
 
-      spec_base == basename or
-        spec_base == rootname or
-        Path.rootname(spec_base) == rootname
-    end)
+        spec_base == basename or
+          spec_base == rootname or
+          Path.rootname(spec_base) == rootname
+      end,
+      session
+    )
   end
 end

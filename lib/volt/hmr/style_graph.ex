@@ -16,20 +16,20 @@ defmodule Volt.HMR.StyleGraph do
 
   @doc "Update resolved dependencies for a stylesheet source file."
   @spec update(String.t(), [String.t()]) :: :ok
-  def update(path, dependencies) do
-    old_dependencies = dependencies_of(path)
+  def update(path, dependencies, session \\ :default) do
+    old_dependencies = dependencies_of(path, session)
     dependencies = dependencies |> Enum.uniq() |> MapSet.new()
 
     Enum.each(old_dependencies, fn dependency ->
-      dependents = dependency |> dependents_of() |> MapSet.new() |> MapSet.delete(path)
-      put_dependents(dependency, dependents)
+      dependents = dependency |> dependents_of(session) |> MapSet.new() |> MapSet.delete(path)
+      put_dependents(dependency, dependents, session)
     end)
 
-    Volt.ETS.put(@table, {{:dependencies, path}, dependencies})
+    Volt.ETS.put(@table, {{session, {:dependencies, path}}, dependencies})
 
     Enum.each(dependencies, fn dependency ->
-      dependents = dependency |> dependents_of() |> MapSet.new() |> MapSet.put(path)
-      put_dependents(dependency, dependents)
+      dependents = dependency |> dependents_of(session) |> MapSet.new() |> MapSet.put(path)
+      put_dependents(dependency, dependents, session)
     end)
 
     :ok
@@ -37,18 +37,19 @@ defmodule Volt.HMR.StyleGraph do
 
   @doc "Return direct resolved dependencies for a stylesheet source file."
   @spec dependencies_of(String.t()) :: [String.t()]
-  def dependencies_of(path), do: lookup_set({:dependencies, path})
+  def dependencies_of(path, session \\ :default), do: lookup_set({session, {:dependencies, path}})
 
   @doc "Return all transitive stylesheets that depend on a source file."
   @spec dependents(String.t()) :: [String.t()]
-  def dependents(path), do: dependents(path, MapSet.new([path]))
+  def dependents(path, session \\ :default),
+    do: walk_dependents(path, MapSet.new([path]), session)
 
   @doc "Remove a stylesheet from the graph."
   @spec remove(String.t()) :: :ok
-  def remove(path) do
-    update(path, [])
-    Volt.ETS.delete(@table, {:dependencies, path})
-    Volt.ETS.delete(@table, {:dependents, path})
+  def remove(path, session \\ :default) do
+    update(path, [], session)
+    Volt.ETS.delete(@table, {session, {:dependencies, path}})
+    Volt.ETS.delete(@table, {session, {:dependents, path}})
     :ok
   end
 
@@ -56,23 +57,26 @@ defmodule Volt.HMR.StyleGraph do
   @spec clear :: :ok
   def clear, do: Volt.ETS.clear(@table)
 
-  defp dependents(path, seen) do
+  @doc "Clear stylesheet edges belonging to one session."
+  def clear_session(session), do: Volt.ETS.clear_session(@table, session)
+
+  defp walk_dependents(path, seen, session) do
     path
-    |> dependents_of()
+    |> dependents_of(session)
     |> Enum.reject(&MapSet.member?(seen, &1))
     |> Enum.flat_map(fn stylesheet ->
-      [stylesheet | dependents(stylesheet, MapSet.put(seen, stylesheet))]
+      [stylesheet | walk_dependents(stylesheet, MapSet.put(seen, stylesheet), session)]
     end)
     |> Enum.uniq()
   end
 
-  defp dependents_of(path), do: lookup_set({:dependents, path})
+  defp dependents_of(path, session), do: lookup_set({session, {:dependents, path}})
 
-  defp put_dependents(path, dependents) do
+  defp put_dependents(path, dependents, session) do
     if MapSet.size(dependents) == 0 do
-      Volt.ETS.delete(@table, {:dependents, path})
+      Volt.ETS.delete(@table, {session, {:dependents, path}})
     else
-      Volt.ETS.put(@table, {{:dependents, path}, dependents})
+      Volt.ETS.put(@table, {{session, {:dependents, path}}, dependents})
     end
   end
 

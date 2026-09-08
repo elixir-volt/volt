@@ -20,6 +20,87 @@ defmodule Mix.Tasks.Volt.BuildTest do
     {:ok, tmp_dir: tmp_dir}
   end
 
+  test "explicit Tailwind enablement works without configured roots", %{tmp_dir: root} do
+    original = Application.get_env(:volt, :tailwind)
+    Application.put_env(:volt, :tailwind, [])
+
+    on_exit(fn ->
+      if is_nil(original),
+        do: Application.delete_env(:volt, :tailwind),
+        else: Application.put_env(:volt, :tailwind, original)
+    end)
+
+    entry = Path.join(root, "src/app.js")
+    File.write!(entry, "console.log('ready')")
+    css = Path.join(root, "src/custom.css")
+    File.write!(css, "@import 'tailwindcss' source(none); .custom { color: red }")
+
+    for {name, flags, expected} <- [
+          {"default", ["--tailwind"], "app.css"},
+          {"custom", ["--tailwind-css", css], "custom.css"},
+          {"disabled", ["--tailwind-css", css, "--no-tailwind"], nil}
+        ] do
+      outdir = Path.join(root, name)
+
+      try do
+        Mix.Tasks.Volt.Build.run(
+          ["--entry", entry, "--outdir", outdir, "--no-hash", "--no-minify"] ++ flags
+        )
+      catch
+        :exit, reason ->
+          receive do
+            {:mix_shell, :error, [message]} -> flunk("#{name}: #{message}")
+          after
+            0 -> exit(reason)
+          end
+      end
+
+      styles = Path.wildcard(Path.join(outdir, "css/*.css"))
+      assert Enum.map(styles, &Path.basename/1) == List.wrap(expected)
+    end
+  end
+
+  test "nested flat assets preserve CDN URLs and sourcemaps", %{tmp_dir: root} do
+    entry = Path.join(root, "src/app.js")
+    File.write!(Path.join(root, "src/logo.svg"), "<svg/>")
+    File.write!(Path.join(root, "src/style.css"), ".logo { background: url('./logo.svg') }")
+
+    File.write!(
+      entry,
+      "import logo from './logo.svg?url'; import './style.css'; console.log(logo)"
+    )
+
+    outdir = Path.join(root, "dist")
+
+    Mix.Tasks.Volt.Build.run([
+      "--entry",
+      entry,
+      "--outdir",
+      outdir,
+      "--assets-dir",
+      "assets",
+      "--output-layout",
+      "flat",
+      "--no-hash",
+      "--no-minify",
+      "--no-tailwind",
+      "--asset-url-prefix",
+      "https://cdn.example/site",
+      "--sourcemap",
+      "true"
+    ])
+
+    manifest = outdir |> Path.join("manifest.json") |> File.read!() |> Jason.decode!()
+    js = File.read!(Path.join(outdir, manifest["app.js"]["file"]))
+    css = File.read!(Path.join(outdir, manifest["app.css"]["file"]))
+    assert [image] = Path.wildcard(Path.join(outdir, "assets/logo-*.svg"))
+    url = "https://cdn.example/site/assets/" <> Path.basename(image)
+    assert js =~ url
+    assert css =~ url
+    assert js =~ "sourceMappingURL=app.js.map"
+    assert File.regular?(Path.join(outdir, "assets/app.js.map"))
+  end
+
   test "--no-tree-shaking is accepted", %{tmp_dir: tmp_dir} do
     entry = Path.join(tmp_dir, "src/app.js")
     outdir = Path.join(tmp_dir, "dist")

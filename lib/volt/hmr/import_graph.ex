@@ -15,24 +15,26 @@ defmodule Volt.HMR.ImportGraph do
 
   @doc "Update the imports for a file path."
   @spec update(String.t(), [String.t()]) :: :ok
-  def update(path, imports), do: Volt.ETS.put(@table, {path, imports})
+  def update(path, imports, session \\ :default) do
+    Volt.ETS.put(@table, {{session, path}, Enum.uniq(imports)})
+  end
 
   @doc "Update imports from compiled code."
   @spec update_from_compiled(String.t(), String.t()) :: :ok
-  def update_from_compiled(path, compiled_code) do
+  def update_from_compiled(path, compiled_code, session \\ :default) do
     imports =
       case OXC.select(compiled_code, Path.basename(path), :import_specifiers) do
         {:ok, imports} -> imports
         _ -> []
       end
 
-    update(path, imports)
+    update(path, imports, session)
   end
 
   @doc "Get the imports for a file path."
   @spec imports_of(String.t()) :: [String.t()]
-  def imports_of(path) do
-    case :ets.lookup(@table, path) do
+  def imports_of(path, session \\ :default) do
+    case :ets.lookup(@table, {session, path}) do
       [{_, imports}] -> imports
       [] -> []
     end
@@ -44,14 +46,8 @@ defmodule Volt.HMR.ImportGraph do
   Used by fallback HMR boundary lookup to propagate changes upward through raw imports.
   """
   @spec dependents(String.t()) :: [String.t()]
-  def dependents(specifier) do
-    :ets.foldl(
-      fn {path, imports}, acc ->
-        if specifier in imports, do: [path | acc], else: acc
-      end,
-      [],
-      @table
-    )
+  def dependents(specifier, session \\ :default) do
+    dependents_matching(&(&1 == specifier), session)
   end
 
   @doc """
@@ -61,10 +57,14 @@ defmodule Volt.HMR.ImportGraph do
   if it matches the file being searched for.
   """
   @spec dependents_matching((String.t() -> boolean())) :: [String.t()]
-  def dependents_matching(predicate) do
+  def dependents_matching(predicate, session \\ :default) do
     :ets.foldl(
-      fn {path, imports}, acc ->
-        if Enum.any?(imports, predicate), do: [path | acc], else: acc
+      fn
+        {{^session, path}, imports}, acc ->
+          if Enum.any?(imports, predicate), do: [path | acc], else: acc
+
+        _, acc ->
+          acc
       end,
       [],
       @table
@@ -73,9 +73,12 @@ defmodule Volt.HMR.ImportGraph do
 
   @doc "Remove a file from the graph."
   @spec remove(String.t()) :: :ok
-  def remove(path), do: Volt.ETS.delete(@table, path)
+  def remove(path, session \\ :default), do: Volt.ETS.delete(@table, {session, path})
 
   @doc "Clear the entire graph."
   @spec clear :: :ok
   def clear, do: Volt.ETS.clear(@table)
+
+  @doc "Clear raw import edges for one session."
+  def clear_session(session), do: Volt.ETS.clear_session(@table, session)
 end

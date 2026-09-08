@@ -97,6 +97,29 @@ defmodule Volt.Assets do
   @spec emit_js_module(String.t(), keyword()) ::
           {:ok, %{code: String.t(), assets: [Volt.Builder.Asset.t()]}} | {:error, term()}
   def emit_js_module(path, opts \\ []) do
+    with {:ok, prepared} <- prepare_js_module(path, opts) do
+      case Keyword.get(opts, :outdir) do
+        nil ->
+          :ok
+
+        outdir ->
+          write_artifacts(prepared.artifacts, outdir)
+      end
+
+      {:ok, %{code: prepared.code, assets: prepared.assets}}
+    end
+  end
+
+  @doc "Write prepared binary assets for the immediate-emission APIs."
+  def write_artifacts(artifacts, outdir) do
+    Enum.each(artifacts, fn %Volt.Builder.Artifact{file: file, content: content} ->
+      File.mkdir_p!(outdir)
+      File.write!(Path.join(outdir, file), content)
+    end)
+  end
+
+  @doc "Prepare an asset module and its output artifacts without writing files."
+  def prepare_js_module(path, opts \\ []) do
     cond do
       Keyword.get(opts, :raw, false) ->
         raw_asset(path)
@@ -133,17 +156,16 @@ defmodule Volt.Assets do
   """
   @spec copy_hashed(String.t(), String.t()) :: {:ok, String.t()}
   def copy_hashed(source_path, outdir) do
-    content = File.read!(source_path)
-    ext = Path.extname(source_path)
-    name = Path.basename(source_path, ext)
-    hash = Volt.Format.content_hash(content)
-    filename = "#{name}-#{hash}#{ext}"
-    dest = Path.join(outdir, filename)
-
+    artifact = prepare_hashed(source_path)
     File.mkdir_p!(outdir)
-    File.write!(dest, content)
+    File.write!(Path.join(outdir, artifact.file), artifact.content)
+    {:ok, artifact.file}
+  end
 
-    {:ok, filename}
+  @doc false
+  @spec prepare_hashed(String.t()) :: Volt.Builder.Artifact.t()
+  def prepare_hashed(source_path) do
+    Volt.Builder.Artifact.asset(source_path, File.read!(source_path))
   end
 
   @doc "Build manifest metadata for an emitted asset."
@@ -254,10 +276,10 @@ defmodule Volt.Assets do
         url = Keyword.get(opts, :url_path) || Volt.URL.join(prefix, Path.basename(path))
         {:ok, asset_module(url)}
 
-      outdir ->
-        {:ok, filename} = copy_hashed(path, outdir)
-        asset = manifest_asset(path, filename, root: Keyword.get(opts, :root))
-        {:ok, asset_module(Volt.URL.join(prefix, filename), [asset])}
+      _outdir ->
+        artifact = prepare_hashed(path)
+        asset = manifest_asset(path, artifact.file, root: Keyword.get(opts, :root))
+        {:ok, asset_module(Volt.URL.join(prefix, artifact.file), [asset], [artifact])}
     end
   end
 
@@ -274,8 +296,8 @@ defmodule Volt.Assets do
     end
   end
 
-  defp asset_module(value, assets \\ []) do
-    %{code: export_default_literal(value), assets: assets}
+  defp asset_module(value, assets \\ [], artifacts \\ []) do
+    %{code: export_default_literal(value), assets: assets, artifacts: artifacts}
   end
 
   defp export_default_literal(value) do

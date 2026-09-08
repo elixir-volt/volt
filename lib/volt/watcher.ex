@@ -47,6 +47,8 @@ defmodule Volt.Watcher do
   defstruct [
     :root,
     :config,
+    :configuration_signature,
+    session: :default,
     fs_pids: [],
     pending: %{},
     tailwind_timer: nil,
@@ -81,6 +83,7 @@ defmodule Volt.Watcher do
       |> Keyword.drop([
         :root,
         :name,
+        :session,
         :watch_dirs,
         :reload_dirs,
         :watch_ignored,
@@ -112,6 +115,8 @@ defmodule Volt.Watcher do
 
     state = %__MODULE__{
       root: root,
+      configuration_signature: opts |> Keyword.delete(:name) |> Map.new(),
+      session: Keyword.get(opts, :session, :default),
       fs_pids: fs_pids,
       config: config,
       tailwind_outdir: tailwind_outdir,
@@ -131,6 +136,11 @@ defmodule Volt.Watcher do
     end
 
     {:ok, state}
+  end
+
+  @impl true
+  def handle_call({:configuration_matches, signature}, _from, state) do
+    {:reply, state.configuration_signature == signature, state}
   end
 
   defp watcher_sources(dirs), do: Enum.map(dirs, &%{base: &1, pattern: "**/*"})
@@ -197,7 +207,7 @@ defmodule Volt.Watcher do
           {:noreply, state}
 
         reload_path?(path, state) ->
-          handle_reload_change(path)
+          handle_reload_change(path, state)
           {:noreply, state}
 
         true ->
@@ -267,40 +277,40 @@ defmodule Volt.Watcher do
   defp handle_js_change(path, state) do
     relative = Path.relative_to(path, state.root)
     css? = css_file?(path)
-    css_dependents = if css?, do: Volt.HMR.StyleGraph.dependents(path), else: []
+    css_dependents = if css?, do: Volt.HMR.StyleGraph.dependents(path, state.session), else: []
 
-    old_entry = Volt.Cache.get_file(path)
-    Volt.Cache.evict_file(path)
-    Volt.HMR.ModuleGraph.invalidate_file(path)
+    old_entry = Volt.Cache.get_file(path, state.session)
+    Volt.Cache.evict_file(path, state.session)
+    Volt.HMR.ModuleGraph.invalidate_file(path, System.system_time(:millisecond), state.session)
 
     case File.read(path) do
       {:ok, source} ->
         case Volt.Pipeline.compile(path, source, Map.to_list(state.config)) do
           {:ok, result} ->
-            Volt.HMR.GlobGraph.update_from_source(path, source)
-            Volt.HMR.ImportGraph.update_from_compiled(path, result.code)
+            Volt.HMR.GlobGraph.update_from_source(path, source, state.session)
+            Volt.HMR.ImportGraph.update_from_compiled(path, result.code, state.session)
 
-            Volt.HMR.StyleDependencies.update_from_compile(path, source, result)
+            Volt.HMR.StyleDependencies.update_from_compile(path, source, result, state.session)
 
             changes = if css?, do: [:style], else: detect_changes(old_entry, result)
-            broadcast_change(path, relative, changes, state.root)
-            broadcast_css_dependents(css_dependents, state.root)
-            broadcast_glob_dependents(path, state.root)
+            broadcast_change(path, relative, changes, state)
+            broadcast_css_dependents(css_dependents, state)
+            broadcast_glob_dependents(path, state)
 
           {:error, reason} ->
-            HMR.broadcast(:error, %{path: relative, reason: reason})
+            HMR.broadcast(:error, %{path: relative, reason: reason}, session: state.session)
         end
 
       {:error, reason} when reason in [:enoent, :eacces, :eperm] ->
-        Volt.HMR.ImportGraph.remove(path)
-        Volt.HMR.GlobGraph.remove(path)
-        if css?, do: Volt.HMR.StyleGraph.remove(path)
-        Volt.HMR.ModuleGraph.remove_file(path)
-        HMR.update(relative, [:full])
-        broadcast_glob_dependents(path, state.root)
+        Volt.HMR.ImportGraph.remove(path, state.session)
+        Volt.HMR.GlobGraph.remove(path, state.session)
+        if css?, do: Volt.HMR.StyleGraph.remove(path, state.session)
+        Volt.HMR.ModuleGraph.remove_file(path, state.session)
+        HMR.update(relative, [:full], session: state.session)
+        broadcast_glob_dependents(path, state)
 
       {:error, reason} ->
-        HMR.broadcast(:error, %{path: relative, reason: inspect(reason)})
+        HMR.broadcast(:error, %{path: relative, reason: inspect(reason)}, session: state.session)
     end
   end
 
@@ -308,23 +318,23 @@ defmodule Volt.Watcher do
 
   defp handle_css_change(path, state) do
     relative = Path.relative_to(path, state.root)
-    css_dependents = StyleGraph.dependents(path)
+    css_dependents = StyleGraph.dependents(path, state.session)
     tailwind_input? = tailwind_input?(path, state)
 
-    Volt.Cache.evict_file(path)
-    Volt.HMR.ModuleGraph.invalidate_file(path)
+    Volt.Cache.evict_file(path, state.session)
+    Volt.HMR.ModuleGraph.invalidate_file(path, System.system_time(:millisecond), state.session)
 
     if File.regular?(path) do
       source = File.read!(path)
-      StyleGraph.update(path, Volt.CSS.Dependencies.resolve(source, path))
+      StyleGraph.update(path, Volt.CSS.Dependencies.resolve(source, path), state.session)
     else
-      StyleGraph.remove(path)
+      StyleGraph.remove(path, state.session)
     end
 
     if Volt.Path.inside?(path, state.root) and not tailwind_input? do
-      HMR.broadcast(:update, %{path: relative, changes: [:style]})
-      broadcast_css_dependents(css_dependents, state.root)
-      broadcast_glob_dependents(path, state.root)
+      HMR.broadcast(:update, %{path: relative, changes: [:style]}, session: state.session)
+      broadcast_css_dependents(css_dependents, state)
+      broadcast_glob_dependents(path, state)
     end
 
     maybe_schedule_tailwind(state, path, full?: true)
@@ -340,48 +350,54 @@ defmodule Volt.Watcher do
   defp tailwind_output?(_path, %{tailwind_outdir: nil}), do: false
   defp tailwind_output?(path, state), do: Volt.Path.inside?(path, state.tailwind_outdir)
 
-  defp broadcast_css_dependents(dependents, root) do
+  defp broadcast_css_dependents(dependents, state) do
     dependents
     |> Enum.uniq()
     |> Enum.each(fn importer ->
-      Volt.Cache.evict_file(importer)
-      Volt.HMR.ModuleGraph.invalidate_file(importer)
-      relative = Path.relative_to(importer, root)
-      HMR.broadcast(:update, %{path: relative, changes: [:style]})
+      Volt.Cache.evict_file(importer, state.session)
+
+      Volt.HMR.ModuleGraph.invalidate_file(
+        importer,
+        System.system_time(:millisecond),
+        state.session
+      )
+
+      relative = Path.relative_to(importer, state.root)
+      HMR.broadcast(:update, %{path: relative, changes: [:style]}, session: state.session)
     end)
   end
 
-  defp handle_reload_change(path) do
+  defp handle_reload_change(path, state) do
     path = Path.relative_to_cwd(path)
-    HMR.full_reload(path)
+    HMR.full_reload(path, session: state.session)
   end
 
   defp handle_asset_change(path, state) do
     relative = Path.relative_to(path, state.root)
-    css_dependents = Volt.HMR.StyleGraph.dependents(path)
+    css_dependents = Volt.HMR.StyleGraph.dependents(path, state.session)
 
-    Volt.Cache.evict_file(path)
-    Volt.HMR.ModuleGraph.invalidate_file(path)
-    HMR.broadcast(:update, %{path: relative, changes: [:full]})
-    broadcast_css_dependents(css_dependents, state.root)
-    broadcast_glob_dependents(path, state.root)
+    Volt.Cache.evict_file(path, state.session)
+    Volt.HMR.ModuleGraph.invalidate_file(path, System.system_time(:millisecond), state.session)
+    HMR.broadcast(:update, %{path: relative, changes: [:full]}, session: state.session)
+    broadcast_css_dependents(css_dependents, state)
+    broadcast_glob_dependents(path, state)
   end
 
-  defp broadcast_glob_dependents(path, root) do
+  defp broadcast_glob_dependents(path, state) do
     path
-    |> Volt.HMR.GlobGraph.dependents()
+    |> Volt.HMR.GlobGraph.dependents(state.session)
     |> Enum.reject(&(&1 == path))
     |> Enum.each(fn importer ->
-      Volt.Cache.evict_file(importer)
-      relative = Path.relative_to(importer, root)
-      HMR.broadcast(:update, %{path: relative, changes: [:full]})
+      Volt.Cache.evict_file(importer, state.session)
+      relative = Path.relative_to(importer, state.root)
+      HMR.broadcast(:update, %{path: relative, changes: [:full]}, session: state.session)
     end)
   end
 
-  defp broadcast_change(path, relative, changes, root) do
+  defp broadcast_change(path, relative, changes, state) do
     cond do
       changes == [:style] ->
-        HMR.broadcast(:update, %{path: relative, changes: [:style]})
+        HMR.broadcast(:update, %{path: relative, changes: [:style]}, session: state.session)
 
       changes == [] ->
         :ok
@@ -394,20 +410,24 @@ defmodule Volt.Watcher do
           end
         end
 
-        case Volt.HMR.Boundary.find_boundary(path, read_source) do
+        case Volt.HMR.Boundary.find_boundary(path, read_source, state.session) do
           {:ok, boundary_path} ->
             timestamp = System.system_time(:millisecond)
-            boundary_relative = Path.relative_to(boundary_path, root)
+            boundary_relative = Path.relative_to(boundary_path, state.root)
 
-            HMR.broadcast(:update, %{
-              path: relative,
-              changes: [:hmr],
-              boundary: boundary_relative,
-              timestamp: timestamp
-            })
+            HMR.broadcast(
+              :update,
+              %{
+                path: relative,
+                changes: [:hmr],
+                boundary: boundary_relative,
+                timestamp: timestamp
+              },
+              session: state.session
+            )
 
           :full_reload ->
-            HMR.broadcast(:update, %{path: relative, changes: changes})
+            HMR.broadcast(:update, %{path: relative, changes: changes}, session: state.session)
         end
     end
   end
@@ -421,11 +441,16 @@ defmodule Volt.Watcher do
            state.config.tailwind_name
          ) do
       {:ok, css} ->
-        HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]})
+        HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]},
+          session: state.session
+        )
+
         Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
 
       {:error, reason} ->
-        HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)})
+        HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)},
+          session: state.session
+        )
     end
   end
 
@@ -445,14 +470,19 @@ defmodule Volt.Watcher do
            ) do
       Volt.Tailwind.Artifact.write(state.tailwind_outdir, state.config.tailwind_name, css)
 
-      HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]})
+      HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]},
+        session: state.session
+      )
+
       Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
     else
       :unchanged ->
         :ok
 
       {:error, reason} ->
-        HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)})
+        HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)},
+          session: state.session
+        )
     end
   end
 
