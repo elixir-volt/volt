@@ -22,6 +22,12 @@ defmodule Volt.JS.Vendor do
     Path.join(build_path, "volt/vendor")
   end
 
+  defp context_dir(module_dirs, plugins, module_types) do
+    signature = browser_signature(module_dirs, plugins, module_types)
+    hash = :crypto.hash(:sha256, :erlang.term_to_binary(signature)) |> Base.encode16(case: :lower)
+    Path.join(cache_dir(), hash)
+  end
+
   @doc """
   Scan source files and pre-bundle any bare npm imports.
 
@@ -45,7 +51,7 @@ defmodule Volt.JS.Vendor do
     module_types = Keyword.get(opts, :module_types, %{})
 
     with {:ok, specifiers} <- scan_bare_imports(root, plugins),
-         :ok <- ensure_cache_dir() do
+         :ok <- ensure_cache_dir(module_dirs, plugins, module_types) do
       specifiers =
         specifiers
         |> Enum.map(&Volt.PluginRunner.prebundle_alias(plugins, &1))
@@ -65,9 +71,9 @@ defmodule Volt.JS.Vendor do
   @spec bundle_on_demand(String.t(), String.t() | nil, keyword()) ::
           {:ok, String.t()} | {:error, term()}
   def bundle_on_demand(specifier, node_modules, opts \\ []) do
-    ensure_cache_dir()
     {plugins, resolve_dirs, module_types} = normalize_on_demand_opts(opts)
     module_dirs = module_dirs(node_modules, resolve_dirs)
+    ensure_cache_dir(module_dirs, plugins, module_types)
     specifier = Volt.PluginRunner.prebundle_alias(plugins, specifier)
 
     case bundle_vendor(specifier, module_dirs, false, plugins, module_types) do
@@ -114,20 +120,19 @@ defmodule Volt.JS.Vendor do
   Read a pre-bundled vendor file by specifier.
   """
   @spec read(String.t()) :: {:ok, String.t()} | {:error, :not_found}
-  def read(specifier), do: read_cached(specifier)
+  def read(specifier), do: read(specifier, [])
 
   @doc "Read a pre-bundled vendor file when its cache signature matches the current options."
   @spec read(String.t(), keyword()) :: {:ok, String.t()} | {:error, :not_found}
-  def read("chunks/" <> _ = specifier, _opts), do: read_cached(specifier)
-
   def read(specifier, opts) do
     {plugins, resolve_dirs, module_types} = normalize_on_demand_opts(opts)
     node_modules = Keyword.get(opts, :node_modules)
     module_dirs = module_dirs(node_modules, resolve_dirs)
     specifier = Volt.PluginRunner.prebundle_alias(plugins, specifier)
 
-    if cache_fresh?(specifier, module_dirs, plugins, module_types) do
-      read_cached(specifier)
+    if String.starts_with?(specifier, "chunks/") or
+         cache_fresh?(specifier, module_dirs, plugins, module_types) do
+      read_cached(specifier, context_dir(module_dirs, plugins, module_types))
     else
       {:error, :not_found}
     end
@@ -186,7 +191,7 @@ defmodule Volt.JS.Vendor do
   defp prebundle_vendors([], _module_dirs, _force, _plugins, _module_types), do: {:ok, %{}}
 
   defp prebundle_vendors(specifiers, module_dirs, force, plugins, module_types) do
-    vendor_map = Map.new(specifiers, &{&1, cache_path(&1)})
+    vendor_map = Map.new(specifiers, &{&1, cache_path(&1, module_dirs, plugins, module_types)})
 
     if not force and Enum.all?(specifiers, &cache_fresh?(&1, module_dirs, plugins, module_types)) do
       {:ok, vendor_map}
@@ -232,7 +237,7 @@ defmodule Volt.JS.Vendor do
       Bundle.new()
       |> Bundle.entries(bundle_entries)
       |> Bundle.cwd(project_root(module_dirs))
-      |> Bundle.outdir(cache_dir())
+      |> Bundle.outdir(context_dir(module_dirs, plugins, module_types))
       |> Bundle.format(:esm)
       |> Bundle.resolve(
         conditions: Volt.JS.Resolution.browser_conditions(),
@@ -262,9 +267,9 @@ defmodule Volt.JS.Vendor do
 
   defp write_vendor_cache_metadata(specifiers, module_dirs, plugins, module_types) do
     Enum.each(specifiers, fn specifier ->
-      if File.regular?(cache_path(specifier)) do
+      if File.regular?(cache_path(specifier, module_dirs, plugins, module_types)) do
         File.write!(
-          cache_meta_path(specifier),
+          cache_meta_path(specifier, module_dirs, plugins, module_types),
           cache_signature(specifier, module_dirs, plugins, module_types)
         )
       end
@@ -307,7 +312,7 @@ defmodule Volt.JS.Vendor do
   end
 
   defp bundle_vendor(specifier, module_dirs, force, plugins, module_types) do
-    path = cache_path(specifier)
+    path = cache_path(specifier, module_dirs, plugins, module_types)
 
     if not force and File.regular?(path) and
          cache_fresh?(specifier, module_dirs, plugins, module_types) do
@@ -318,7 +323,7 @@ defmodule Volt.JS.Vendor do
   end
 
   defp do_bundle_vendor(specifier, module_dirs, output_path, plugins, module_types) do
-    case prebundle_entry(specifier, module_dirs, plugins) do
+    case prebundle_entry(specifier, module_dirs, plugins, module_types) do
       {:ok, entry_path, project_root} ->
         bundle_opts =
           [
@@ -353,17 +358,22 @@ defmodule Volt.JS.Vendor do
     end
   end
 
-  defp prebundle_entry(specifier, module_dirs, plugins) do
+  defp prebundle_entry(specifier, module_dirs, plugins, module_types) do
     case Volt.PluginRunner.prebundle_entry(plugins, specifier) do
       {:source, filename, source} ->
-        synthetic_prebundle_entry(specifier, filename, source, module_dirs)
+        synthetic_prebundle_entry(
+          specifier,
+          filename,
+          source,
+          context_dir(module_dirs, plugins, module_types)
+        )
 
       {:proxy, filename, _opts} = entry ->
         synthetic_prebundle_entry(
           specifier,
           filename,
           Volt.JS.PrebundleEntry.source(entry),
-          module_dirs
+          context_dir(module_dirs, plugins, module_types)
         )
 
       nil ->
@@ -371,8 +381,8 @@ defmodule Volt.JS.Vendor do
     end
   end
 
-  defp synthetic_prebundle_entry(specifier, filename, source, _module_dirs) do
-    dir = Path.expand(Path.join([cache_dir(), "entries", encode_specifier(specifier)]))
+  defp synthetic_prebundle_entry(specifier, filename, source, directory) do
+    dir = Path.expand(Path.join([directory, "entries", encode_specifier(specifier)]))
     path = Path.join(dir, filename)
     File.mkdir_p!(dir)
     File.write!(path, source)
@@ -514,13 +524,13 @@ defmodule Volt.JS.Vendor do
   defp project_root([module_dir | _]), do: Path.dirname(module_dir)
   defp project_root([]), do: File.cwd!()
 
-  defp ensure_cache_dir do
-    File.mkdir_p!(cache_dir())
+  defp ensure_cache_dir(module_dirs, plugins, module_types) do
+    File.mkdir_p!(context_dir(module_dirs, plugins, module_types))
     :ok
   end
 
-  defp read_cached("chunks/" <> _ = specifier) do
-    Path.join(cache_dir(), specifier <> ".js")
+  defp read_cached("chunks/" <> _ = specifier, directory) do
+    Path.join(directory, specifier <> ".js")
     |> File.read()
     |> case do
       {:ok, _} = ok -> ok
@@ -528,9 +538,9 @@ defmodule Volt.JS.Vendor do
     end
   end
 
-  defp read_cached(specifier) do
-    specifier
-    |> cache_path()
+  defp read_cached(specifier, directory) do
+    directory
+    |> Path.join(encode_specifier(specifier) <> ".js")
     |> File.read()
     |> case do
       {:ok, _} = ok -> ok
@@ -539,13 +549,13 @@ defmodule Volt.JS.Vendor do
   end
 
   defp cache_fresh?(specifier, module_dirs, plugins, module_types) do
-    File.regular?(cache_path(specifier)) and
-      File.read(cache_meta_path(specifier)) ==
+    File.regular?(cache_path(specifier, module_dirs, plugins, module_types)) and
+      File.read(cache_meta_path(specifier, module_dirs, plugins, module_types)) ==
         {:ok, cache_signature(specifier, module_dirs, plugins, module_types)}
   end
 
   defp write_cache_files!(output_path, code, specifier, module_dirs, plugins, module_types) do
-    meta_path = cache_meta_path(specifier)
+    meta_path = cache_meta_path(specifier, module_dirs, plugins, module_types)
     nonce = System.unique_integer([:positive])
     tmp_output = "#{output_path}.#{nonce}.tmp"
     tmp_meta = "#{meta_path}.#{nonce}.tmp"
@@ -651,11 +661,15 @@ defmodule Volt.JS.Vendor do
     end
   end
 
-  defp cache_path(specifier) do
-    Path.join(cache_dir(), encode_specifier(specifier) <> ".js")
+  defp cache_path(specifier, module_dirs, plugins, module_types) do
+    Path.join(
+      context_dir(module_dirs, plugins, module_types),
+      encode_specifier(specifier) <> ".js"
+    )
   end
 
-  defp cache_meta_path(specifier), do: cache_path(specifier) <> ".meta"
+  defp cache_meta_path(specifier, module_dirs, plugins, module_types),
+    do: cache_path(specifier, module_dirs, plugins, module_types) <> ".meta"
 
   @doc "Encode a specifier for use in URLs (escaping @ and /)."
   def encode_specifier(specifier) do
