@@ -2,6 +2,7 @@ type BeamModuleSpec = {
   path: string
   base: string
   code: string
+  dependencies: string[]
   format: 'cjs' | 'json'
 }
 
@@ -79,8 +80,10 @@ async function compileTailwindCss(
   inputCss: string | null,
   candidates: string[] | null,
   base: string | null,
-  scan: { base: string; sources: Source[] } | null = null
+  scan: { base: string; sources: Source[] } | null = null,
+  metadata = false
 ) {
+  const dependencies = new Set<string>()
   const moduleCache = new Map<string, { exports: unknown }>()
   const rootBase = normalizeBase(base, TAILWIND_DEFAULT_BASE)
   const css = inputCss === null ? '@import "tailwindcss";' : inputCss
@@ -122,12 +125,14 @@ async function compileTailwindCss(
         }
       }
 
-      return Beam.callSync(
+      const stylesheet = Beam.callSync(
         'tailwind.load_stylesheet',
         id,
         normalizeBase(currentBase, rootBase),
         rootBase
       ) as { path: string; base: string; content: string }
+      dependencies.add(stylesheet.path)
+      return stylesheet
     },
     loadModule: async (id, currentBase, type) => {
       const spec = Beam.callSync(
@@ -137,6 +142,7 @@ async function compileTailwindCss(
         type ?? 'plugin'
       ) as BeamModuleSpec
 
+      for (const dependency of spec.dependencies) dependencies.add(dependency)
       const mod = requireResolvedModule(spec, moduleCache)
       return { path: spec.path, module: unwrapModule(mod), base: spec.base }
     }
@@ -155,7 +161,15 @@ async function compileTailwindCss(
       ...compiler.sources
     ]) as string[]
   }
-  return compiler.build(candidates ?? [])
+  const code = compiler.build(candidates ?? [])
+  return metadata
+    ? {
+        code,
+        dependencies: [...dependencies].sort(),
+        sources: compiler.sources,
+        root: compiler.root
+      }
+    : code
 }
 
 function normalizeBase(base: string | null | undefined, fallbackBase: string) {

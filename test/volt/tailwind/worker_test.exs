@@ -3,6 +3,30 @@ defmodule Volt.Tailwind.WorkerTest do
 
   @moduletag :tmp_dir
 
+  test "candidate-only rebuild retains custom CSS and base directory", %{tmp_dir: tmp} do
+    key = {:test, make_ref()}
+    on_exit(fn -> Volt.Tailwind.Supervisor.release(key) end)
+    File.write!(Path.join(tmp, "theme.css"), ".retained { color: red }")
+    File.write!(Path.join(tmp, "page.html"), ~s(<p class="flex"></p>))
+
+    assert {:ok, first} =
+             Volt.Tailwind.build(
+               key: key,
+               css: "@import './theme.css'; @tailwind utilities;",
+               css_base: tmp,
+               minify: true,
+               sources: [%{base: tmp, pattern: "*.html"}]
+             )
+
+    assert first =~ ".retained"
+    File.write!(Path.join(tmp, "page.html"), ~s(<p class="flex grid"></p>))
+    assert {:ok, rebuilt} = Volt.Tailwind.rebuild([Path.join(tmp, "page.html")], key: key)
+    assert rebuilt =~ ".retained"
+    assert rebuilt =~ ".grid"
+    assert [{pid, _}] = Registry.lookup(Volt.Tailwind.Registry, key)
+    assert :sys.get_state(pid).compilation.minify
+  end
+
   test "isolates scanner state by build context", %{tmp_dir: tmp} do
     first = Path.join(tmp, "first")
     second = Path.join(tmp, "second")

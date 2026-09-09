@@ -17,13 +17,15 @@ defmodule Volt.HMR.ModuleGraph do
               last_invalidated_at: nil
   end
 
+  defp table(session), do: Volt.ETS.session_table(session, :modules, @table)
+
   def create_table, do: ETS.create_named_set(@table)
 
   def update_module(url, id, file, imports, opts \\ []) do
     session = Keyword.get(opts, :session, :default)
     old = get_by_id(id, session)
     unlink_imports(old, session)
-    if old && old.url != url, do: ETS.delete(@table, {session, {:url, old.url}})
+    if old && old.url != url, do: ETS.delete(table(session), {session, {:url, old.url}})
     if old && old.file != file, do: unlink_file(old, session)
 
     importers =
@@ -83,15 +85,15 @@ defmodule Volt.HMR.ModuleGraph do
         end
       end)
 
-      ETS.delete(@table, {session, {:url, node.url}})
-      ETS.delete(@table, {session, {:id, node.id}})
+      ETS.delete(table(session), {session, {:url, node.url}})
+      ETS.delete(table(session), {session, {:id, node.id}})
     end)
 
-    ETS.delete(@table, {session, {:file, file}})
+    ETS.delete(table(session), {session, {:file, file}})
   end
 
   def clear, do: ETS.clear(@table)
-  def clear_session(session), do: ETS.clear_session(@table, session)
+  def clear_session(session), do: ETS.clear_session(table(session), session)
 
   defp nodes(session) do
     :ets.foldl(
@@ -100,20 +102,20 @@ defmodule Volt.HMR.ModuleGraph do
         _, acc -> acc
       end,
       [],
-      @table
+      table(session)
     )
   end
 
   defp put_node(node, session) do
     ids = lookup({:file, node.file}, session) || MapSet.new()
-    ETS.put(@table, {{session, {:url, node.url}}, node.id})
-    ETS.put(@table, {{session, {:id, node.id}}, node})
-    ETS.put(@table, {{session, {:file, node.file}}, MapSet.put(ids, node.id)})
+    ETS.put(table(session), {{session, {:url, node.url}}, node.id})
+    ETS.put(table(session), {{session, {:id, node.id}}, node})
+    ETS.put(table(session), {{session, {:file, node.file}}, MapSet.put(ids, node.id)})
   end
 
   defp unlink_file(node, session) do
     ids = lookup({:file, node.file}, session) || MapSet.new()
-    ETS.put(@table, {{session, {:file, node.file}}, MapSet.delete(ids, node.id)})
+    ETS.put(table(session), {{session, {:file, node.file}}, MapSet.delete(ids, node.id)})
   end
 
   defp unlink_imports(nil, _session), do: :ok
@@ -127,7 +129,7 @@ defmodule Volt.HMR.ModuleGraph do
   end
 
   defp lookup(key, session) do
-    case :ets.lookup(@table, {session, key}) do
+    case :ets.lookup(table(session), {session, key}) do
       [{_, value}] -> value
       [] -> nil
     end

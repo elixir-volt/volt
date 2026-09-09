@@ -3,12 +3,14 @@ defmodule Volt.HMR.GlobGraph do
 
   @table :volt_hmr_glob_graph
 
+  defp table(session), do: Volt.ETS.session_table(session, :globs, @table)
+
   @doc "Create the glob graph ETS table."
   def create_table, do: Volt.ETS.create_named_set(@table)
 
   @doc "Store glob patterns owned by an importer."
   def update(importer, globs, session \\ :default),
-    do: Volt.ETS.put(@table, {{session, importer}, globs})
+    do: Volt.ETS.put(table(session), {{session, importer}, globs})
 
   @doc "Extract and store `import.meta.glob()` patterns from source."
   def update_from_source(path, source, session \\ :default) do
@@ -31,14 +33,14 @@ defmodule Volt.HMR.GlobGraph do
           acc
       end,
       [],
-      @table
+      table(session)
     )
   end
 
-  def remove(path, session \\ :default), do: Volt.ETS.delete(@table, {session, path})
+  def remove(path, session \\ :default), do: Volt.ETS.delete(table(session), {session, path})
 
   @doc "Remove glob ownership for one session."
-  def clear_session(session), do: Volt.ETS.clear_session(@table, session)
+  def clear_session(session), do: Volt.ETS.clear_session(table(session), session)
 
   def clear, do: Volt.ETS.clear(@table)
 

@@ -9,6 +9,8 @@ defmodule Volt.HMR.ImportGraph do
 
   @table :volt_hmr_import_graph
 
+  defp table(session), do: Volt.ETS.session_table(session, :imports, @table)
+
   @doc "Create the import graph ETS table. Called once from Application.start/2."
   @spec create_table :: :ok
   def create_table, do: Volt.ETS.create_named_set(@table)
@@ -16,7 +18,7 @@ defmodule Volt.HMR.ImportGraph do
   @doc "Update the imports for a file path."
   @spec update(String.t(), [String.t()]) :: :ok
   def update(path, imports, session \\ :default) do
-    Volt.ETS.put(@table, {{session, path}, Enum.uniq(imports)})
+    Volt.ETS.put(table(session), {{session, path}, Enum.uniq(imports)})
   end
 
   @doc "Update imports from compiled code."
@@ -34,7 +36,7 @@ defmodule Volt.HMR.ImportGraph do
   @doc "Get the imports for a file path."
   @spec imports_of(String.t()) :: [String.t()]
   def imports_of(path, session \\ :default) do
-    case :ets.lookup(@table, {session, path}) do
+    case :ets.lookup(table(session), {session, path}) do
       [{_, imports}] -> imports
       [] -> []
     end
@@ -67,18 +69,18 @@ defmodule Volt.HMR.ImportGraph do
           acc
       end,
       [],
-      @table
+      table(session)
     )
   end
 
   @doc "Remove a file from the graph."
   @spec remove(String.t()) :: :ok
-  def remove(path, session \\ :default), do: Volt.ETS.delete(@table, {session, path})
+  def remove(path, session \\ :default), do: Volt.ETS.delete(table(session), {session, path})
 
   @doc "Clear the entire graph."
   @spec clear :: :ok
   def clear, do: Volt.ETS.clear(@table)
 
   @doc "Clear raw import edges for one session."
-  def clear_session(session), do: Volt.ETS.clear_session(@table, session)
+  def clear_session(session), do: Volt.ETS.clear_session(table(session), session)
 end

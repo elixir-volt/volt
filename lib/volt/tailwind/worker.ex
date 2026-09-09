@@ -14,21 +14,68 @@ defmodule Volt.Tailwind.Worker do
     {:ok,
      %State{
        key: Keyword.fetch!(opts, :key),
+       runtime: Keyword.get(opts, :runtime),
        scanner: nil,
        last_css: nil,
        sources: Keyword.get(opts, :sources, [])
      }}
   end
 
+  @doc "Return the last successfully compiled stylesheet without compiling."
+  def stylesheet(server), do: GenServer.call(server, :stylesheet)
+
+  def inputs(server), do: GenServer.call(server, :inputs)
+
   @impl true
+  def handle_call(:inputs, _from, state),
+    do: {:reply, %{sources: state.sources, dependencies: state.dependencies}, state}
+
+  def handle_call(:stylesheet, _from, state) do
+    result = if is_binary(state.last_css), do: {:ok, state.last_css}, else: {:error, :not_built}
+    {:reply, result, state}
+  end
+
   def handle_call({:build, opts}, _from, state) do
     sources = opts[:sources] || state.sources
-    scanner = build_scanner(sources)
+    compilation = Volt.Tailwind.Compilation.new(opts)
+    runtime = state.runtime || Volt.Tailwind.Supervisor.runtime(state.key)
 
-    case compile_css(opts[:css], scan(scanner), opts[:css_base]) do
+    with {:ok, metadata} <-
+           Volt.Tailwind.Runtime.compile_metadata(compilation.css, [], compilation.base, runtime) do
+      automatic =
+        case metadata.root do
+          :none ->
+            []
+
+          :automatic ->
+            if sources == [], do: [%{base: compilation.base, pattern: "**/*"}], else: []
+
+          source ->
+            [source]
+        end
+
+      sources = Enum.uniq(automatic ++ sources ++ metadata.sources)
+      scanner = build_scanner(sources)
+      finish_build(state, compilation, scanner, sources, metadata.dependencies)
+    else
+      {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  defp finish_build(state, compilation, scanner, sources, dependencies) do
+    case compile_css(compilation.css, scan(scanner), compilation.base, state) do
       {:ok, css} ->
-        css = maybe_minify(css, Keyword.get(opts, :minify, false))
-        {:reply, {:ok, css}, %{state | scanner: scanner, last_css: css, sources: sources}}
+        css = maybe_minify(css, compilation.minify)
+
+        {:reply, {:ok, css},
+         %{
+           state
+           | scanner: scanner,
+             last_css: css,
+             sources: sources,
+             compilation: compilation,
+             dependencies: dependencies
+         }}
 
       {:error, _reason} = error ->
         {:reply, error, state}
@@ -56,11 +103,13 @@ defmodule Volt.Tailwind.Worker do
   end
 
   defp compile_rebuilt_css(state, scanner, opts) do
-    case compile_css(opts[:css], Oxide.scan(scanner), opts[:css_base]) do
+    compilation = Volt.Tailwind.Compilation.update(state.compilation, opts)
+
+    case compile_css(compilation.css, Oxide.scan(scanner), compilation.base, state) do
       {:ok, css} ->
-        css = maybe_minify(css, Keyword.get(opts, :minify, false))
+        css = maybe_minify(css, compilation.minify)
         reply = if css == state.last_css, do: :unchanged, else: {:ok, css}
-        {:reply, reply, %{state | last_css: css}}
+        {:reply, reply, %{state | last_css: css, compilation: compilation}}
 
       {:error, _reason} = error ->
         {:reply, error, state}
@@ -86,8 +135,9 @@ defmodule Volt.Tailwind.Worker do
 
   defp changed_file(map), do: struct!(Oxide.Changed, map)
 
-  defp compile_css(css, candidates, css_base) do
-    Volt.Tailwind.Runtime.call(css, candidates, Path.expand(css_base || File.cwd!()))
+  defp compile_css(css, candidates, css_base, state) do
+    runtime = state.runtime || Volt.Tailwind.Supervisor.runtime(state.key)
+    Volt.Tailwind.Runtime.call(css, candidates, css_base, runtime)
   end
 
   defp maybe_minify(css, false), do: css

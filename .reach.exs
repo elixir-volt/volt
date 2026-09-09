@@ -36,6 +36,7 @@ orchestrator = [
   "Volt.Tailwind",
   "Volt.Tailwind.Build",
   "Volt.Watcher",
+  "Volt.Dev.Session.Watcher",
   "Volt.Watcher.Ignore",
   "Volt.Watcher.Path"
 ]
@@ -58,6 +59,7 @@ model = [
   "Volt.ChunkGraph.Chunk",
   "Volt.Config",
   "Volt.Config.*",
+  "Volt.Dev.Session.Tables",
   "Volt.DevServer.CacheEntry",
   "Volt.DevServer.Config",
   "Volt.HMR.Message",
@@ -70,7 +72,9 @@ model = [
   "Volt.MIME",
   "Volt.Paths",
   "Volt.Pipeline.Result.Hashes",
-  "Volt.Tailwind.State"
+  "Volt.Tailwind.Metadata",
+  "Volt.Tailwind.State",
+  "Volt.Tailwind.Compilation"
 ]
 
 logic = [
@@ -130,6 +134,9 @@ infrastructure = [
   "Volt.Builder.Publication",
   "Volt.Cache",
   "Volt.Dev",
+  "Volt.Dev.State",
+  "Volt.Dev.Session.State",
+  "Volt.Dev.Session.Supervisor",
   "Volt.Dev.ConsoleForwarder",
   "Volt.Dev.ConsoleForwarder.Payload",
   "Volt.ETS",

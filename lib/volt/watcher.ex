@@ -48,13 +48,19 @@ defmodule Volt.Watcher do
     :root,
     :config,
     :configuration_signature,
+    :owner_monitor,
+    :managed_key,
+    :tables,
     session: :default,
     fs_pids: [],
     pending: %{},
     tailwind_timer: nil,
+    pending_reloads: [],
     tailwind_changed: [],
     tailwind_full?: false,
     tailwind_outdir: nil,
+    discovered_watches: %{},
+    base_watch_dirs: [],
     tailwind_dirs: [],
     reload_dirs: [],
     watch_ignored: []
@@ -69,13 +75,26 @@ defmodule Volt.Watcher do
 
   @impl true
   def init(opts) do
+    Process.flag(:trap_exit, true)
+
+    owner_monitor =
+      case Keyword.get(opts, :owner) do
+        nil -> nil
+        owner when is_pid(owner) -> Process.monitor(owner)
+      end
+
     root = Keyword.fetch!(opts, :root) |> Path.expand()
     watch_dirs = Keyword.get(opts, :watch_dirs, []) |> Enum.map(&Path.expand/1)
     reload_dirs = Keyword.get(opts, :reload_dirs, []) |> Enum.map(&Path.expand/1)
     tailwind_outdir = Keyword.get(opts, :tailwind_outdir) |> maybe_expand()
     tailwind_name = Keyword.get(opts, :tailwind_name, "app")
     tailwind_url = Keyword.get(opts, :tailwind_url, "/assets/css/#{tailwind_name}.css")
+    session = Keyword.get(opts, :session, :default)
     tailwind_key = Keyword.get(opts, :tailwind_key, {:watcher, root})
+
+    tailwind_key =
+      if session == :default, do: tailwind_key, else: {:session, session, tailwind_key}
+
     configured_tailwind_sources = Keyword.get(opts, :tailwind_sources)
 
     config =
@@ -84,6 +103,9 @@ defmodule Volt.Watcher do
         :root,
         :name,
         :session,
+        :owner,
+        :managed_key,
+        :tables,
         :watch_dirs,
         :reload_dirs,
         :watch_ignored,
@@ -95,7 +117,18 @@ defmodule Volt.Watcher do
       ])
       |> Map.new()
 
-    all_dirs = Enum.uniq([root | watch_dirs ++ reload_dirs ++ tailwind_colocated_dirs(config)])
+    source_dirs =
+      if config[:tailwind] do
+        Enum.map(configured_tailwind_sources || [], &Path.expand(&1.base))
+      else
+        []
+      end
+
+    all_dirs =
+      Enum.uniq([
+        root | watch_dirs ++ reload_dirs ++ source_dirs ++ tailwind_colocated_dirs(config)
+      ])
+
     tailwind_sources = configured_tailwind_sources || watcher_sources(all_dirs)
     watch_ignored = Volt.Watcher.Ignore.compile(Keyword.get(opts, :watch_ignored, []), all_dirs)
 
@@ -110,16 +143,26 @@ defmodule Volt.Watcher do
       config
       |> Map.put(:tailwind_key, tailwind_key)
       |> Map.put(:tailwind_name, tailwind_name)
+      |> Map.put(:tailwind_configured_sources, tailwind_sources)
       |> Map.put(:tailwind_sources, tailwind_sources)
       |> Map.put(:tailwind_url, tailwind_url)
 
     state = %__MODULE__{
       root: root,
-      configuration_signature: opts |> Keyword.delete(:name) |> Map.new(),
+      owner_monitor: owner_monitor,
+      tables: Keyword.get(opts, :tables),
+      managed_key: Keyword.get(opts, :managed_key),
+      configuration_signature:
+        Keyword.get(
+          opts,
+          :configuration_signature,
+          opts |> Keyword.drop([:name, :managed_key]) |> Map.new()
+        ),
       session: Keyword.get(opts, :session, :default),
       fs_pids: fs_pids,
       config: config,
       tailwind_outdir: tailwind_outdir,
+      base_watch_dirs: all_dirs,
       tailwind_dirs: all_dirs,
       reload_dirs: reload_dirs,
       watch_ignored: watch_ignored
@@ -131,12 +174,56 @@ defmodule Volt.Watcher do
         config[:tailwind_css],
         tailwind_outdir,
         tailwind_key,
-        tailwind_name
+        tailwind_name,
+        config[:tailwind_runtime],
+        config[:tailwind_worker]
       )
     end
 
-    {:ok, state}
+    {:ok, refresh_tailwind_inputs(state)}
   end
+
+  defp refresh_tailwind_inputs(%{config: %{tailwind: true, tailwind_worker: worker}} = state)
+       when not is_nil(worker) do
+    inputs = Volt.Tailwind.Worker.inputs(worker)
+
+    dirs =
+      Enum.uniq(
+        Enum.map(inputs.sources, &Path.expand(&1.base)) ++
+          Enum.map(inputs.dependencies, &Path.dirname/1)
+      )
+
+    desired = dirs |> Enum.reject(&(&1 in state.base_watch_dirs)) |> Enum.filter(&File.dir?/1)
+    {kept, removed} = Map.split(state.discovered_watches, desired)
+
+    Enum.each(removed, fn {_dir, pid} ->
+      if Process.alive?(pid), do: GenServer.stop(pid)
+    end)
+
+    added =
+      Map.new(desired -- Map.keys(kept), fn dir ->
+        {:ok, pid} = FileSystem.start_link(dirs: [dir])
+        FileSystem.subscribe(pid)
+        {dir, pid}
+      end)
+
+    watches = Map.merge(kept, added)
+
+    config =
+      state.config
+      |> Map.put(:tailwind_sources, inputs.sources)
+      |> Map.put(:tailwind_dependencies, inputs.dependencies)
+
+    %{
+      state
+      | config: config,
+        discovered_watches: watches,
+        fs_pids: (state.fs_pids -- Map.values(removed)) ++ Map.values(added),
+        tailwind_dirs: state.base_watch_dirs ++ Map.keys(watches)
+    }
+  end
+
+  defp refresh_tailwind_inputs(state), do: state
 
   @impl true
   def handle_call({:configuration_matches, signature}, _from, state) do
@@ -145,8 +232,8 @@ defmodule Volt.Watcher do
 
   defp watcher_sources(dirs), do: Enum.map(dirs, &%{base: &1, pattern: "**/*"})
 
-  defp initial_tailwind_build(sources, css_path, outdir, key, name) do
-    case build_tailwind(sources, css_path, outdir, key, name) do
+  defp initial_tailwind_build(sources, css_path, outdir, key, name, runtime, worker) do
+    case build_tailwind(sources, css_path, outdir, key, name, runtime, worker) do
       {:ok, css} ->
         Logger.debug("[Volt] Initial Tailwind build: #{byte_size(css)} bytes")
 
@@ -155,14 +242,18 @@ defmodule Volt.Watcher do
     end
   end
 
-  defp build_tailwind(sources, css_path, outdir, key, name) do
+  defp build_tailwind(sources, css_path, outdir, key, name, runtime, worker) do
+    worker_opts = if worker, do: [worker: worker], else: [key: key, runtime: runtime]
+
     with {:ok, {css_input, css_base}} <- read_tailwind_css(css_path),
          {:ok, css} <-
            Volt.Tailwind.build(
-             key: key,
-             sources: sources,
-             css: css_input,
-             css_base: css_base
+             worker_opts ++
+               [
+                 sources: sources,
+                 css: css_input,
+                 css_base: css_base
+               ]
            ) do
       Volt.Tailwind.Artifact.write(outdir, name, css)
       {:ok, css}
@@ -189,6 +280,13 @@ defmodule Volt.Watcher do
         tailwind_output?(path, state) ->
           {:noreply, state}
 
+        path in Map.get(state.config, :tailwind_dependencies, []) ->
+          {:noreply, maybe_schedule_tailwind(state, path, full?: true)}
+
+        reload_path?(path, state) and state.config[:tailwind] ->
+          state = %{state | pending_reloads: Enum.uniq([path | state.pending_reloads])}
+          {:noreply, maybe_schedule_tailwind(state, path)}
+
         ext in Extensions.css() ->
           state = handle_css_change(path, state)
           {:noreply, state}
@@ -208,7 +306,10 @@ defmodule Volt.Watcher do
 
         reload_path?(path, state) ->
           handle_reload_change(path, state)
-          {:noreply, state}
+          {:noreply, maybe_schedule_tailwind(state, path)}
+
+        tailwind_source?(path, state) ->
+          {:noreply, maybe_schedule_tailwind(state, path)}
 
         true ->
           {:noreply, state}
@@ -228,12 +329,30 @@ defmodule Volt.Watcher do
     changed = state.tailwind_changed
     full? = state.tailwind_full?
     state = %{state | tailwind_timer: nil, tailwind_changed: [], tailwind_full?: false}
-    handle_tailwind_rebuild(changed, full?, state)
-    {:noreply, state}
+
+    case handle_tailwind_rebuild(changed, full?, state) do
+      :ok ->
+        Enum.each(state.pending_reloads, &handle_reload_change(&1, state))
+        {:noreply, refresh_tailwind_inputs(%{state | pending_reloads: []})}
+
+      {:error, _reason} ->
+        {:noreply, state}
+    end
   end
 
   def handle_info({:file_event, _pid, :stop}, state) do
     {:noreply, state}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, %{owner_monitor: ref} = state)
+      when is_reference(ref) do
+    {:stop, :normal, state}
+  end
+
+  def handle_info({:EXIT, pid, reason}, state) do
+    if pid in state.fs_pids,
+      do: {:stop, {:filesystem_watcher_exit, reason}, state},
+      else: {:noreply, state}
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
@@ -277,20 +396,37 @@ defmodule Volt.Watcher do
   defp handle_js_change(path, state) do
     relative = Path.relative_to(path, state.root)
     css? = css_file?(path)
-    css_dependents = if css?, do: Volt.HMR.StyleGraph.dependents(path, state.session), else: []
 
-    old_entry = Volt.Cache.get_file(path, state.session)
-    Volt.Cache.evict_file(path, state.session)
-    Volt.HMR.ModuleGraph.invalidate_file(path, System.system_time(:millisecond), state.session)
+    css_dependents =
+      if css?, do: Volt.HMR.StyleGraph.dependents(path, state.tables || state.session), else: []
+
+    old_entry = Volt.Cache.get_file(path, state.tables || state.session)
+    Volt.Cache.evict_file(path, state.tables || state.session)
+
+    Volt.HMR.ModuleGraph.invalidate_file(
+      path,
+      System.system_time(:millisecond),
+      state.tables || state.session
+    )
 
     case File.read(path) do
       {:ok, source} ->
         case Volt.Pipeline.compile(path, source, Map.to_list(state.config)) do
           {:ok, result} ->
-            Volt.HMR.GlobGraph.update_from_source(path, source, state.session)
-            Volt.HMR.ImportGraph.update_from_compiled(path, result.code, state.session)
+            Volt.HMR.GlobGraph.update_from_source(path, source, state.tables || state.session)
 
-            Volt.HMR.StyleDependencies.update_from_compile(path, source, result, state.session)
+            Volt.HMR.ImportGraph.update_from_compiled(
+              path,
+              result.code,
+              state.tables || state.session
+            )
+
+            Volt.HMR.StyleDependencies.update_from_compile(
+              path,
+              source,
+              result,
+              state.tables || state.session
+            )
 
             changes = if css?, do: [:style], else: detect_changes(old_entry, result)
             broadcast_change(path, relative, changes, state)
@@ -302,10 +438,10 @@ defmodule Volt.Watcher do
         end
 
       {:error, reason} when reason in [:enoent, :eacces, :eperm] ->
-        Volt.HMR.ImportGraph.remove(path, state.session)
-        Volt.HMR.GlobGraph.remove(path, state.session)
-        if css?, do: Volt.HMR.StyleGraph.remove(path, state.session)
-        Volt.HMR.ModuleGraph.remove_file(path, state.session)
+        Volt.HMR.ImportGraph.remove(path, state.tables || state.session)
+        Volt.HMR.GlobGraph.remove(path, state.tables || state.session)
+        if css?, do: Volt.HMR.StyleGraph.remove(path, state.tables || state.session)
+        Volt.HMR.ModuleGraph.remove_file(path, state.tables || state.session)
         HMR.update(relative, [:full], session: state.session)
         broadcast_glob_dependents(path, state)
 
@@ -318,17 +454,27 @@ defmodule Volt.Watcher do
 
   defp handle_css_change(path, state) do
     relative = Path.relative_to(path, state.root)
-    css_dependents = StyleGraph.dependents(path, state.session)
+    css_dependents = StyleGraph.dependents(path, state.tables || state.session)
     tailwind_input? = tailwind_input?(path, state)
 
-    Volt.Cache.evict_file(path, state.session)
-    Volt.HMR.ModuleGraph.invalidate_file(path, System.system_time(:millisecond), state.session)
+    Volt.Cache.evict_file(path, state.tables || state.session)
+
+    Volt.HMR.ModuleGraph.invalidate_file(
+      path,
+      System.system_time(:millisecond),
+      state.tables || state.session
+    )
 
     if File.regular?(path) do
       source = File.read!(path)
-      StyleGraph.update(path, Volt.CSS.Dependencies.resolve(source, path), state.session)
+
+      StyleGraph.update(
+        path,
+        Volt.CSS.Dependencies.resolve(source, path),
+        state.tables || state.session
+      )
     else
-      StyleGraph.remove(path, state.session)
+      StyleGraph.remove(path, state.tables || state.session)
     end
 
     if Volt.Path.inside?(path, state.root) and not tailwind_input? do
@@ -354,7 +500,7 @@ defmodule Volt.Watcher do
     dependents
     |> Enum.uniq()
     |> Enum.each(fn importer ->
-      Volt.Cache.evict_file(importer, state.session)
+      Volt.Cache.evict_file(importer, state.tables || state.session)
 
       Volt.HMR.ModuleGraph.invalidate_file(
         importer,
@@ -374,10 +520,16 @@ defmodule Volt.Watcher do
 
   defp handle_asset_change(path, state) do
     relative = Path.relative_to(path, state.root)
-    css_dependents = Volt.HMR.StyleGraph.dependents(path, state.session)
+    css_dependents = Volt.HMR.StyleGraph.dependents(path, state.tables || state.session)
 
-    Volt.Cache.evict_file(path, state.session)
-    Volt.HMR.ModuleGraph.invalidate_file(path, System.system_time(:millisecond), state.session)
+    Volt.Cache.evict_file(path, state.tables || state.session)
+
+    Volt.HMR.ModuleGraph.invalidate_file(
+      path,
+      System.system_time(:millisecond),
+      state.tables || state.session
+    )
+
     HMR.broadcast(:update, %{path: relative, changes: [:full]}, session: state.session)
     broadcast_css_dependents(css_dependents, state)
     broadcast_glob_dependents(path, state)
@@ -385,10 +537,10 @@ defmodule Volt.Watcher do
 
   defp broadcast_glob_dependents(path, state) do
     path
-    |> Volt.HMR.GlobGraph.dependents(state.session)
+    |> Volt.HMR.GlobGraph.dependents(state.tables || state.session)
     |> Enum.reject(&(&1 == path))
     |> Enum.each(fn importer ->
-      Volt.Cache.evict_file(importer, state.session)
+      Volt.Cache.evict_file(importer, state.tables || state.session)
       relative = Path.relative_to(importer, state.root)
       HMR.broadcast(:update, %{path: relative, changes: [:full]}, session: state.session)
     end)
@@ -410,7 +562,7 @@ defmodule Volt.Watcher do
           end
         end
 
-        case Volt.HMR.Boundary.find_boundary(path, read_source, state.session) do
+        case Volt.HMR.Boundary.find_boundary(path, read_source, state.tables || state.session) do
           {:ok, boundary_path} ->
             timestamp = System.system_time(:millisecond)
             boundary_relative = Path.relative_to(boundary_path, state.root)
@@ -433,24 +585,29 @@ defmodule Volt.Watcher do
   end
 
   defp handle_tailwind_rebuild(_changed_paths, true, state) do
+    previous = previous_stylesheet(state)
+
     case build_tailwind(
-           state.config.tailwind_sources,
+           state.config.tailwind_configured_sources,
            state.config[:tailwind_css],
            state.tailwind_outdir,
            state.config.tailwind_key,
-           state.config.tailwind_name
+           state.config.tailwind_name,
+           state.config[:tailwind_runtime],
+           state.config[:tailwind_worker]
          ) do
       {:ok, css} ->
-        HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]},
-          session: state.session
-        )
+        if previous != {:ok, css} do
+          HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]},
+            session: state.session
+          )
+        end
 
         Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
+        :ok
 
       {:error, reason} ->
-        HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)},
-          session: state.session
-        )
+        tailwind_error(reason, state.session)
     end
   end
 
@@ -461,12 +618,21 @@ defmodule Volt.Watcher do
         %{file: path, extension: ext}
       end)
 
+    worker_opts =
+      case state.config[:tailwind_worker] do
+        nil -> [key: state.config.tailwind_key]
+        worker -> [worker: worker]
+      end
+
     with {:ok, {css_input, css_base}} <- read_tailwind_css(state.config[:tailwind_css]),
          {:ok, css} <-
-           Volt.Tailwind.rebuild(changed,
-             key: state.config.tailwind_key,
-             css: css_input,
-             css_base: css_base
+           Volt.Tailwind.rebuild(
+             changed,
+             worker_opts ++
+               [
+                 css: css_input,
+                 css_base: css_base
+               ]
            ) do
       Volt.Tailwind.Artifact.write(state.tailwind_outdir, state.config.tailwind_name, css)
 
@@ -475,15 +641,30 @@ defmodule Volt.Watcher do
       )
 
       Logger.debug("[Volt] Tailwind rebuilt (#{byte_size(css)} bytes)")
+      :ok
     else
       :unchanged ->
         :ok
 
       {:error, reason} ->
-        HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)},
-          session: state.session
-        )
+        tailwind_error(reason, state.session)
     end
+  end
+
+  defp previous_stylesheet(state) do
+    worker =
+      state.config[:tailwind_worker] ||
+        case Registry.lookup(Volt.Tailwind.Registry, state.config.tailwind_key) do
+          [{pid, _}] -> pid
+          [] -> nil
+        end
+
+    if worker, do: Volt.Tailwind.Worker.stylesheet(worker), else: {:error, :not_built}
+  end
+
+  defp tailwind_error(reason, session) do
+    HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)}, session: session)
+    {:error, reason}
   end
 
   defp detect_changes(nil, _new), do: [:full]
@@ -500,6 +681,17 @@ defmodule Volt.Watcher do
     else
       [:full]
     end
+  end
+
+  defp tailwind_source?(path, state) do
+    state.config[:tailwind] &&
+      Enum.any?(state.config.tailwind_sources, fn source ->
+        not Map.get(source, :negated, false) and
+          GlobEx.match?(
+            GlobEx.compile!(Path.join(Path.expand(source.base), source.pattern)),
+            path
+          )
+      end)
   end
 
   defp reload_path?(path, state) do
@@ -520,7 +712,15 @@ defmodule Volt.Watcher do
 
   @impl true
   def terminate(_reason, state) do
-    Enum.each(state.fs_pids, &GenServer.stop/1)
+    Enum.each(state.fs_pids, fn pid ->
+      if Process.alive?(pid), do: GenServer.stop(pid)
+    end)
+
+    if state.config[:tailwind] && is_nil(state.config[:tailwind_worker]),
+      do: Volt.Tailwind.Supervisor.release(state.config.tailwind_key)
+
+    if state.session != :default, do: Volt.Dev.State.clear(state.session)
+    if state.managed_key, do: Registry.unregister(Volt.Dev.WatcherRegistry, state.managed_key)
     :ok
   end
 

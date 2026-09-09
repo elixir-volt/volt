@@ -24,7 +24,18 @@ defmodule Volt.Tailwind do
   end
 
   defp worker(opts) do
+    case Keyword.fetch(opts, :worker) do
+      {:ok, worker} -> worker
+      :error -> registered_worker(opts)
+    end
+  end
+
+  defp registered_worker(opts) do
     key = Keyword.get(opts, :key, @default_key)
-    Volt.Tailwind.Supervisor.worker(key, sources: Keyword.get(opts, :sources, []))
+
+    Volt.Tailwind.Supervisor.worker(key,
+      sources: Keyword.get(opts, :sources, []),
+      runtime: Keyword.get(opts, :runtime)
+    )
   end
 end

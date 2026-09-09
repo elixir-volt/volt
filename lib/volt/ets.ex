@@ -1,6 +1,12 @@
 defmodule Volt.ETS do
   @moduledoc "Small helpers for Volt's named ETS tables."
 
+  @doc "Resolve an owned session table or the legacy table at the API boundary."
+  def session_table(%Volt.Dev.Session.Tables{} = tables, kind, _legacy),
+    do: Map.fetch!(tables, kind)
+
+  def session_table(_session, _kind, legacy), do: legacy
+
   @doc "Create a public named set table optimized for concurrent reads."
   def create_named_set(table) do
     :ets.new(table, [:named_table, :set, :public, read_concurrency: true])

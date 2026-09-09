@@ -47,29 +47,33 @@ defmodule Volt.Tailwind.Loader do
   defp load_module(id, base, kind, runtime_node_modules) do
     path = Resolver.resolve_module_path!(id, base, kind, runtime_node_modules)
 
-    {code, format} =
+    {code, format, dependencies} =
       if Path.extname(path) == ".json" do
-        {File.read!(path), "json"}
+        {File.read!(path), "json", [path]}
       else
-        {bundle_module_source!(path, runtime_node_modules), "cjs"}
+        {code, dependencies} = bundle_module_source!(path, runtime_node_modules)
+        {code, "cjs", dependencies}
       end
 
     %{
       path: path,
       base: Path.dirname(path),
       code: code,
+      dependencies: dependencies,
       format: format
     }
   end
 
   defp bundle_module_source!(entry_path, runtime_node_modules) do
     with {:ok, files} <- collect_bundle_files(entry_path, runtime_node_modules) do
+      dependencies = Enum.map(files, fn {path, _source} -> path end)
+
       case OXC.bundle(files, entry: entry_path, format: :cjs) do
         {:ok, code} when is_binary(code) ->
-          code
+          {code, dependencies}
 
         {:ok, %{code: code}} when is_binary(code) ->
-          code
+          {code, dependencies}
 
         {:error, errors} ->
           raise "Could not bundle Tailwind module #{inspect(entry_path)}: #{inspect(errors)}"
