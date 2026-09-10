@@ -742,6 +742,9 @@ defmodule Volt.DevServer do
       String.starts_with?(specifier, "#") ->
         rewrite_package_import(specifier, importer, config)
 
+      Path.type(elem(URL.split_query(specifier), 0)) == :absolute ->
+        rewrite_resolved_path(specifier, config)
+
       NPM.Resolution.PackageResolver.relative?(specifier) ->
         rewrite_relative(specifier, importer, config)
 

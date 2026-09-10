@@ -1,6 +1,31 @@
 defmodule Volt.DevServer.ImportRewritingTest do
   use Volt.TestSupport.DevServerCase
 
+  defmodule VirtualAbsolute do
+    @behaviour Volt.Plugin
+    def name, do: "virtual-absolute"
+
+    def load("fixture:entry", root: root),
+      do:
+        {:ok,
+         "import value from #{Jason.encode!(Path.join(root, "value.ts"))}; console.log(value);"}
+
+    def load(_, _), do: nil
+  end
+
+  @tag :tmp_dir
+  test "virtual entry absolute filesystem imports become served URLs", %{tmp_dir: root} do
+    File.write!(Path.join(root, "value.ts"), "export default 42")
+
+    config =
+      Volt.DevServer.init(root: root, watch: false, plugins: [{VirtualAbsolute, root: root}])
+
+    conn = Plug.Test.conn(:get, "/@volt/virtual/fixture:entry") |> Volt.DevServer.call(config)
+    assert conn.status == 200
+    assert conn.resp_body =~ "from \"/assets/value.ts\""
+    refute conn.resp_body =~ Path.join(root, "value.ts")
+  end
+
   describe "import rewriting" do
     test "rewrites relative imports to absolute paths" do
       File.write!(Path.join(@fixture_dir, "src/utils.ts"), "export const y = 1")
