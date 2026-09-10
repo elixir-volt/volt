@@ -226,9 +226,26 @@ defmodule Volt.Builder.Output do
         Enum.flat_map(prepared_js, &elem(&1, 1)) ++
           List.flatten(css_artifacts) ++ shared_assets(bundle_result.outputs) ++ asset_artifacts
 
+      chunk_keys =
+        Map.new(Enum.filter(bundle_result.outputs, &(&1.type in [:entry, :chunk])), fn output ->
+          {output.file_name,
+           if(output.type == :entry, do: "#{output.name}.js", else: output.file_name)}
+        end)
+
       manifest =
         bundle_result.outputs
         |> Enum.reduce(%{}, fn output, acc ->
+          output =
+            if output.type in [:entry, :chunk] do
+              %{
+                output
+                | imports: manifest_imports(output.imports, chunk_keys),
+                  dynamic_imports: manifest_imports(output.dynamic_imports, chunk_keys)
+              }
+            else
+              output
+            end
+
           output_manifest_entry(output, css_results, assets, acc)
         end)
         |> Writer.add_asset_entries(assets)
@@ -311,6 +328,15 @@ defmodule Volt.Builder.Output do
     |> Enum.reject(&String.ends_with?(&1.file_name, ".map"))
     |> Enum.map(fn output ->
       %Volt.Builder.Artifact{file: output.file_name, content: output.source || ""}
+    end)
+  end
+
+  defp manifest_imports(imports, chunk_keys) do
+    Enum.flat_map(imports, fn reference ->
+      case Map.fetch(chunk_keys, reference) do
+        {:ok, key} -> [key]
+        :error -> []
+      end
     end)
   end
 

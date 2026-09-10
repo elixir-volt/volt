@@ -14,6 +14,41 @@ defmodule Volt.BuildTest do
     {:ok, root: root, outdir: outdir}
   end
 
+  test "shared output manifest includes only emitted chunk identities", %{
+    root: root,
+    outdir: outdir
+  } do
+    File.write!(
+      Path.join(root, "one.ts"),
+      "import {value} from 'external-lib'; console.log(value); export const load = () => import('external-lazy')"
+    )
+
+    File.write!(
+      Path.join(root, "two.ts"),
+      "import {value} from 'external-lib'; console.log(value)"
+    )
+
+    assert {:ok, result} =
+             Volt.build(
+               entry: [Path.join(root, "one.ts"), Path.join(root, "two.ts")],
+               root: root,
+               outdir: outdir,
+               tailwind: [],
+               format: :esm,
+               minify: false,
+               external: ["external-lib", "external-lazy"]
+             )
+
+    for {_key, entry} <- result.manifest do
+      for reference <- entry.imports ++ entry.dynamicImports do
+        assert Map.has_key?(result.manifest, reference)
+      end
+
+      refute "external-lib" in entry.imports
+      refute "external-lazy" in entry.dynamicImports
+    end
+  end
+
   test "nested assets keep public files and manifest at the publication root", %{
     root: root,
     outdir: outdir
