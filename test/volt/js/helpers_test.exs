@@ -44,6 +44,19 @@ defmodule Volt.JS.HelpersTest do
     assert Helpers.discover_files(tool: :lint) == [Path.join(tmp_dir, "lint/source.ts")]
   end
 
+  test "a bundle format on the same key holds no discovery options", %{tmp_dir: tmp_dir} do
+    Application.put_env(:volt, :format, :esm)
+
+    Application.put_env(:volt, :lint,
+      root: tmp_dir,
+      sources: ["lint/**/*.ts"],
+      ignore: []
+    )
+
+    assert Helpers.discover_format_files() == []
+    assert Helpers.discover_files(tool: :lint) == [Path.join(tmp_dir, "lint/source.ts")]
+  end
+
   defp restore_env(key, nil), do: Application.delete_env(:volt, key)
   defp restore_env(key, value), do: Application.put_env(:volt, key, value)
 end

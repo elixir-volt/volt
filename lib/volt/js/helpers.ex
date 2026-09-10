@@ -38,5 +38,11 @@ defmodule Volt.JS.Helpers do
   end
 
   defp discovery_config(nil), do: []
-  defp discovery_config(tool), do: Application.get_env(:volt, tool, [])
+
+  defp discovery_config(tool) do
+    config = Application.get_env(:volt, tool, [])
+
+    # The bundler reads :format as an atom, so it holds no discovery keys.
+    if Keyword.keyword?(config), do: config, else: []
+  end
 end

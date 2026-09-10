@@ -27,9 +27,14 @@ defmodule Volt.JS.Format do
   @discovery_keys ~w(root sources ignore)a
 
   def load_config do
-    case Application.get_env(:volt, :format) do
-      nil -> load_json_config()
-      opts when is_list(opts) -> Keyword.drop(opts, @discovery_keys)
+    opts = Application.get_env(:volt, :format)
+
+    # The bundler reads the same key, where the value is an atom such as :esm.
+    # Only a keyword list carries formatter options.
+    if Keyword.keyword?(opts) do
+      Keyword.drop(opts, @discovery_keys)
+    else
+      load_json_config()
     end
   end
 
