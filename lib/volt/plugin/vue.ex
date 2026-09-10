@@ -1,6 +1,8 @@
 defmodule Volt.Plugin.Vue do
   @behaviour Volt.Plugin
 
+  alias Vize.SFC
+
   @impl true
   def name, do: "vue"
 
@@ -22,7 +24,10 @@ defmodule Volt.Plugin.Vue do
     {base_path, query} = Volt.URL.split_query(path)
 
     if query == "" and Path.extname(base_path) == ".vue" do
+      scope_id = SFC.scope_id(base_path)
+
       sfc_opts = [
+        scope_id: scope_id,
         filename: base_path,
         vapor: Keyword.get(opts, :vapor, false),
         strip_types: true,
@@ -30,13 +35,15 @@ defmodule Volt.Plugin.Vue do
         source_map: Keyword.get(opts, :sourcemap, true)
       ]
 
-      with {:ok, assets} <- Vize.SFC.collect_template_assets(source, filename: base_path),
+      with {:ok, descriptor} <- Vize.parse_sfc(source),
+           {:ok, assets} <- SFC.collect_template_assets(source, filename: base_path),
            {:ok, result} <- Vize.compile_sfc(source, sfc_opts) do
         {:ok,
          %Volt.Pipeline.Result{
            code:
              result.code
-             |> Vize.SFC.rewrite_asset_references(assets)
+             |> assemble_template_component(descriptor, scope_id, sfc_opts[:vapor])
+             |> SFC.rewrite_asset_references(assets)
              |> append_template_asset_imports(assets)
              |> maybe_append_style_imports(path, source, opts),
            sourcemap: result.source_map,
@@ -50,6 +57,23 @@ defmodule Volt.Plugin.Vue do
       end
     end
   end
+
+  defp assemble_template_component(
+         code,
+         %{script: nil, script_setup: nil, template: template, styles: styles},
+         scope_id,
+         false
+       )
+       when not is_nil(template) do
+    component =
+      if Enum.any?(styles, & &1.scoped),
+        do: "{ render, __scopeId: #{Jason.encode!("data-v-" <> scope_id)} }",
+        else: "{ render }"
+
+    code <> "\nexport default " <> component <> ";\n"
+  end
+
+  defp assemble_template_component(code, _descriptor, _scope_id, _vapor), do: code
 
   @impl true
   def extract_imports(path, source, _opts) do
