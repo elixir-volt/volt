@@ -52,7 +52,7 @@ defmodule Volt.Dev.Session.Supervisor do
                :configuration_signature,
                watcher_opts |> Keyword.delete(:name) |> Map.new()
              )
-             |> Keyword.put(:tailwind_outdir, nil)
+             |> Keyword.put(:tailwind_outdir, Keyword.get(watcher_opts, :tailwind_sink))
              |> Keyword.put(:state_owner, owner_name)
              |> Keyword.put(:tailwind_worker, worker_name)
              |> Keyword.put(:tailwind_runtime, runtime_name)}

@@ -2,6 +2,31 @@ defmodule Volt.DevTest do
   use ExUnit.Case, async: false
 
   @tag :tmp_dir
+  test "explicit compatibility sink is written by the session-owned worker", %{tmp_dir: root} do
+    source = Path.join(root, "app.css")
+    File.write!(source, ".sink { color: red }")
+    sink = Path.join(root, "static")
+    session = make_ref()
+
+    assert {:ok, watcher} =
+             Volt.Dev.start(
+               session: session,
+               root: root,
+               tailwind: true,
+               tailwind_css: source,
+               tailwind_name: "site",
+               tailwind_sources: [],
+               tailwind_sink: sink
+             )
+
+    on_exit(fn -> Volt.Dev.stop(session) end)
+    tables = :sys.get_state(watcher).tables
+    assert {:ok, css} = Volt.Tailwind.Worker.stylesheet(tables.stylesheet_worker)
+    assert File.read!(Path.join(sink, "site.css")) == css
+    assert :sys.get_state(watcher).tailwind_outdir == sink
+  end
+
+  @tag :tmp_dir
   test "Tailwind contexts are isolated and released with explicit sessions", %{tmp_dir: root} do
     a = make_ref()
     b = make_ref()
@@ -106,32 +131,20 @@ defmodule Volt.DevTest do
     root = Path.expand("volt-dev-#{System.unique_integer([:positive])}", System.tmp_dir!())
     File.mkdir_p!(root)
 
-    assert :ok = Volt.Dev.ensure_watcher(id: :default, root: root, tailwind: false)
-    assert [{pid, _}] = Registry.lookup(Volt.Dev.WatcherRegistry, {:watcher, :default, root})
+    default = Volt.Dev.session_identity(root: root)
+    admin = Volt.Dev.session_identity(root: root, id: :admin)
 
     on_exit(fn ->
-      if Process.alive?(pid) do
-        DynamicSupervisor.terminate_child(Volt.Dev.WatcherSupervisor, pid)
-      end
-
+      Volt.Dev.stop(default)
+      Volt.Dev.stop(admin)
       File.rm_rf!(root)
     end)
 
-    assert Process.alive?(pid)
-    assert :ok = Volt.Dev.ensure_watcher(id: :default, root: root, tailwind: false)
-    assert [{^pid, _}] = Registry.lookup(Volt.Dev.WatcherRegistry, {:watcher, :default, root})
-
-    assert :ok = Volt.Dev.ensure_watcher(id: :admin, root: root, tailwind: false)
-
-    assert [{profile_pid, _}] =
-             Registry.lookup(Volt.Dev.WatcherRegistry, {:watcher, :admin, root})
-
-    on_exit(fn ->
-      if Process.alive?(profile_pid) do
-        DynamicSupervisor.terminate_child(Volt.Dev.WatcherSupervisor, profile_pid)
-      end
-    end)
-
+    assert {:ok, pid} = Volt.Dev.start(root: root, tailwind: false)
+    assert {:ok, ^pid} = Volt.Dev.start(id: :default, root: root, tailwind: false)
+    assert {:ok, profile_pid} = Volt.Dev.start(id: :admin, root: root, tailwind: false)
+    assert :sys.get_state(pid).tables == Volt.Dev.tables(default)
+    refute Volt.Dev.tables(default).owner == Volt.Dev.tables(admin).owner
     assert profile_pid != pid
   end
 end

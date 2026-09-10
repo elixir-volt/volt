@@ -63,6 +63,7 @@ defmodule Volt.Watcher do
     base_watch_dirs: [],
     tailwind_dirs: [],
     reload_dirs: [],
+    explicit_ignored: [],
     watch_ignored: []
   ]
 
@@ -165,6 +166,8 @@ defmodule Volt.Watcher do
       base_watch_dirs: all_dirs,
       tailwind_dirs: all_dirs,
       reload_dirs: reload_dirs,
+      explicit_ignored:
+        Volt.Watcher.Ignore.compile_explicit(Keyword.get(opts, :watch_ignored, []), all_dirs),
       watch_ignored: watch_ignored
     }
 
@@ -193,7 +196,12 @@ defmodule Volt.Watcher do
           Enum.map(inputs.dependencies, &Path.dirname/1)
       )
 
-    desired = dirs |> Enum.reject(&(&1 in state.base_watch_dirs)) |> Enum.filter(&File.dir?/1)
+    desired =
+      dirs
+      |> Enum.map(&existing_watch_parent/1)
+      |> Enum.uniq()
+      |> Enum.reject(&(&1 in state.base_watch_dirs))
+
     {kept, removed} = Map.split(state.discovered_watches, desired)
 
     Enum.each(removed, fn {_dir, pid} ->
@@ -224,6 +232,11 @@ defmodule Volt.Watcher do
   end
 
   defp refresh_tailwind_inputs(state), do: state
+
+  defp existing_watch_parent(path) do
+    parent = Path.dirname(path)
+    if File.dir?(path) or parent == path, do: path, else: existing_watch_parent(parent)
+  end
 
   @impl true
   def handle_call({:configuration_matches, signature}, _from, state) do
@@ -336,7 +349,7 @@ defmodule Volt.Watcher do
         {:noreply, refresh_tailwind_inputs(%{state | pending_reloads: []})}
 
       {:error, _reason} ->
-        {:noreply, state}
+        {:noreply, refresh_tailwind_inputs(%{state | tailwind_full?: true})}
     end
   end
 
@@ -364,7 +377,12 @@ defmodule Volt.Watcher do
   end
 
   defp ignored_path?(path, state) do
-    Enum.any?(state.watch_ignored, &GlobEx.match?(&1, path))
+    patterns =
+      if path in Map.get(state.config, :tailwind_dependencies, []),
+        do: state.explicit_ignored,
+        else: state.watch_ignored
+
+    Enum.any?(patterns, &GlobEx.match?(&1, path))
   end
 
   defp schedule_rebuild(state, path) do

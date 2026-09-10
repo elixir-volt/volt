@@ -26,7 +26,7 @@ defmodule Volt.DevServer.BasicTest do
 
       root = Path.join(@fixture_dir, "src")
       opts = Volt.DevServer.init(root: root, prefix: "/assets", watch: true)
-      key = {:watcher, :default, Path.expand(root)}
+      key = {:session, opts.session}
 
       assert [] = Registry.lookup(Volt.Dev.WatcherRegistry, key)
 
@@ -35,10 +35,8 @@ defmodule Volt.DevServer.BasicTest do
       assert [{pid, _}] = Registry.lookup(Volt.Dev.WatcherRegistry, key)
       assert Process.alive?(pid)
 
-      on_exit(fn ->
-        if Process.alive?(pid),
-          do: DynamicSupervisor.terminate_child(Volt.Dev.WatcherSupervisor, pid)
-      end)
+      assert %Volt.Dev.Session.Tables{} = Volt.Dev.tables(opts.session)
+      on_exit(fn -> Volt.Dev.stop(opts.session) end)
     end
 
     test "normalizes configured Tailwind root into watcher options" do

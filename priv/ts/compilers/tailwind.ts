@@ -76,77 +76,97 @@ const tailwindRuntimeSpec = Beam.callSync(
 ) as BeamModuleSpec
 const tailwindExports = requireResolvedModule(tailwindRuntimeSpec, new Map()) as TailwindCompiler
 
+const compilerContexts = new Map<number, Awaited<ReturnType<TailwindCompiler['compile']>>>()
+let nextCompilerContext = 0
+
 async function compileTailwindCss(
   inputCss: string | null,
   candidates: string[] | null,
   base: string | null,
   scan: { base: string; sources: Source[] } | null = null,
-  metadata = false
+  metadata = false,
+  retain = false
 ) {
   const dependencies = new Set<string>()
   const moduleCache = new Map<string, { exports: unknown }>()
   const rootBase = normalizeBase(base, TAILWIND_DEFAULT_BASE)
   const css = inputCss === null ? '@import "tailwindcss";' : inputCss
 
-  const compiler = await tailwindExports.compile(css, {
-    base: rootBase,
-    from: 'app.css',
-    loadStylesheet: async (id, currentBase) => {
-      if (id === 'tailwindcss') {
-        return {
-          path: path.join(TAILWIND_ROOT, 'index.css'),
-          base: rootBase,
-          content:
-            '@import "tailwindcss/theme.css" layer(theme);\n@import "tailwindcss/preflight.css" layer(base);\n@import "tailwindcss/utilities.css" layer(utilities);'
+  let compiler: Awaited<ReturnType<TailwindCompiler['compile']>>
+  try {
+    compiler = await tailwindExports.compile(css, {
+      base: rootBase,
+      from: 'app.css',
+      loadStylesheet: async (id, currentBase) => {
+        if (id === 'tailwindcss') {
+          return {
+            path: path.join(TAILWIND_ROOT, 'index.css'),
+            base: rootBase,
+            content:
+              '@import "tailwindcss/theme.css" layer(theme);\n@import "tailwindcss/preflight.css" layer(base);\n@import "tailwindcss/utilities.css" layer(utilities);'
+          }
         }
-      }
 
-      if (id === 'tailwindcss/theme.css') {
-        return {
-          path: themeCssPath,
-          base: rootBase,
-          content: tailwindExports.Features ? fs.readFileSync(themeCssPath, 'utf8') : ''
+        if (id === 'tailwindcss/theme.css') {
+          return {
+            path: themeCssPath,
+            base: rootBase,
+            content: tailwindExports.Features ? fs.readFileSync(themeCssPath, 'utf8') : ''
+          }
         }
-      }
 
-      if (id === 'tailwindcss/preflight.css') {
-        return {
-          path: preflightCssPath,
-          base: rootBase,
-          content: fs.readFileSync(preflightCssPath, 'utf8')
+        if (id === 'tailwindcss/preflight.css') {
+          return {
+            path: preflightCssPath,
+            base: rootBase,
+            content: fs.readFileSync(preflightCssPath, 'utf8')
+          }
         }
-      }
 
-      if (id === 'tailwindcss/utilities.css') {
-        return {
-          path: utilitiesCssPath,
-          base: rootBase,
-          content: fs.readFileSync(utilitiesCssPath, 'utf8')
+        if (id === 'tailwindcss/utilities.css') {
+          return {
+            path: utilitiesCssPath,
+            base: rootBase,
+            content: fs.readFileSync(utilitiesCssPath, 'utf8')
+          }
         }
+
+        const stylesheet = Beam.callSync(
+          'tailwind.load_stylesheet',
+          id,
+          normalizeBase(currentBase, rootBase),
+          rootBase
+        ) as
+          | { path: string; base: string; content: string }
+          | { error: string; candidates: string[] }
+        if ('error' in stylesheet) {
+          for (const candidate of stylesheet.candidates) dependencies.add(candidate)
+          throw new Error(stylesheet.error)
+        }
+        dependencies.add(stylesheet.path)
+        return stylesheet
+      },
+      loadModule: async (id, currentBase, type) => {
+        const spec = Beam.callSync(
+          'tailwind.load_module',
+          id,
+          normalizeBase(currentBase, rootBase),
+          type ?? 'plugin'
+        ) as BeamModuleSpec | { error: string; candidates: string[] }
+
+        if ('error' in spec) {
+          for (const candidate of spec.candidates) dependencies.add(candidate)
+          throw new Error(spec.error)
+        }
+        for (const dependency of spec.dependencies) dependencies.add(dependency)
+        const mod = requireResolvedModule(spec, moduleCache)
+        return { path: spec.path, module: unwrapModule(mod), base: spec.base }
       }
-
-      const stylesheet = Beam.callSync(
-        'tailwind.load_stylesheet',
-        id,
-        normalizeBase(currentBase, rootBase),
-        rootBase
-      ) as { path: string; base: string; content: string }
-      dependencies.add(stylesheet.path)
-      return stylesheet
-    },
-    loadModule: async (id, currentBase, type) => {
-      const spec = Beam.callSync(
-        'tailwind.load_module',
-        id,
-        normalizeBase(currentBase, rootBase),
-        type ?? 'plugin'
-      ) as BeamModuleSpec
-
-      for (const dependency of spec.dependencies) dependencies.add(dependency)
-      const mod = requireResolvedModule(spec, moduleCache)
-      return { path: spec.path, module: unwrapModule(mod), base: spec.base }
-    }
-  })
+    })
+  } catch (error) {
+    if (retain) return { error: String(error), dependencies: [...dependencies].sort() }
+    throw error
+  }
 
   if (scan) {
     let automatic: Source[] = []
@@ -160,6 +180,17 @@ async function compileTailwindCss(
       ...scan.sources,
       ...compiler.sources
     ]) as string[]
+  }
+  if (retain) {
+    const id = ++nextCompilerContext
+    compilerContexts.set(id, compiler)
+    return {
+      id,
+      code: '',
+      dependencies: [...dependencies].sort(),
+      sources: compiler.sources,
+      root: compiler.root
+    }
   }
   const code = compiler.build(candidates ?? [])
   return metadata
@@ -244,5 +275,21 @@ function loadCommonJSModule(
     throw error
   }
 }
+
+async function prepareTailwindContext(css: string | null, base: string) {
+  return compileTailwindCss(css, [], base, null, true, true)
+}
+function buildTailwindContext(id: number, candidates: string[]) {
+  const compiler = compilerContexts.get(id)
+  if (!compiler) throw new Error('Unknown Tailwind compiler context')
+  return compiler.build(candidates)
+}
+function releaseTailwindContext(id: number) {
+  return compilerContexts.delete(id)
+}
+
+globalThis.prepareTailwindContext = prepareTailwindContext
+globalThis.buildTailwindContext = buildTailwindContext
+globalThis.releaseTailwindContext = releaseTailwindContext
 
 globalThis.compileTailwindCss = compileTailwindCss

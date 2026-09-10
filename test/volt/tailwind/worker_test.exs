@@ -3,6 +3,57 @@ defmodule Volt.Tailwind.WorkerTest do
 
   @moduletag :tmp_dir
 
+  test "changed source directives reconstruct scanning without retaining old discovered roots", %{
+    tmp_dir: tmp
+  } do
+    key = {:test, make_ref()}
+    on_exit(fn -> Volt.Tailwind.Supervisor.release(key) end)
+    File.mkdir_p!(Path.join(tmp, "first"))
+    File.mkdir_p!(Path.join(tmp, "second"))
+    File.write!(Path.join(tmp, "first/page.html"), "<div class='flex'></div>")
+    File.write!(Path.join(tmp, "second/page.html"), "<div class='grid'></div>")
+    first_css = "@tailwind utilities source(none); @source './first/*.html';"
+    second_css = "@tailwind utilities source(none); @source './second/*.html';"
+
+    assert {:ok, first} =
+             Volt.Tailwind.build(key: key, css: first_css, css_base: tmp, sources: [])
+
+    assert first =~ ".flex"
+    assert {:ok, second} = Volt.Tailwind.rebuild([], key: key, css: second_css)
+    assert second =~ ".grid"
+    refute second =~ ".flex"
+    assert {:ok, rebuilt} = Volt.Tailwind.build(key: key, css: second_css, css_base: tmp)
+    refute rebuilt =~ ".flex"
+  end
+
+  test "recovers a dead context without new candidates and releases it on shutdown", %{
+    tmp_dir: tmp
+  } do
+    key = {:test, make_ref()}
+    on_exit(fn -> Volt.Tailwind.Supervisor.release(key) end)
+    File.write!(Path.join(tmp, "page.html"), "<div class='flex'></div>")
+
+    assert {:ok, first} =
+             Volt.Tailwind.build(
+               key: key,
+               css: "@tailwind utilities;",
+               sources: [%{base: tmp, pattern: "*.html"}]
+             )
+
+    [{worker, _}] = Registry.lookup(Volt.Tailwind.Registry, key)
+    old = :sys.get_state(worker).context
+    monitor = Process.monitor(old.runtime)
+    Process.exit(old.runtime, :kill)
+    assert_receive {:DOWN, ^monitor, :process, _, :killed}
+    assert :unchanged = Volt.Tailwind.rebuild([], key: key)
+    state = :sys.get_state(worker)
+    refute state.context.runtime == old.runtime
+    assert {:ok, ^first} = Volt.Tailwind.Worker.stylesheet(worker)
+    assert :ok = Volt.Tailwind.Supervisor.release(key)
+    assert {:error, _} = Volt.Tailwind.Runtime.build_context(state.context, [], state.runtime)
+    assert GenServer.whereis(state.runtime)
+  end
+
   test "candidate-only rebuild retains custom CSS and base directory", %{tmp_dir: tmp} do
     key = {:test, make_ref()}
     on_exit(fn -> Volt.Tailwind.Supervisor.release(key) end)

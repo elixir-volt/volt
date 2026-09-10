@@ -23,6 +23,7 @@ defmodule Mix.Tasks.Volt.Dev do
   """
   use Mix.Task
 
+  alias Volt.Dev
   alias Volt.Config
   alias Volt.Paths
 
@@ -58,8 +59,11 @@ defmodule Mix.Tasks.Volt.Dev do
       |> Volt.Config.Tailwind.new()
 
     tailwind? =
-      Keyword.get(parsed, :tailwind) ||
-        (Volt.Config.Tailwind.enabled?(tailwind_config) and Keyword.get(parsed, :tailwind, true))
+      Keyword.get(
+        parsed,
+        :tailwind,
+        not is_nil(parsed[:tailwind_css]) or Volt.Config.Tailwind.enabled?(tailwind_config)
+      )
 
     cli_watch_dirs = Keyword.get_values(parsed, :watch_dir)
     cli_reload_dirs = Keyword.get_values(parsed, :reload_dir)
@@ -87,11 +91,8 @@ defmodule Mix.Tasks.Volt.Dev do
 
     tailwind_css = tailwind_root.css
 
-    if tailwind? do
-      initial_build(tailwind_root, parsed, profile)
-    end
-
     opts = [
+      id: profile || :default,
       root: root,
       watch_dirs: watch_dirs,
       reload_dirs: reload_dirs,
@@ -102,11 +103,11 @@ defmodule Mix.Tasks.Volt.Dev do
       tailwind_name: tailwind_root.name,
       tailwind_sources: tailwind_root.sources,
       tailwind_url: tailwind_root.dev_url,
-      tailwind_outdir: Keyword.get(parsed, :tailwind_outdir, Paths.static_css()),
+      tailwind_sink: Keyword.get(parsed, :tailwind_outdir, Paths.static_css()),
       target: target
     ]
 
-    {:ok, _pid} = Volt.Watcher.start_link(opts)
+    {:ok, _pid} = Dev.start(opts)
 
     Mix.shell().info("[Volt] Watching #{opts[:root]}...")
 
@@ -123,32 +124,13 @@ defmodule Mix.Tasks.Volt.Dev do
     end
 
     unless iex_running?() do
-      Process.sleep(:infinity)
-    end
-  end
+      session = Dev.session_identity(opts)
 
-  defp initial_build(root, parsed, profile) do
-    css_input = if root.css, do: File.read!(root.css)
-    css_base = if root.css, do: Path.dirname(root.css), else: File.cwd!()
-    key = tailwind_key(profile, root)
-
-    case Volt.Tailwind.build(
-           key: key,
-           sources: root.sources,
-           css: css_input,
-           css_base: css_base
-         ) do
-      {:ok, css} ->
-        outdir = Keyword.get(parsed, :tailwind_outdir, Paths.static_css())
-        File.mkdir_p!(outdir)
-        File.write!(Path.join(outdir, "#{root.name}.css"), css)
-
-        Mix.shell().info(
-          "[Volt] Initial Tailwind build: #{Volt.Format.format_size(byte_size(css))}"
-        )
-
-      {:error, reason} ->
-        Mix.shell().error("[Volt] Tailwind build failed: #{inspect(reason)}")
+      try do
+        Process.sleep(:infinity)
+      after
+        Dev.stop(session)
+      end
     end
   end
 

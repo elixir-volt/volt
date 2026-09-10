@@ -13,6 +13,147 @@ defmodule Volt.WatcherTest do
   end
 
   @tag :tmp_dir
+  test "installing a missing package repairs session compilation", %{tmp_dir: root} do
+    assets = Path.join(root, "assets")
+    modules = Path.join(root, "node_modules")
+    File.mkdir_p!(assets)
+    File.mkdir_p!(modules)
+    css = Path.join(assets, "app.css")
+    File.write!(css, "@plugin 'missing-recovery-fixture';")
+
+    supervisor =
+      start_supervised!(
+        {Volt.Dev.Session.Supervisor,
+         identity: make_ref(),
+         watcher: [
+           root: assets,
+           name: nil,
+           tailwind: true,
+           tailwind_css: css,
+           tailwind_sources: []
+         ]}
+      )
+
+    {_, watcher, _, _} =
+      Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
+        id == Volt.Dev.Session.Watcher
+      end)
+
+    state = :sys.get_state(watcher)
+    package = Path.join(modules, "missing-recovery-fixture")
+    metadata = Path.join(package, "package.json")
+    assert metadata in state.config.tailwind_dependencies
+    File.mkdir_p!(package)
+    File.write!(metadata, ~s({"name":"missing-recovery-fixture","main":"index.js"}))
+
+    File.write!(
+      Path.join(package, "index.js"),
+      "module.exports = ({addBase}) => addBase({'.installed': {color: 'red'}})"
+    )
+
+    assert {:noreply, queued} =
+             Volt.Watcher.handle_info({:file_event, self(), {metadata, [:created]}}, state)
+
+    assert is_reference(queued.tailwind_timer)
+    Process.cancel_timer(queued.tailwind_timer)
+    assert {:noreply, _} = Volt.Watcher.handle_info(:tailwind_rebuild, queued)
+    assert {:ok, code} = Volt.Tailwind.Worker.stylesheet(state.tables.stylesheet_worker)
+    assert code =~ ".installed"
+  end
+
+  @tag :tmp_dir
+  test "missing plugin helper creation repairs session compilation", %{tmp_dir: root} do
+    assets = Path.join(root, "assets")
+    external = Path.join(root, "plugins")
+    File.mkdir_p!(assets)
+    File.mkdir_p!(external)
+    plugin = Path.join(external, "theme.cjs")
+    helper = Path.join(external, "helper.cjs")
+
+    File.write!(
+      plugin,
+      "const values = require('./helper.cjs'); module.exports = ({addBase}) => addBase(values)"
+    )
+
+    css = Path.join(assets, "app.css")
+    File.write!(css, "@plugin '../plugins/theme.cjs';")
+
+    supervisor =
+      start_supervised!(
+        {Volt.Dev.Session.Supervisor,
+         identity: make_ref(),
+         watcher: [
+           root: assets,
+           name: nil,
+           tailwind: true,
+           tailwind_css: css,
+           tailwind_sources: []
+         ]}
+      )
+
+    {_, watcher, _, _} =
+      Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
+        id == Volt.Dev.Session.Watcher
+      end)
+
+    state = :sys.get_state(watcher)
+    assert helper in state.config.tailwind_dependencies
+    assert external in state.tailwind_dirs
+    File.write!(helper, "module.exports = {'.repaired': {color: 'red'}}")
+
+    assert {:noreply, queued} =
+             Volt.Watcher.handle_info({:file_event, self(), {helper, [:created]}}, state)
+
+    Process.cancel_timer(queued.tailwind_timer)
+    assert queued.tailwind_full?
+    assert {:noreply, _} = Volt.Watcher.handle_info(:tailwind_rebuild, queued)
+    assert {:ok, code} = Volt.Tailwind.Worker.stylesheet(state.tables.stylesheet_worker)
+    assert code =~ ".repaired"
+  end
+
+  @tag :tmp_dir
+  test "missing external CSS creation repairs failed initial compilation", %{tmp_dir: root} do
+    assets = Path.join(root, "assets")
+    File.mkdir_p!(assets)
+    css = Path.join(assets, "app.css")
+    missing = Path.join(root, "external/theme.css")
+    File.write!(css, "@import '../external/theme.css';")
+
+    supervisor =
+      start_supervised!(
+        {Volt.Dev.Session.Supervisor,
+         identity: make_ref(),
+         watcher: [
+           root: assets,
+           name: nil,
+           tailwind: true,
+           tailwind_css: css,
+           tailwind_sources: []
+         ]}
+      )
+
+    {_, watcher, _, _} =
+      Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
+        id == Volt.Dev.Session.Watcher
+      end)
+
+    state = :sys.get_state(watcher)
+    assert missing in state.config.tailwind_dependencies
+    assert root in state.tailwind_dirs
+    File.mkdir_p!(Path.dirname(missing))
+    File.write!(missing, ".repaired { color: red }")
+
+    assert {:noreply, queued} =
+             Volt.Watcher.handle_info({:file_event, self(), {missing, [:created]}}, state)
+
+    Process.cancel_timer(queued.tailwind_timer)
+    assert queued.tailwind_full?
+    assert {:noreply, _} = Volt.Watcher.handle_info(:tailwind_rebuild, queued)
+    assert {:ok, code} = Volt.Tailwind.Worker.stylesheet(state.tables.stylesheet_worker)
+    assert code =~ ".repaired"
+  end
+
+  @tag :tmp_dir
   test "session observes compiler-discovered external stylesheet dependencies", %{tmp_dir: root} do
     assets = Path.join(root, "assets")
     external = Path.join(root, "external")
@@ -107,10 +248,19 @@ defmodule Volt.WatcherTest do
 
     assert {:noreply, pending} = Volt.Watcher.handle_info(:tailwind_rebuild, failed)
     assert pending.pending_reloads == [page]
+    assert pending.tailwind_full?
     assert_receive {:volt_hmr, :error, _}
     refute_received {:volt_hmr, :update, _}
     File.write!(css, "@tailwind utilities; .changed { color: red }")
-    recovered = %{pending | tailwind_full?: true, config: state.config}
+
+    assert {:noreply, recovered} =
+             Volt.Watcher.handle_info(
+               {:file_event, self(), {page, [:modified]}},
+               %{pending | config: state.config}
+             )
+
+    Process.cancel_timer(recovered.tailwind_timer)
+    assert recovered.tailwind_full?
     assert {:noreply, completed} = Volt.Watcher.handle_info(:tailwind_rebuild, recovered)
     assert completed.pending_reloads == []
     assert_receive {:volt_hmr, :update, %{changes: [:style]}}

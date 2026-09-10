@@ -14,6 +14,15 @@ defmodule Volt.Tailwind.Runtime do
     GenServer.call(server, {:compile, css, candidates, css_base}, :infinity)
   end
 
+  def prepare_context(css, base, server),
+    do: GenServer.call(server, {:prepare_context, css, base}, :infinity)
+
+  def build_context(context, candidates, server),
+    do: GenServer.call(server, {:build_context, context, candidates}, :infinity)
+
+  def release_context(context, server),
+    do: GenServer.call(server, {:release_context, context}, :infinity)
+
   @doc "Compile and return source/dependency metadata for development invalidation."
   def compile_metadata(css, candidates, css_base, server) do
     GenServer.call(server, {:compile_metadata, css, candidates, css_base}, :infinity)
@@ -41,27 +50,62 @@ defmodule Volt.Tailwind.Runtime do
   end
 
   @impl true
-  def handle_call({:compile_metadata, css, candidates, css_base}, _from, runtime) do
+  def handle_call({:prepare_context, css, base}, _from, runtime) do
     runtime = if runtime && Process.alive?(runtime.pid), do: runtime, else: start_runtime()
 
-    case Volt.JS.Runtime.call(runtime, "compileTailwindCss", [
-           css,
-           candidates,
-           css_base,
-           nil,
-           true
-         ]) do
-      {:ok, result} -> {:reply, {:ok, Volt.Tailwind.Metadata.decode(result)}, runtime}
-      {:error, _} = error -> {:reply, error, runtime}
+    case invoke(runtime, "prepareTailwindContext", [css, base]) do
+      {:ok, %{"error" => message, "dependencies" => dependencies}} ->
+        {:reply,
+         {:error, %Volt.Tailwind.CompileError{message: message, dependencies: dependencies}},
+         runtime}
+
+      {:ok, %{"id" => id} = metadata} ->
+        {:reply,
+         {:ok, %Volt.Tailwind.Context{runtime: runtime.pid, id: id},
+          Volt.Tailwind.Metadata.decode(metadata)}, runtime}
+
+      error ->
+        {:reply, error, runtime}
     end
   end
 
+  def handle_call(
+        {:build_context, %Volt.Tailwind.Context{} = context, candidates},
+        _from,
+        runtime
+      ) do
+    if runtime && runtime.pid == context.runtime && Process.alive?(runtime.pid) do
+      {:reply, invoke(runtime, "buildTailwindContext", [context.id, candidates]), runtime}
+    else
+      {:reply, {:error, :stale_compiler_context}, runtime}
+    end
+  end
+
+  def handle_call({:release_context, context}, _from, runtime) do
+    if runtime && runtime.pid == context.runtime && Process.alive?(runtime.pid) do
+      invoke(runtime, "releaseTailwindContext", [context.id])
+    end
+
+    {:reply, :ok, runtime}
+  end
+
+  def handle_call({:compile_metadata, css, candidates, css_base}, _from, runtime) do
+    execute(runtime, [css, candidates, css_base, nil, true], fn
+      {:ok, result} -> {:ok, Volt.Tailwind.Metadata.decode(result)}
+      {:error, _} = error -> error
+    end)
+  end
+
   def handle_call({:compile, css, candidates, css_base}, _from, runtime) do
+    execute(runtime, [css, candidates, css_base], &normalize_result/1)
+  end
+
+  defp execute(runtime, args, decode) do
     runtime = if runtime && Process.alive?(runtime.pid), do: runtime, else: start_runtime()
 
     try do
-      result = Volt.JS.Runtime.call(runtime, "compileTailwindCss", [css, candidates, css_base])
-      {:reply, normalize_result(result), runtime}
+      result = Volt.JS.Runtime.call(runtime, "compileTailwindCss", args)
+      {:reply, decode.(result), runtime}
     catch
       :exit, reason ->
         if Process.alive?(runtime.pid), do: Volt.JS.Runtime.stop(runtime)
@@ -79,6 +123,12 @@ defmodule Volt.Tailwind.Runtime do
   def terminate(_reason, runtime) do
     if Process.alive?(runtime.pid), do: Volt.JS.Runtime.stop(runtime)
     :ok
+  end
+
+  defp invoke(runtime, function, args) do
+    Volt.JS.Runtime.call(runtime, function, args)
+  catch
+    :exit, reason -> {:error, {:compiler_exit, reason}}
   end
 
   defp start_runtime do

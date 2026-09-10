@@ -53,10 +53,13 @@ defmodule Volt.Tailwind.Resolver do
   defp resolve_bare_path!(id, base, extensions, index_files, kind, runtime_node_modules) do
     {package_name, subpath} = NPM.Resolution.PackageResolver.split_specifier(id)
 
-    resolved =
+    search_dirs =
       ([find_node_modules_for(base), runtime_node_modules] ++ phoenix_tailwind_search_dirs())
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
+
+    resolved =
+      search_dirs
       |> Enum.find_value(fn node_modules ->
         package_dir = Path.join(node_modules, package_name)
 
@@ -80,7 +83,26 @@ defmodule Volt.Tailwind.Resolver do
         Path.expand(path)
 
       nil ->
-        raise "Could not resolve #{kind} #{inspect(id)} from #{inspect(base)}. Add it to node_modules or the Tailwind runtime install."
+        candidates =
+          Enum.flat_map(search_dirs, fn directory ->
+            package = Path.join(directory, package_name)
+
+            target =
+              Path.join(
+                package,
+                if(subpath, do: String.trim_leading(subpath, "./"), else: "index")
+              )
+
+            [
+              Path.join(package, "package.json")
+              | Enum.map(extensions ++ index_files, &(target <> &1))
+            ]
+          end)
+
+        raise Volt.Tailwind.ResolveError,
+          message:
+            "Could not resolve #{kind} #{inspect(id)} from #{inspect(base)}. Add it to node_modules or the Tailwind runtime install.",
+          candidates: candidates
     end
   end
 
@@ -120,7 +142,10 @@ defmodule Volt.Tailwind.Resolver do
         Path.expand(path)
 
       {:error, reason} ->
-        raise "Could not resolve file #{inspect(id)} from #{inspect(base)}: #{inspect(reason)}"
+        raise Volt.Tailwind.ResolveError,
+          message:
+            "Could not resolve file #{inspect(id)} from #{inspect(base)}: #{inspect(reason)}",
+          candidates: Enum.map(extensions ++ index_files, &(target <> &1))
     end
   end
 

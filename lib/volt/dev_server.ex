@@ -60,6 +60,17 @@ defmodule Volt.DevServer do
 
     prebundle_vendor(expanded_root, node_modules, plugins, config.resolve_dirs, module_types)
 
+    session =
+      if server_config.watch do
+        Volt.Dev.session_identity(
+          root: expanded_root,
+          id: profile || :default,
+          session: Keyword.get(opts, :session, :default)
+        )
+      else
+        Keyword.get(opts, :session, :default)
+      end
+
     watcher_opts =
       if server_config.watch and is_nil(Keyword.get(opts, :session_supervisor)) do
         watch_dirs =
@@ -71,7 +82,7 @@ defmodule Volt.DevServer do
 
         [
           id: profile || :default,
-          session: Keyword.get(opts, :session, :default),
+          session: session,
           root: expanded_root,
           watch_dirs: watch_dirs,
           reload_dirs: server_config.reload_dirs,
@@ -116,7 +127,7 @@ defmodule Volt.DevServer do
       stylesheet_source: tailwind_root && tailwind_root.css,
       session_supervisor: Keyword.get(opts, :session_supervisor),
       tables: Keyword.get(opts, :tables),
-      session: Keyword.get(opts, :session, :default),
+      session: session,
       watcher_opts: watcher_opts
     }
   end

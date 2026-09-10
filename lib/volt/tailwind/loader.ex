@@ -25,12 +25,19 @@ defmodule Volt.Tailwind.Loader do
         |> Oxide.scan()
       end,
       "tailwind.load_stylesheet" => fn [id, base, output_base] ->
-        load_stylesheet(id, base, output_base, runtime_node_modules)
+        capture_resolution(fn -> load_stylesheet(id, base, output_base, runtime_node_modules) end)
       end,
       "tailwind.load_module" => fn [id, base, kind] ->
-        load_module(id, base, kind, runtime_node_modules)
+        capture_resolution(fn -> load_module(id, base, kind, runtime_node_modules) end)
       end
     }
+  end
+
+  defp capture_resolution(load) do
+    load.()
+  rescue
+    error in Volt.Tailwind.ResolveError ->
+      %{error: Exception.message(error), candidates: error.candidates}
   end
 
   defp load_stylesheet(id, base, output_base, runtime_node_modules) do

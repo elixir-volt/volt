@@ -33,44 +33,85 @@ defmodule Volt.Tailwind.RuntimeTest do
     assert metadata.code =~ ".custom"
   end
 
-  test "compiler death during a call returns an error and permits recovery" do
-    session = make_ref()
-    wrapper = Volt.Tailwind.Supervisor.runtime({:session, session, :css})
-    on_exit(fn -> Volt.Tailwind.Supervisor.release_runtime(session) end)
-    parent = self()
+  for operation <- [:call, :compile_metadata] do
+    @tag operation: operation
+    test "compiler death during #{operation} returns an error and permits recovery", %{
+      operation: operation
+    } do
+      session = make_ref()
+      wrapper = Volt.Tailwind.Supervisor.runtime({:session, session, :css})
+      on_exit(fn -> Volt.Tailwind.Supervisor.release_runtime(session) end)
+      parent = self()
 
-    {:ok, compiler} =
-      QuickBEAM.start(
-        handlers: %{
-          "blocked" => fn [] ->
-            send(parent, {:compiler_blocked, self()})
+      {:ok, compiler} =
+        QuickBEAM.start(
+          handlers: %{
+            "blocked" => fn [] ->
+              send(parent, {:compiler_blocked, self()})
 
-            receive do
-              :release -> :ok
+              receive do
+                :release -> :ok
+              end
             end
-          end
-        }
-      )
+          }
+        )
 
-    # Install a controlled runtime in the wrapper to exercise the real call/exit path.
-    :sys.replace_state(wrapper, fn _ -> %Volt.JS.Runtime{pid: compiler} end)
-    Process.unlink(compiler)
-    on_exit(fn -> if Process.alive?(compiler), do: QuickBEAM.stop(compiler) end)
+      # Install a controlled runtime in the wrapper to exercise the real call/exit path.
+      :sys.replace_state(wrapper, fn _ -> %Volt.JS.Runtime{pid: compiler} end)
+      Process.unlink(compiler)
+      on_exit(fn -> if Process.alive?(compiler), do: QuickBEAM.stop(compiler) end)
 
-    {:ok, _} =
-      QuickBEAM.eval(compiler, "globalThis.compileTailwindCss = () => Beam.call('blocked')")
+      {:ok, _} =
+        QuickBEAM.eval(compiler, "globalThis.compileTailwindCss = () => Beam.call('blocked')")
 
-    task = Task.async(fn -> Volt.Tailwind.Runtime.call("", [], File.cwd!(), wrapper) end)
-    assert_receive {:compiler_blocked, handler}
-    Process.exit(compiler, :kill)
-    send(handler, :release)
-    assert {:error, {:compiler_exit, _}} = Task.await(task)
-    assert Process.alive?(wrapper)
+      task =
+        Task.async(fn ->
+          apply(Volt.Tailwind.Runtime, operation, ["", [], File.cwd!(), wrapper])
+        end)
 
-    assert {:ok, css} =
-             Volt.Tailwind.Runtime.call("@tailwind utilities;", ["flex"], File.cwd!(), wrapper)
+      assert_receive {:compiler_blocked, handler}
+      Process.exit(compiler, :kill)
+      send(handler, :release)
+      assert {:error, {:compiler_exit, _}} = Task.await(task)
+      assert Process.alive?(wrapper)
 
-    assert css =~ ".flex"
+      assert {:ok, css} =
+               Volt.Tailwind.Runtime.call("@tailwind utilities;", ["flex"], File.cwd!(), wrapper)
+
+      assert css =~ ".flex"
+    end
+  end
+
+  test "retained contexts reuse the compiler and reject a different runtime generation" do
+    session = make_ref()
+    runtime = Volt.Tailwind.Supervisor.runtime({:session, session, :css})
+    on_exit(fn -> Volt.Tailwind.Supervisor.release_runtime(session) end)
+
+    assert {:ok, context, metadata} =
+             Volt.Tailwind.Runtime.prepare_context("@tailwind utilities;", File.cwd!(), runtime)
+
+    assert metadata.code == ""
+    assert {:ok, first} = Volt.Tailwind.Runtime.build_context(context, ["flex"], runtime)
+    assert first =~ ".flex"
+    assert {:ok, second} = Volt.Tailwind.Runtime.build_context(context, ["grid"], runtime)
+    assert second =~ ".flex"
+    assert second =~ ".grid"
+    monitor = Process.monitor(context.runtime)
+    Process.exit(context.runtime, :kill)
+    assert_receive {:DOWN, ^monitor, :process, _, :killed}
+
+    assert {:error, :stale_compiler_context} =
+             Volt.Tailwind.Runtime.build_context(context, ["hidden"], runtime)
+
+    assert {:ok, replacement, _} =
+             Volt.Tailwind.Runtime.prepare_context("@tailwind utilities;", File.cwd!(), runtime)
+
+    refute replacement.runtime == context.runtime
+    assert {:ok, fresh} = Volt.Tailwind.Runtime.build_context(replacement, ["hidden"], runtime)
+    assert fresh =~ ".hidden"
+    refute fresh =~ ".flex"
+    assert :ok = Volt.Tailwind.Runtime.release_context(replacement, runtime)
+    assert {:error, _} = Volt.Tailwind.Runtime.build_context(replacement, [], runtime)
   end
 
   test "session runtimes isolate compiler death and recover on the next call" do

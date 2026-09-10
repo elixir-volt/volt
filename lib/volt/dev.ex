@@ -34,12 +34,10 @@ defmodule Volt.Dev do
 
   @doc "Start or reuse a managed watcher, rejecting conflicting configuration."
   def start(opts) do
-    {id, opts} = Keyword.pop(opts, :id, :default)
-
-    session = Keyword.get(opts, :session, :default)
+    session = session_identity(opts)
     root = opts |> Keyword.fetch!(:root) |> Path.expand()
-    key = if session == :default, do: {:watcher, id, root}, else: {:session, session}
-    opts = normalize_options(opts, root)
+    key = {:session, session}
+    opts = normalize_options(Keyword.put(opts, :session, session), root)
 
     :global.trans({{__MODULE__, key}, self()}, fn -> start_watcher(key, opts) end, [node()])
   end
@@ -70,23 +68,14 @@ defmodule Volt.Dev do
     end
   end
 
-  defp start_watcher(key, opts) do
-    name = {:via, Registry, {@registry, key}}
+  @doc "Normalize omitted session identity from profile and asset root."
+  def session_identity(opts) do
+    case Keyword.get(opts, :session, :default) do
+      :default ->
+        {:managed, Keyword.get(opts, :id, :default), Path.expand(Keyword.fetch!(opts, :root))}
 
-    case Registry.lookup(@registry, key) do
-      [{pid, _}] ->
-        verify_configuration(pid, opts)
-
-      [] ->
-        opts = Keyword.put(opts, :name, name)
-
-        opts = Keyword.put(opts, :managed_key, key)
-        spec = Supervisor.child_spec({Volt.Watcher, opts}, restart: :transient)
-
-        case DynamicSupervisor.start_child(@supervisor, spec) do
-          {:error, {:already_started, pid}} -> verify_configuration(pid, opts)
-          result -> result
-        end
+      session ->
+        session
     end
   end
 
@@ -141,6 +130,7 @@ defmodule Volt.Dev do
 
   defp normalize_options(opts, root) do
     opts
+    |> Keyword.delete(:id)
     |> Keyword.put(:root, root)
     |> Keyword.put_new(:session, :default)
     |> Keyword.update(:watch_dirs, [], &Enum.map(&1, fn path -> Path.expand(path) end))

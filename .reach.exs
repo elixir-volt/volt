@@ -72,6 +72,9 @@ model = [
   "Volt.MIME",
   "Volt.Paths",
   "Volt.Pipeline.Result.Hashes",
+  "Volt.Tailwind.CompileError",
+  "Volt.Tailwind.ResolveError",
+  "Volt.Tailwind.Context",
   "Volt.Tailwind.Metadata",
   "Volt.Tailwind.State",
   "Volt.Tailwind.Compilation"
