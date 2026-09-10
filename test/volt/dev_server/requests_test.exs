@@ -2,6 +2,43 @@ defmodule Volt.DevServer.RequestsTest do
   use Volt.TestSupport.DevServerCase
 
   @tag :tmp_dir
+  test "Plug attaches to a CLI-owned session and serves current CSS ahead of a stale sink", %{
+    tmp_dir: root
+  } do
+    css = Path.join(root, "app.css")
+    File.write!(css, ".current { color: red }")
+    sink = Path.join(root, "static")
+
+    opts = [
+      root: root,
+      tailwind: true,
+      tailwind_css: css,
+      tailwind_name: "site",
+      tailwind_sources: [],
+      tailwind_sink: sink
+    ]
+
+    session = Volt.Dev.session_identity(opts)
+    on_exit(fn -> Volt.Dev.stop(session) end)
+    assert {:ok, watcher} = Volt.Dev.start(opts)
+
+    config = %{
+      Volt.DevServer.init(root: root, watch: false, session: session)
+      | stylesheet_url: "/assets/site.css",
+        stylesheet_source: css
+    }
+
+    assert config.watcher_opts == nil
+    assert File.regular?(Path.join(sink, "site.css"))
+    File.write!(Path.join(sink, "site.css"), "stale disk output")
+    conn = Plug.Test.conn(:get, "/assets/site.css") |> Volt.DevServer.call(config)
+    assert conn.status == 200
+    assert conn.resp_body =~ ".current"
+    refute conn.resp_body =~ "stale disk"
+    assert {:ok, ^watcher} = Volt.Dev.start(opts)
+  end
+
+  @tag :tmp_dir
   test "session CSS links to served nested assets without rewriting stored CSS", %{tmp_dir: root} do
     session = make_ref()
     File.mkdir_p!(Path.join(root, "css/nested"))

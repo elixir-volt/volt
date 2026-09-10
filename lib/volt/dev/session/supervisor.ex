@@ -9,7 +9,9 @@ defmodule Volt.Dev.Session.Supervisor do
   end
 
   @doc "Read the current generation from a running session subtree."
-  def tables(supervisor) do
+  def tables(supervisor), do: Volt.Dev.Session.Call.run(fn -> read_tables(supervisor) end)
+
+  defp read_tables(supervisor) do
     case Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
            id == Volt.Dev.Session.State
          end) do
@@ -19,7 +21,9 @@ defmodule Volt.Dev.Session.Supervisor do
   end
 
   @doc "Read the session's last successful stylesheet."
-  def stylesheet(supervisor) do
+  def stylesheet(supervisor), do: Volt.Dev.Session.Call.run(fn -> read_stylesheet(supervisor) end)
+
+  defp read_stylesheet(supervisor) do
     case Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
            id == Volt.Tailwind.Worker
          end) do

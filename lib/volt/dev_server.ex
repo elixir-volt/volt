@@ -167,6 +167,16 @@ defmodule Volt.DevServer do
     end
   end
 
+  def call(conn, %{session: session, tables: nil} = config) when session != :default do
+    case Volt.Dev.tables(session) do
+      %Volt.Dev.Session.Tables{} = tables ->
+        call_generation(conn, config, tables)
+
+      {:error, _} ->
+        conn |> Conn.send_resp(503, "Development session is unavailable") |> Conn.halt()
+    end
+  end
+
   def call(conn, %{tables: %Volt.Dev.Session.Tables{} = tables} = config) do
     call_generation(conn, config, tables)
   end

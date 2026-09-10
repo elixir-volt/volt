@@ -138,6 +138,7 @@ infrastructure = [
   "Volt.Cache",
   "Volt.Dev",
   "Volt.Dev.State",
+  "Volt.Dev.Session.Call",
   "Volt.Dev.Session.State",
   "Volt.Dev.Session.Supervisor",
   "Volt.Dev.ConsoleForwarder",

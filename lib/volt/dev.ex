@@ -39,7 +39,13 @@ defmodule Volt.Dev do
     key = {:session, session}
     opts = normalize_options(Keyword.put(opts, :session, session), root)
 
-    :global.trans({{__MODULE__, key}, self()}, fn -> start_watcher(key, opts) end, [node()])
+    :global.trans(
+      {{__MODULE__, key}, self()},
+      fn ->
+        Volt.Dev.Session.Call.run(fn -> start_watcher(key, opts) end)
+      end,
+      [node()]
+    )
   end
 
   defp start_watcher({:session, session} = key, opts) do

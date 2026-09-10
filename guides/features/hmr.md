@@ -2,6 +2,25 @@
 
 The file watcher monitors your asset and template directories and pushes updates to the browser over a WebSocket.
 
+## Managed session ownership
+
+Choose one watcher owner. A watched `Volt.DevServer` starts a managed session;
+`mix volt.dev` also owns a managed session and preserves its file-backed CSS sink.
+Do not enable automatic Plug watching alongside a CLI watcher with different options.
+To attach a Plug to a CLI-owned session, use `watch: false` and the matching identity:
+
+```elixir
+session = Volt.Dev.session_identity(root: "assets", id: :default)
+plug Volt.DevServer, root: "assets", watch: false, session: session
+```
+
+Use the named profile as `id` when the CLI runs with a profile. Session identity is
+independent of stylesheet URL. Put Volt's development Plug **before `Plug.Static`**
+for its owned asset URLs; an earlier static plug can halt with stale generated CSS.
+Configure the same Tailwind input/URL for the host and CLI. Conflicting managed
+start configurations are rejected rather than merged. Requests encountering a
+session disappearing during lookup return a retryable 503.
+
 ## What Gets Updated
 
 | File type | Action |
