@@ -2,6 +2,24 @@ defmodule Volt.DevTest do
   use ExUnit.Case, async: false
 
   @tag :tmp_dir
+  test "cached asset requests do not wait for the watcher to finish rebuilding", %{tmp_dir: root} do
+    File.write!(Path.join(root, "app.js"), "export default 1")
+    config = Volt.DevServer.init(root: root, watch: true)
+    request = fn -> Plug.Test.conn(:get, "/assets/app.js") |> Volt.DevServer.call(config) end
+    assert request.().status == 200
+    assert {:ok, watcher} = Volt.Dev.start(config.watcher_opts)
+    :sys.suspend(watcher)
+
+    try do
+      task = Task.async(request)
+      assert Task.await(task, 1_000).status == 200
+    after
+      :sys.resume(watcher)
+      Volt.Dev.stop(config.session)
+    end
+  end
+
+  @tag :tmp_dir
   test "explicit compatibility sink is written by the session-owned worker", %{tmp_dir: root} do
     source = Path.join(root, "app.css")
     File.write!(source, ".sink { color: red }")

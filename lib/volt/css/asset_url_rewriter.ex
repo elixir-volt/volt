@@ -75,12 +75,13 @@ defmodule Volt.CSS.AssetURLRewriter do
 
   @doc "Rewrite relative CSS asset URLs to dev-server URLs without copying files."
   @spec rewrite_dev(String.t(), String.t() | nil, String.t(), String.t()) :: rewrite_result()
-  def rewrite_dev(css, nil, _root, _prefix), do: {:ok, css}
+  def rewrite_dev(css, source_path, root, prefix, opts \\ [])
+  def rewrite_dev(css, nil, _root, _prefix, _opts), do: {:ok, css}
 
-  def rewrite_dev(css, source_path, root, prefix) do
+  def rewrite_dev(css, source_path, root, prefix, opts) do
     with {:ok, css} <-
            Vize.CSS.rewrite_urls(css, [filename: source_path], fn url ->
-             case dev_url(url, source_path, root, prefix) do
+             case dev_url(url, source_path, root, prefix, opts) do
                {:ok, ^url} -> :keep
                {:ok, rewritten} -> {:rewrite, rewritten}
              end
@@ -118,15 +119,23 @@ defmodule Volt.CSS.AssetURLRewriter do
     end
   end
 
-  defp dev_url(url, source_path, root, prefix) do
+  defp dev_url(url, source_path, root, prefix, opts) do
     if rewrite_candidate?(url) do
       uri = URI.parse(url)
       asset_path = Path.expand(uri.path || "", Path.dirname(source_path))
 
-      if Volt.Assets.asset?(asset_path) and File.regular?(asset_path) and
-           Volt.Path.inside?(asset_path, root) do
-        relative = Path.relative_to(asset_path, root)
-        {:ok, append_suffix(Volt.URL.join(prefix, relative), uri)}
+      if Volt.Assets.asset?(asset_path) and File.regular?(asset_path) do
+        cond do
+          Volt.Path.inside?(asset_path, root) ->
+            relative = Path.relative_to(asset_path, root)
+            {:ok, append_suffix(Volt.URL.join(prefix, relative), uri)}
+
+          grant = Keyword.get(opts, :grant_asset) ->
+            {:ok, append_suffix(grant.(asset_path), uri)}
+
+          true ->
+            {:ok, url}
+        end
       else
         {:ok, url}
       end

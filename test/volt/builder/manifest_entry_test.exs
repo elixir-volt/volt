@@ -3,6 +3,17 @@ defmodule Volt.Builder.ManifestEntryTest do
 
   alias Volt.Builder.ManifestEntry
 
+  test "stylesheet traversal is dependency-first, deduplicated, and cycle-safe" do
+    manifest = %{
+      "app" => %ManifestEntry{imports: ["a", "b"], css: ["app.css"], dynamicImports: ["lazy"]},
+      "a" => %ManifestEntry{imports: ["b"], css: ["a.css"]},
+      "b" => %ManifestEntry{imports: ["a"], css: ["shared.css", "a.css"]},
+      "lazy" => %ManifestEntry{css: ["lazy.css"]}
+    }
+
+    assert ManifestEntry.stylesheets(manifest, "app") == ["shared.css", "a.css", "app.css"]
+  end
+
   test "output prefixes do not alter manifest references or source identity" do
     entry = %ManifestEntry{
       src: "src/app.ts",

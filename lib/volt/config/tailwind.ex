@@ -16,11 +16,15 @@ defmodule Volt.Config.Tailwind do
           dev_url: String.t()
         }
 
-  @spec enabled?(keyword() | nil) :: boolean()
+  @spec enabled?(keyword() | boolean() | nil) :: boolean()
+  def enabled?(true), do: true
   def enabled?(config), do: is_list(config) and config != []
 
-  @spec new(keyword(), keyword()) :: t()
-  def new(config, overrides \\ []) do
+  @spec new(keyword() | boolean() | nil, keyword()) :: t()
+  def new(config, overrides \\ [])
+  def new(config, overrides) when config in [nil, false, true], do: new([], overrides)
+
+  def new(config, overrides) when is_list(config) do
     css = overrides[:css] || config[:css]
     name = overrides[:name] || config[:name] || entry_name(css)
 

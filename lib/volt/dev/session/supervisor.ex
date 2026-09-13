@@ -46,16 +46,14 @@ defmodule Volt.Dev.Session.Supervisor do
           worker_name = {:via, Registry, {Volt.Dev.WatcherRegistry, {:stylesheet, identity}}}
 
           [
-            {Volt.Dev.Session.State, name: owner_name},
+            {Volt.Dev.Session.State,
+             name: owner_name,
+             configuration: watcher_opts |> Keyword.drop([:name, :managed_key]) |> Map.new()},
             {Volt.Tailwind.Runtime, name: runtime_name},
             {Volt.Tailwind.Worker,
              name: worker_name, key: {:session, identity}, runtime: runtime_name},
             {Volt.Dev.Session.Watcher,
              watcher_opts
-             |> Keyword.put(
-               :configuration_signature,
-               watcher_opts |> Keyword.delete(:name) |> Map.new()
-             )
              |> Keyword.put(:tailwind_outdir, Keyword.get(watcher_opts, :tailwind_sink))
              |> Keyword.put(:state_owner, owner_name)
              |> Keyword.put(:tailwind_worker, worker_name)

@@ -6,15 +6,6 @@ defmodule Volt.Dev.Session.Watcher do
     worker = GenServer.whereis(Keyword.fetch!(opts, :tailwind_worker))
     tables = Volt.Dev.Session.State.attach_stylesheet(state_owner, worker)
 
-    opts =
-      Keyword.put_new(
-        opts,
-        :configuration_signature,
-        opts
-        |> Keyword.drop([:name, :state_owner, :tailwind_worker, :tailwind_runtime])
-        |> Map.new()
-      )
-
     Volt.Watcher.start_link(Keyword.put(opts, :tables, tables))
   end
 

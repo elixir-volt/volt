@@ -45,6 +45,24 @@ defmodule Volt.Builder.ManifestEntry do
     }
   end
 
+  @doc "Collect an entry's static stylesheet dependencies, dependencies first and deduplicated."
+  @spec stylesheets(%{String.t() => t()}, String.t()) :: [String.t()]
+  def stylesheets(manifest, key) do
+    {_seen, files} = collect_stylesheets(manifest, key, {MapSet.new(), []})
+    files |> Enum.reverse() |> Enum.uniq()
+  end
+
+  defp collect_stylesheets(manifest, key, {seen, files} = acc) do
+    if MapSet.member?(seen, key) do
+      acc
+    else
+      %__MODULE__{} = entry = Map.fetch!(manifest, key)
+      acc = {MapSet.put(seen, key), files}
+      {seen, files} = Enum.reduce(entry.imports, acc, &collect_stylesheets(manifest, &1, &2))
+      {seen, Enum.reduce(entry.css, files, &[&1 | &2])}
+    end
+  end
+
   defp prefix_path(nil, _prefix), do: nil
   defp prefix_path(path, prefix), do: Path.join(prefix, path)
 end

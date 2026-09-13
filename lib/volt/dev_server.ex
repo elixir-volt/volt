@@ -192,7 +192,14 @@ defmodule Volt.DevServer do
     error in ArgumentError ->
       case __STACKTRACE__ do
         [{:ets, _operation, [table | _], _} | _]
-        when table in [tables.cache, tables.imports, tables.globs, tables.styles, tables.modules] ->
+        when table in [
+               tables.cache,
+               tables.imports,
+               tables.globs,
+               tables.styles,
+               tables.modules,
+               tables.assets
+             ] ->
           if :ets.info(table) == :undefined do
             conn
             |> Conn.send_resp(503, "Development session restarted; retry the request")
@@ -217,7 +224,8 @@ defmodule Volt.DevServer do
           css,
           config.stylesheet_source,
           config.root,
-          config.prefix
+          config.prefix,
+          grant_asset: &Volt.Dev.Assets.register(&1, config.tables)
         )
       end
 
@@ -231,6 +239,28 @@ defmodule Volt.DevServer do
 
       {:error, _} ->
         conn |> Conn.send_resp(503, "Stylesheet is not ready") |> Conn.halt()
+    end
+  end
+
+  defp do_call(%Conn{request_path: "/@volt/assets/" <> id, method: method} = conn, config)
+       when method in ["GET", "HEAD"] do
+    case Volt.Dev.Assets.fetch(id, config.tables || config.session) do
+      {:ok, path} ->
+        if File.regular?(path) do
+          if method == "HEAD" do
+            conn
+            |> Conn.put_resp_content_type(Volt.Assets.mime_type(path))
+            |> Conn.send_resp(200, "")
+            |> Conn.halt()
+          else
+            serve_public(conn, path)
+          end
+        else
+          conn |> Conn.send_resp(404, "Asset not found") |> Conn.halt()
+        end
+
+      :error ->
+        conn |> Conn.send_resp(404, "Asset not registered for this session") |> Conn.halt()
     end
   end
 
@@ -670,14 +700,18 @@ defmodule Volt.DevServer do
   defp cache_key_for(file_path, false), do: file_path
 
   defp rewrite_dev_css_urls(%{type: :css, code: code} = result, file_path, config) do
-    case Volt.CSS.AssetURLRewriter.rewrite_dev(code, file_path, config.root, config.prefix) do
+    case Volt.CSS.AssetURLRewriter.rewrite_dev(code, file_path, config.root, config.prefix,
+           grant_asset: &Volt.Dev.Assets.register(&1, config.tables || config.session)
+         ) do
       {:ok, code} -> %{result | code: code}
       {:error, _} -> result
     end
   end
 
   defp rewrite_dev_css_urls(%{css: css} = result, file_path, config) when is_binary(css) do
-    case Volt.CSS.AssetURLRewriter.rewrite_dev(css, file_path, config.root, config.prefix) do
+    case Volt.CSS.AssetURLRewriter.rewrite_dev(css, file_path, config.root, config.prefix,
+           grant_asset: &Volt.Dev.Assets.register(&1, config.tables || config.session)
+         ) do
       {:ok, css} -> %{result | css: css}
       {:error, _} -> result
     end

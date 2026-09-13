@@ -47,7 +47,6 @@ defmodule Volt.Watcher do
   defstruct [
     :root,
     :config,
-    :configuration_signature,
     :owner_monitor,
     :managed_key,
     :tables,
@@ -153,12 +152,6 @@ defmodule Volt.Watcher do
       owner_monitor: owner_monitor,
       tables: Keyword.get(opts, :tables),
       managed_key: Keyword.get(opts, :managed_key),
-      configuration_signature:
-        Keyword.get(
-          opts,
-          :configuration_signature,
-          opts |> Keyword.drop([:name, :managed_key]) |> Map.new()
-        ),
       session: Keyword.get(opts, :session, :default),
       fs_pids: fs_pids,
       config: config,
@@ -236,11 +229,6 @@ defmodule Volt.Watcher do
   defp existing_watch_parent(path) do
     parent = Path.dirname(path)
     if File.dir?(path) or parent == path, do: path, else: existing_watch_parent(parent)
-  end
-
-  @impl true
-  def handle_call({:configuration_matches, signature}, _from, state) do
-    {:reply, state.configuration_signature == signature, state}
   end
 
   defp watcher_sources(dirs), do: Enum.map(dirs, &%{base: &1, pattern: "**/*"})

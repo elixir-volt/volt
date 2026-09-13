@@ -89,7 +89,7 @@ defmodule Volt.Dev do
     case Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
            id == Volt.Dev.Session.Watcher
          end) do
-      {_, pid, _, _} when is_pid(pid) -> verify_configuration(pid, opts)
+      {_, pid, _, _} when is_pid(pid) -> verify_configuration(supervisor, pid, opts)
       _ -> {:error, :session_restarting}
     end
   end
@@ -143,12 +143,14 @@ defmodule Volt.Dev do
     |> Keyword.update(:reload_dirs, [], &Enum.map(&1, fn path -> Path.expand(path) end))
   end
 
-  defp verify_configuration(pid, opts) do
+  defp verify_configuration(supervisor, pid, opts) do
     signature = opts |> Keyword.drop([:name, :managed_key]) |> Map.new()
 
-    if GenServer.call(pid, {:configuration_matches, signature}),
-      do: {:ok, pid},
-      else: {:error, :session_configuration_conflict}
+    with %Volt.Dev.Session.Tables{} = tables <- Volt.Dev.Session.Supervisor.tables(supervisor) do
+      if Volt.Dev.Session.State.configuration_matches?(tables.owner, signature),
+        do: {:ok, pid},
+        else: {:error, :session_configuration_conflict}
+    end
   end
 
   defp dev_supervision_started? do
