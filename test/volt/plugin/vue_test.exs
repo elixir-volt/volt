@@ -12,6 +12,24 @@ defmodule Volt.Plugin.VueTest do
     assert result.code =~ "export default { render }"
   end
 
+  test "script-bearing scoped components receive their CSS scope on the default export" do
+    for script <- [
+          "<script setup>defineProps(['label'])</script>",
+          "<script>export default { props: ['label'] }</script>"
+        ] do
+      source =
+        script <>
+          "<template><button>{{ label }}</button></template><style scoped>button { color: red }</style>"
+
+      assert {:ok, result} = Volt.Plugin.Vue.compile("/fixtures/Script.vue", source, [])
+      scope = "data-v-" <> Vize.SFC.scope_id("/fixtures/Script.vue")
+      assert result.code =~ "__scopeId: \"#{scope}\""
+      assert result.css =~ scope
+      assert {:ok, _} = OXC.parse(result.code, "component.js")
+      assert is_nil(result.sourcemap)
+    end
+  end
+
   test "template-only scoped CSS and component use the same scope identity" do
     file = "/fixtures/Scoped.vue"
 

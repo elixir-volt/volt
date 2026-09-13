@@ -21,6 +21,14 @@ Configure the same Tailwind input/URL for the host and CLI. Conflicting managed
 start configurations are rejected rather than merged. Requests encountering a
 session disappearing during lookup return a retryable 503.
 
+## Stylesheet dependency assets
+
+Relative image and font URLs resolved from project stylesheets can refer to files
+outside the asset root, including package assets. Volt serves these through
+session-scoped `/@volt/assets/` URLs. Only files resolved by the stylesheet pipeline
+are registered; the endpoint does not accept filesystem paths. Registrations end
+with the session's state generation.
+
 ## What Gets Updated
 
 | File type | Action |
