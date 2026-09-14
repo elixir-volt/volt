@@ -67,6 +67,42 @@ config :volt, :lint,
 
 Lint-specific `:root`, `:sources`, and `:ignore` values override the build source set without changing which files the formatter checks. This is useful when canonical fixtures must be linted but retain their original formatting.
 
+### Per-file overrides
+
+Both `mix volt.lint` and `mix volt.js.check` resolve the same per-file settings:
+
+```elixir
+config :volt, :lint,
+  root: ".",
+  sources: ["assets/**/*.js", "scripts/**/*.js"],
+  plugins: [:typescript, :unicorn],
+  env: [:browser],
+  rules: %{"correctness" => :deny, "unicorn/no-null" => :deny},
+  overrides: [
+    %{
+      files: ["assets/colocated/**/*.js"],
+      rules: %{"unicorn/filename-case" => :allow}
+    },
+    %{
+      files: ["assets/js/dom.js"],
+      rules: %{"unicorn/no-null" => :allow}
+    },
+    %{
+      files: ["scripts/**/*.js"],
+      env: %{browser: false, node: true},
+      globals: %{"BuildContext" => :readonly}
+    }
+  ]
+```
+
+- `:files` is a non-empty list of globs relative to the lint root (`:root` under `:lint`, or the build root, which defaults to `assets`). Use `**/*.js` for nested files; `*.js` matches only the root level. Brace alternatives such as `**/*.{js,ts}` are supported.
+- Overrides change settings for discovered files; they do not add files or change `:sources`/`:ignore`. Already-discovered dotfiles can match override globs.
+- All matching overrides apply in declaration order. Later values win for each rule, environment or global; unrelated inherited entries remain intact. Rule severities are `:allow`, `:warn`, or `:deny`.
+- Environment lists enable names; maps can enable or disable them. Set an inherited global to `:off` to remove it, or use `:readonly`/`:writable` to set its access.
+- Override entries may be maps or keyword lists and support only `:files`, `:rules`, `:env`, and `:globals`. Plugins and custom rules remain run-wide; `mix volt.lint --plugin` retains its precedence over configured plugins.
+
+Type-aware checks group files by their effective TypeScript rules. Vue/Svelte script overrides match the original component path, not the generated virtual filename. Every group retains the complete set of extracted script sources, and diagnostics are mapped back to component paths. Environment/global overrides apply to syntax linting, not to TypeScript's project-level compiler configuration. File discovery and formatting settings are unchanged.
+
 ### Custom Rules
 
 Custom lint rules can be written in Elixir using the `OXC.Lint.Rule` behaviour — see the [oxc docs](https://hexdocs.pm/oxc/OXC.Lint.Rule.html).

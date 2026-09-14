@@ -8,6 +8,7 @@
 
 ### Added
 
+- Support root-relative, ordered lint overrides for rules, environments, and globals in both lint commands, including per-component TypeScript rule selection in type-aware checks ([#35](https://github.com/elixir-volt/volt/issues/35)).
 - Add `Volt.build/1` as the library API for complete frontend builds with one typed result and merged manifest for scripts, styles, chunks, and emitted assets.
 - Isolate Tailwind scanner and CSS state by profile and stylesheet root while sharing one supervised compiler runtime.
 - Allow Tailwind roots to configure their logical output name, development URL, and source globs.
@@ -22,6 +23,7 @@
 
 ### Fixed
 
+- Apply configured environments and globals in `mix volt.lint`, matching `mix volt.js.check`.
 - Allow JavaScript formatting and checks when the bundle format is configured as `:esm`, without treating the format atom as formatter options ([#36](https://github.com/elixir-volt/volt/pull/36), fixes [#34](https://github.com/elixir-volt/volt/issues/34)).
 - Handle filesystem watcher events for the watched root itself when normalizing macOS path aliases.
 - Apply Vue scoped styles without capturing component-module bindings such as `Object`.

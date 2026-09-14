@@ -222,6 +222,7 @@ defmodule Volt.MixProject do
           Volt.JS.AST,
           Volt.JS.Extensions,
           Volt.JS.Discovery,
+          Volt.JS.Lint.Config,
           Volt.JS.ImportExtractor,
           Volt.JS.ImportExtractor.Result,
           Volt.JS.Package,

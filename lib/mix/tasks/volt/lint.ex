@@ -31,7 +31,17 @@ defmodule Mix.Tasks.Volt.Lint do
         },
         custom_rules: [
           {MyApp.NoConsoleLog, :warn}
+        ],
+        overrides: [
+          %{
+            files: ["colocated/**/*.js"],
+            rules: %{"unicorn/filename-case" => :allow}
+          }
         ]
+
+  Overrides are relative to the lint root and apply in order. They merge
+  individual `:rules`, `:env`, and `:globals` entries; later matches win.
+  Both lint commands share these settings. Plugins remain run-wide.
   """
   use Mix.Task
 
@@ -75,8 +85,7 @@ defmodule Mix.Tasks.Volt.Lint do
         cli_plugins -> Enum.map(cli_plugins, &String.to_atom/1)
       end
 
-    rules = Keyword.get(config, :rules, %{})
-    custom_rules = Keyword.get(config, :custom_rules, [])
+    lint_config = Volt.JS.Lint.Config.new(config, Volt.Config.build().root)
     fix = Keyword.get(parsed, :fix, false)
 
     files = Volt.JS.Discovery.files(tool: :lint, only: ~w".js .ts .jsx .tsx")
@@ -85,21 +94,18 @@ defmodule Mix.Tasks.Volt.Lint do
       Mix.shell().info("No lintable files found")
       :ok
     else
-      results = lint_files(files, plugins, rules, custom_rules, fix)
+      results = lint_files(files, lint_config, plugins, fix)
       print_results(results, files)
     end
   end
 
-  defp lint_files(files, plugins, rules, custom_rules, fix) do
+  defp lint_files(files, config, plugins, fix) do
     Enum.flat_map(files, fn file ->
       source = File.read!(file)
+      options = Volt.JS.Lint.Config.options(config, file)
+      options = Keyword.merge(options, plugins: plugins, fix: fix)
 
-      case OXC.Lint.run(source, file,
-             plugins: plugins,
-             rules: rules,
-             custom_rules: custom_rules,
-             fix: fix
-           ) do
+      case OXC.Lint.run(source, file, options) do
         {:ok, diags} ->
           Enum.map(diags, &Map.put(&1, :file, file))
 
