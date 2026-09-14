@@ -46,7 +46,9 @@ defmodule Volt.Test.BrowserRunnerTest do
 
       test('sees browser globals', () => {
         document.body.innerHTML = '<button id="ok">OK</button>'
-        expect(window.location.href).toMatch('about:blank')
+        const pageURL = new URL(window.location.href)
+        expect(pageURL.protocol).toBe('file:')
+        expect(pageURL.pathname.endsWith('/index.html')).toBe(true)
         expect(document.querySelector('#ok')?.textContent).toBe('OK')
       })
       """)
