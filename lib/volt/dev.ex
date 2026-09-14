@@ -131,7 +131,7 @@ defmodule Volt.Dev do
         end
     end
 
-    Volt.Dev.State.clear(session)
+    Volt.Dev.Cleanup.run(session)
   end
 
   defp normalize_options(opts, root) do

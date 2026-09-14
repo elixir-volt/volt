@@ -1,12 +1,12 @@
-defmodule Volt.JS.HelpersTest do
+defmodule Volt.JS.DiscoveryTest do
   use ExUnit.Case, async: false
 
-  alias Volt.JS.Helpers
+  alias Volt.JS.Discovery
 
   setup do
     tmp_dir =
       Path.expand(
-        "volt-js-helpers-#{System.unique_integer([:positive])}",
+        "volt-js-discovery-#{System.unique_integer([:positive])}",
         System.tmp_dir!()
       )
 
@@ -40,8 +40,8 @@ defmodule Volt.JS.HelpersTest do
       ignore: []
     )
 
-    assert Helpers.discover_format_files() == [Path.join(tmp_dir, "format/source.ts")]
-    assert Helpers.discover_files(tool: :lint) == [Path.join(tmp_dir, "lint/source.ts")]
+    assert Discovery.format_files() == [Path.join(tmp_dir, "format/source.ts")]
+    assert Discovery.files(tool: :lint) == [Path.join(tmp_dir, "lint/source.ts")]
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:volt, key)

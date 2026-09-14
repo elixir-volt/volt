@@ -221,7 +221,7 @@ defmodule Volt.MixProject do
           Volt.JS.Asset,
           Volt.JS.AST,
           Volt.JS.Extensions,
-          Volt.JS.Helpers,
+          Volt.JS.Discovery,
           Volt.JS.ImportExtractor,
           Volt.JS.ImportExtractor.Result,
           Volt.JS.Package,

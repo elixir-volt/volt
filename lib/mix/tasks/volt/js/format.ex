@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Volt.Js.Format do
   def run(_args) do
     Mix.Task.run("app.config")
 
-    files = Volt.JS.Helpers.discover_format_files()
+    files = Volt.JS.Discovery.format_files()
 
     if files == [] do
       Mix.shell().info("No formattable files found")

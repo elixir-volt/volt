@@ -3,6 +3,12 @@ defmodule Volt.Builder.NamingTest do
 
   alias Volt.Builder.Naming
 
+  test "preserves eight-character lowercase SHA-256 names" do
+    assert Naming.hash("") == "e3b0c442"
+    assert Naming.hash("hello") == "2cf24dba"
+    assert Naming.hash(["he", "llo"]) == "2cf24dba"
+  end
+
   test "replaces characters that are invalid in Windows filenames" do
     assert Naming.file_path("virtual:volt/test?<entry>|.js") ==
              "virtual_volt/test__entry__.js"

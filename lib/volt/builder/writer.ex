@@ -127,7 +127,7 @@ defmodule Volt.Builder.Writer do
   end
 
   def hashed_name(name, content, ext, true) do
-    "#{name}-#{Volt.Format.content_hash(content)}#{ext}"
+    "#{name}-#{Volt.Builder.Naming.hash(content)}#{ext}"
   end
 
   def hashed_name(name, _content, ext, false), do: "#{name}#{ext}"

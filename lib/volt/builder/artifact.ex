@@ -10,7 +10,7 @@ defmodule Volt.Builder.Artifact do
   def asset(source_path, content) do
     ext = Path.extname(source_path)
     name = Path.basename(source_path, ext)
-    hash = Volt.Format.content_hash(content)
+    hash = Volt.Builder.Naming.hash(content)
     %__MODULE__{file: "#{name}-#{hash}#{ext}", content: content}
   end
 

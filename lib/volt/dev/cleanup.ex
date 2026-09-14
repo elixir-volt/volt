@@ -1,7 +1,7 @@
-defmodule Volt.Dev.State do
+defmodule Volt.Dev.Cleanup do
   @moduledoc "Cleanup of session-scoped compilation and dependency state."
 
-  def clear(session) do
+  def run(session) do
     Volt.Dev.Assets.clear_session(session)
     Volt.Tailwind.Supervisor.release_runtime(session)
     Volt.Cache.clear_session(session)

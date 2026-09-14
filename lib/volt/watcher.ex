@@ -725,7 +725,7 @@ defmodule Volt.Watcher do
     if state.config[:tailwind] && is_nil(state.config[:tailwind_worker]),
       do: Volt.Tailwind.Supervisor.release(state.config.tailwind_key)
 
-    if state.session != :default, do: Volt.Dev.State.clear(state.session)
+    if state.session != :default, do: Volt.Dev.Cleanup.run(state.session())
     if state.managed_key, do: Registry.unregister(Volt.Dev.WatcherRegistry, state.managed_key)
     :ok
   end

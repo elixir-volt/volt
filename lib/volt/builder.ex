@@ -563,7 +563,7 @@ defmodule Volt.Builder do
     name = resolved_path |> Path.basename() |> Path.rootname()
 
     if MapSet.member?(duplicate_basenames, name) do
-      "#{name}-#{Volt.Format.content_hash(resolved_path)}"
+      "#{name}-#{Volt.Builder.Naming.hash(resolved_path)}"
     else
       name
     end

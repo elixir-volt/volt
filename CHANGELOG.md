@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking changes
+
+- Rename `Volt.JS.Helpers` to `Volt.JS.Discovery`, with `files/0,1` and `format_files/0` replacing `discover_files/0,1` and `discover_format_files/0`.
+
 ### Added
 
 - Add `Volt.build/1` as the library API for complete frontend builds with one typed result and merged manifest for scripts, styles, chunks, and emitted assets.

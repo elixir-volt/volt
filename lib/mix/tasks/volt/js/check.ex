@@ -22,8 +22,8 @@ defmodule Mix.Tasks.Volt.Js.Check do
     Mix.Task.run("app.config")
 
     opts = parse_args!(args)
-    format_files = Volt.JS.Helpers.discover_format_files()
-    lint_files = Volt.JS.Helpers.discover_files(tool: :lint)
+    format_files = Volt.JS.Discovery.format_files()
+    lint_files = Volt.JS.Discovery.files(tool: :lint)
 
     if format_files == [] and lint_files == [] do
       Mix.shell().info("No files found")

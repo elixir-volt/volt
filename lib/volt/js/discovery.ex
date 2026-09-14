@@ -1,7 +1,7 @@
-defmodule Volt.JS.Helpers do
+defmodule Volt.JS.Discovery do
   @moduledoc "Shared JavaScript file discovery helpers for Mix tasks."
 
-  def discover_files(opts \\ []) do
+  def files(opts \\ []) do
     config = Volt.Config.build()
     tool_config = discovery_config(Keyword.get(opts, :tool))
     root = Keyword.get(tool_config, :root, config.root)
@@ -33,8 +33,8 @@ defmodule Volt.JS.Helpers do
     |> Enum.sort()
   end
 
-  def discover_format_files do
-    discover_files(tool: :format, only: Volt.JS.Extensions.formattable())
+  def format_files do
+    files(tool: :format, only: Volt.JS.Extensions.formattable())
   end
 
   defp discovery_config(nil), do: []

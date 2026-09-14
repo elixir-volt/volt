@@ -5,7 +5,7 @@ defmodule Volt.Builder.ArtifactTest do
 
   test "asset identity is derived from content and preserves the extension" do
     content = <<0, 255, 42>>
-    hash = Volt.Format.content_hash(content)
+    hash = Volt.Builder.Naming.hash(content)
 
     assert Artifact.asset("/source/fonts/site.woff2", content) ==
              %Artifact{file: "site-#{hash}.woff2", content: content}

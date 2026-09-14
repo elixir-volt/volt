@@ -428,10 +428,17 @@ defmodule Volt.DevServer do
   defp compilable?(path, config),
     do: Path.extname(path) in Volt.JS.Extensions.compilable(config.plugins)
 
+  defp file_mtime(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, %{mtime: mtime}} when is_integer(mtime) -> mtime
+      _ -> 0
+    end
+  end
+
   defp serve_compiled(conn, file_path, relative, config) do
     module_id = module_id_for_request(file_path, conn.query_string)
     request_relative = relative_for_module(relative, module_id)
-    mtime = Volt.Format.file_mtime(file_path)
+    mtime = file_mtime(file_path)
     css_import? = css_import_request?(conn, module_id)
     content_type = content_type_for(module_id, css_import?)
     cache_key = cache_key_for(module_id, css_import?)
