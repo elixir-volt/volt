@@ -25,6 +25,11 @@
 - Handle filesystem watcher events for the watched root itself when normalizing macOS path aliases.
 - Apply Vue scoped styles without capturing component-module bindings such as `Object`.
 
+### Security
+
+- Require Igniter 0.8.4 or later to prevent terminal escape injection through package metadata in installer confirmation prompts (CVE-2026-82584).
+- Require Bandit 1.12.5 or later in the bundled Phoenix examples to address HTTP/2 header validation and connection-window starvation (CVE-2026-75484, CVE-2026-74836).
+
 ## 0.17.11 - 2026-09-04
 
 ### Added

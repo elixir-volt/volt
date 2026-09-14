@@ -50,7 +50,7 @@ defmodule Volt.MixProject do
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:json_codec, "~> 0.2.3"},
-      {:igniter, "~> 0.5", optional: true},
+      {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
       {:npm, "~> 0.7.6"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -58,7 +58,7 @@ defmodule Volt.MixProject do
       {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:makeup_js, "~> 0.1", only: :dev, runtime: false},
-      {:bandit, "~> 1.0", only: :test},
+      {:bandit, ">= 1.12.5 and < 2.0.0", only: :test},
       {:playwright_ex, "~> 0.5", only: :test}
     ]
   end
