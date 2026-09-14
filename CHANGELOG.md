@@ -28,7 +28,9 @@
 ### Security
 
 - Require Igniter 0.8.4 or later to prevent terminal escape injection through package metadata in installer confirmation prompts (CVE-2026-82584).
-- Require Bandit 1.12.5 or later in the bundled Phoenix examples to address HTTP/2 header validation and connection-window starvation (CVE-2026-75484, CVE-2026-74836).
+- Require Bandit 1.12.5 or later in the Phoenix examples to address HTTP/2 header validation and connection-window starvation (CVE-2026-75484, CVE-2026-74836).
+
+- Update Phoenix example locks to patched Phoenix and LiveView releases for channel-join and long-poll denial of service, presence-client crashes, link scheme validation, and redirect validation.
 
 ## 0.17.11 - 2026-09-04
 
