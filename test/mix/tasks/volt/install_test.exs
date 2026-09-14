@@ -1,4 +1,4 @@
-defmodule Volt.InstallTest do
+defmodule Mix.Tasks.Volt.InstallTest do
   use ExUnit.Case
 
   alias Igniter.Test

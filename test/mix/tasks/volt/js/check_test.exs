@@ -1,4 +1,4 @@
-defmodule Volt.JsCheckTest do
+defmodule Mix.Tasks.Volt.Js.CheckTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO

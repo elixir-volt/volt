@@ -12,7 +12,7 @@ defmodule Volt.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      test_ignore_filters: [&String.starts_with?(&1, "test/support/")],
+      elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [plt_add_apps: [:mix, :ex_unit], flags: [:no_opaque]],
       name: "Volt",
       description:
@@ -30,6 +30,9 @@ defmodule Volt.MixProject do
       mod: {Volt.Application, []}
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_env), do: ["lib"]
 
   defp deps do
     [

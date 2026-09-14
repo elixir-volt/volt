@@ -1,4 +1,4 @@
-defmodule Volt.LintTest do
+defmodule Mix.Tasks.Volt.LintTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
