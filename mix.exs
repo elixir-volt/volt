@@ -38,7 +38,7 @@ defmodule Volt.MixProject do
       {:oxc, "~> 0.17.8"},
       {:vize, "~> 0.14.2"},
       {:oxide_ex, "~> 0.2.2"},
-      {:quickbeam, "~> 0.11.0"},
+      {:quickbeam, "~> 0.11.1"},
       {:dotenvy, "~> 1.1"},
       {:floki, "~> 0.38"},
       {:plug, "~> 1.16"},

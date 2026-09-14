@@ -10,6 +10,7 @@
 
 ### Changed
 
+- Require QuickBEAM 0.11.1 or later in the 0.11 series for release-optimized, baseline-CPU precompiled runtimes and the Mint 1.10 security dependency floor.
 - Write one production manifest at the configured asset output root instead of separate JavaScript and Tailwind manifests.
 - Make `mix volt.build` a thin adapter over `Volt.build/1`.
 - Emit Tailwind development artifacts atomically and skip style HMR broadcasts when generated CSS is unchanged.
