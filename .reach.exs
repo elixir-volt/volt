@@ -99,6 +99,7 @@ logic = [
   "Volt.HTMLEntry",
   "Volt.JS.AST",
   "Volt.JS.Check",
+  "Volt.JS.Lint.Config",
   "Volt.JS.Extensions",
   "Volt.JS.Format",
   "Volt.JS.Discovery",

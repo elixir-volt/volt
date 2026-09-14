@@ -27,13 +27,13 @@ defmodule Volt.JS.Check do
 
   def lint(files, opts \\ []) do
     config = Application.get_env(:volt, :lint, [])
-    rules = Keyword.get(config, :rules, %{})
+    lint_config = Volt.JS.Lint.Config.new(config, Volt.Config.build().root)
 
     if opts[:type_aware] do
-      ast_lint(Enum.filter(files, &type_aware_file?/1), config, rules) ++
-        type_aware_lint(files, config, typescript_rules(rules), opts)
+      ast_lint(Enum.filter(files, &type_aware_file?/1), lint_config) ++
+        type_aware_lint(files, config, lint_config, opts)
     else
-      ast_lint(files, config, rules)
+      ast_lint(files, lint_config)
     end
   end
 
@@ -55,50 +55,49 @@ defmodule Volt.JS.Check do
   def lint_error_message(message) when is_binary(message), do: message
   def lint_error_message(message), do: inspect(message)
 
-  defp ast_lint(files, config, rules) do
-    plugins = Keyword.get(config, :plugins, [:typescript])
-    custom_rules = Keyword.get(config, :custom_rules, [])
-    env = Keyword.get(config, :env, [])
-    globals = Keyword.get(config, :globals, %{})
-
+  defp ast_lint(files, config) do
     Enum.flat_map(files, fn file ->
       source = File.read!(file)
+      options = Volt.JS.Lint.Config.options(config, file)
 
-      case OXC.Lint.run(source, file,
-             plugins: plugins,
-             rules: rules,
-             env: env,
-             globals: globals,
-             custom_rules: custom_rules
-           ) do
+      case OXC.Lint.run(source, file, options) do
         {:ok, diagnostics} -> Enum.map(diagnostics, &Map.put(&1, :file, file))
         {:error, errors} -> Enum.map(errors, &lint_error(&1, file))
       end
     end)
   end
 
-  defp type_aware_lint(files, config, rules, opts) do
+  defp type_aware_lint(files, config, lint_config, opts) do
     {files, source_overrides, source_files} = type_aware_inputs(files, config)
 
-    lint_opts =
+    common_opts =
       [
         type_aware: true,
         type_check: opts[:type_check] == true,
-        rules: rules,
         source_overrides: Map.merge(source_overrides, Keyword.get(config, :source_overrides, %{}))
       ] ++ type_aware_options(config)
 
-    case run_type_aware_lint(files, lint_opts) do
-      {:ok, diagnostics} ->
-        Enum.map(diagnostics, fn diagnostic ->
-          diagnostic
-          |> restore_sfc_file(source_files)
-          |> promote_type_check_diagnostic(opts)
-        end)
+    files
+    |> Enum.group_by(fn file ->
+      original = Map.get(source_files, Path.expand(file), file)
 
-      {:error, errors} ->
-        Enum.map(errors, &lint_error/1)
-    end
+      lint_config
+      |> Volt.JS.Lint.Config.options(original)
+      |> Keyword.fetch!(:rules)
+      |> typescript_rules()
+    end)
+    |> Enum.sort_by(fn {rules, _files} -> rules end)
+    |> Enum.flat_map(fn {rules, batch} ->
+      case run_type_aware_lint(batch, Keyword.put(common_opts, :rules, rules)) do
+        {:ok, diagnostics} ->
+          Enum.map(diagnostics, fn diagnostic ->
+            diagnostic |> restore_sfc_file(source_files) |> promote_type_check_diagnostic(opts)
+          end)
+
+        {:error, errors} ->
+          Enum.map(errors, &lint_error/1)
+      end
+    end)
   end
 
   defp type_aware_inputs(files, config) do

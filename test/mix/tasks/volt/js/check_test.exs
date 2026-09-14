@@ -154,6 +154,62 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
              "svelteValue"
   end
 
+  test "type-aware overrides batch by effective rules and use original SFC paths" do
+    files = Enum.map(["app.ts", "Component.vue", "Widget.svelte"], &Path.join(@tmp_dir, &1))
+    [app, vue, svelte] = files
+    File.write!(app, "export const value = 1;\n")
+    File.write!(vue, "<script setup lang=\"ts\">const vueValue = 1</script>\n")
+    File.write!(svelte, "<script lang=\"ts\">const svelteValue = 1</script>\n")
+    payload_path = Path.join(@tmp_dir, "batches.jsonl")
+
+    tsgolint =
+      fake_executable!(@tmp_dir, "tsgolint-batches", """
+      input = IO.binread(:stdio, :eof)
+      File.write!(#{inspect(payload_path)}, [input, "\\n"], [:append])
+      payload = JSON.decode!(input)
+      for config <- payload["configs"], file <- config["file_paths"] do
+        json = JSON.encode!(%{rule: "no-floating-promises", message: %{description: "batch diagnostic"}, file_path: file, range: %{pos: 0, end: 1}})
+        IO.binwrite(<<byte_size(json)::32-little, 1, json::binary>>)
+      end
+      """)
+
+    Application.put_env(:volt, :lint,
+      root: @tmp_dir,
+      tsgolint: tsgolint,
+      rules: %{"typescript/no-floating-promises" => :deny},
+      overrides: [
+        %{files: ["**/*.{vue,svelte}"], rules: %{"typescript/no-floating-promises" => :warn}},
+        %{files: ["**/*.script0.ts"], rules: %{"typescript/no-floating-promises" => :allow}}
+      ]
+    )
+
+    diagnostics = Volt.JS.Check.lint(files, type_aware: true)
+
+    assert Enum.sort(Enum.map(diagnostics, & &1.file)) ==
+             Enum.sort([Path.expand(app), vue, svelte])
+
+    batches =
+      payload_path |> File.read!() |> String.split("\n", trim: true) |> Enum.map(&Jason.decode!/1)
+
+    assert length(batches) == 2
+
+    configs = Enum.flat_map(batches, & &1["configs"])
+    assert Enum.sort(Enum.map(configs, &length(&1["file_paths"]))) == [1, 2]
+
+    assert configs |> Enum.flat_map(& &1["rules"]) |> Enum.map(& &1["name"]) |> Enum.uniq() == [
+             "no-floating-promises"
+           ]
+
+    assert Enum.find(diagnostics, &(&1.file == Path.expand(app))).severity == :deny
+    assert Enum.find(diagnostics, &(&1.file == vue)).severity == :warn
+    assert Enum.find(diagnostics, &(&1.file == svelte)).severity == :warn
+
+    for batch <- batches do
+      assert batch["source_overrides"][Path.expand(vue <> ".script0.ts")] =~ "vueValue"
+      assert batch["source_overrides"][Path.expand(svelte <> ".script0.ts")] =~ "svelteValue"
+    end
+  end
+
   defp fake_tsgolint!(dir) do
     fake_executable!(dir, "tsgolint", """
     json = ~s({"rule":"no-floating-promises","message":{"description":"floating promise"},"file_path":"typed.ts","range":{"pos":0,"end":5}})
@@ -188,7 +244,7 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
 
   defp fake_executable!(dir, name, code) do
     script = Path.expand("#{name}.exs", dir)
-    File.write!(script, code)
+    File.write!(script, ":io.setopts(:standard_io, encoding: :latin1)\n" <> code)
 
     case :os.type() do
       {:win32, _name} ->
