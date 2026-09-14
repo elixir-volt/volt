@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- Allow JavaScript formatting and checks when the bundle format is configured as `:esm`, without treating the format atom as formatter options ([#36](https://github.com/elixir-volt/volt/pull/36), fixes [#34](https://github.com/elixir-volt/volt/issues/34)).
 - Handle filesystem watcher events for the watched root itself when normalizing macOS path aliases.
 - Apply Vue scoped styles without capturing component-module bindings such as `Object`.
 

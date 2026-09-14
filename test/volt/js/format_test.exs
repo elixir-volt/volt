@@ -25,4 +25,10 @@ defmodule Volt.JS.FormatTest do
 
     assert Format.load_config() == [semi: false, print_width: 100]
   end
+
+  test "load_config/0 ignores a bundle format set on the same key" do
+    Application.put_env(:volt, :format, :esm)
+
+    assert Format.load_config() == Format.load_json_config()
+  end
 end
