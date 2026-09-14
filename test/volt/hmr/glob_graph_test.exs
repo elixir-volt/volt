@@ -8,6 +8,19 @@ defmodule Volt.HMR.GlobGraphTest do
     :ok
   end
 
+  test "isolates glob ownership, removal, and cleanup by session" do
+    importer = "/src/routes.ts"
+    GlobGraph.update(importer, ["/src/a/*.ts"], :a)
+    GlobGraph.update(importer, ["/src/b/*.ts"], :b)
+    assert GlobGraph.dependents("/src/a/page.ts", :a) == [importer]
+    assert GlobGraph.dependents("/src/a/page.ts", :b) == []
+    assert GlobGraph.dependents("/src/a/page.ts") == []
+    GlobGraph.remove(importer, :a)
+    assert GlobGraph.dependents("/src/b/page.ts", :b) == [importer]
+    GlobGraph.clear_session(:b)
+    assert GlobGraph.dependents("/src/b/page.ts", :b) == []
+  end
+
   test "finds importers whose glob patterns match a path" do
     GlobGraph.update("/src/routes.ts", ["/src/pages/*.ts"])
 

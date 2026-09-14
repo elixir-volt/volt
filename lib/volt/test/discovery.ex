@@ -2,7 +2,7 @@ defmodule Volt.Test.Discovery do
   @moduledoc """
   Discovers JavaScript and TypeScript test files for the Volt test runner.
 
-  Discovery is intentionally aligned with `Volt.JS.Helpers`: configured include
+  Discovery is intentionally aligned with `Volt.JS.Discovery`: configured include
   globs are expanded relative to `Volt.Test.Config.root`, exclude globs are
   expanded from the same root, non-files are ignored, and results are sorted for
   deterministic ExUnit generation.

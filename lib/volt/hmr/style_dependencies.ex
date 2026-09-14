@@ -11,14 +11,14 @@ defmodule Volt.HMR.StyleDependencies do
 
   @doc "Update stylesheet dependency state for a compiled source file."
   @spec update_from_compile(String.t(), String.t(), Volt.Pipeline.Result.t() | map()) :: :ok
-  def update_from_compile(path, source, result) do
+  def update_from_compile(path, source, result, session \\ :default) do
     case dependency_source(path, source, result) do
       nil ->
-        Volt.HMR.StyleGraph.remove(path)
+        Volt.HMR.StyleGraph.remove(path, session)
 
       css ->
         dependencies = Volt.CSS.Dependencies.resolve(css, path)
-        Volt.HMR.StyleGraph.update(path, dependencies)
+        Volt.HMR.StyleGraph.update(path, dependencies, session)
     end
   end
 

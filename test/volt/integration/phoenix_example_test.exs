@@ -146,6 +146,7 @@ defmodule Volt.Integration.PhoenixExampleBuildTest do
 
     File.rm_rf!(Path.join(@outdir, "js"))
     File.rm_rf!(Path.join(@outdir, "css"))
+    File.rm(Path.join(@outdir, "manifest.json"))
 
     {output, status} =
       System.cmd("mix", ["volt.build", "--tailwind", "--hash", "--no-minify"],
@@ -179,22 +180,19 @@ defmodule Volt.Integration.PhoenixExampleBuildTest do
   end
 
   test "produces valid manifest", %{build_status: 0} do
-    manifest = @outdir |> Path.join("js/manifest.json") |> File.read!() |> Jason.decode!()
+    manifest = manifest()
 
     assert Map.has_key?(manifest, "app.js")
-    assert manifest["app.js"]["file"] =~ ~r/^app-[a-f0-9]{8}\.js$/
-  end
-
-  test "produces valid Tailwind manifest", %{build_status: 0} do
-    manifest = @outdir |> Path.join("css/manifest.json") |> File.read!() |> Jason.decode!()
-
+    assert manifest["app.js"]["file"] =~ ~r|^js/app-[a-f0-9]{8}\.js$|
     assert Map.has_key?(manifest, "app.css")
-    assert manifest["app.css"]["file"] =~ ~r/^app-[a-f0-9]{8}\.css$/
+    assert manifest["app.css"]["file"] =~ ~r|^css/app-[a-f0-9]{8}\.css$|
+    refute File.exists?(Path.join(@outdir, "js/manifest.json"))
+    refute File.exists?(Path.join(@outdir, "css/manifest.json"))
   end
 
   test "produces Tailwind CSS with utility classes from heex templates", %{build_status: 0} do
-    manifest = @outdir |> Path.join("css/manifest.json") |> File.read!() |> Jason.decode!()
-    css = File.read!(Path.join([@outdir, "css", manifest["app.css"]["file"]]))
+    manifest = manifest()
+    css = File.read!(Path.join(@outdir, manifest["app.css"]["file"]))
 
     assert css =~ "rounded-2xl"
     assert css =~ "bg-amber-600"
@@ -202,17 +200,17 @@ defmodule Volt.Integration.PhoenixExampleBuildTest do
   end
 
   test "produces Tailwind CSS with Phoenix colocated CSS", %{build_status: 0} do
-    manifest = @outdir |> Path.join("css/manifest.json") |> File.read!() |> Jason.decode!()
-    css = File.read!(Path.join([@outdir, "css", manifest["app.css"]["file"]]))
+    manifest = manifest()
+    css = File.read!(Path.join(@outdir, manifest["app.css"]["file"]))
 
     assert css =~ ".colocated-card"
     assert css =~ "oklch(98.7% .022 95.277)"
   end
 
   test "generates sourcemap", %{build_status: 0} do
-    manifest = @outdir |> Path.join("js/manifest.json") |> File.read!() |> Jason.decode!()
+    manifest = manifest()
     map_path = manifest["app.js"]["file"] <> ".map"
-    map = [@outdir, "js", map_path] |> Path.join() |> File.read!() |> Jason.decode!()
+    map = [@outdir, map_path] |> Path.join() |> File.read!() |> Jason.decode!()
 
     assert map["version"] == 3
   end
@@ -234,7 +232,11 @@ defmodule Volt.Integration.PhoenixExampleBuildTest do
   end
 
   defp js_path do
-    manifest = @outdir |> Path.join("js/manifest.json") |> File.read!() |> Jason.decode!()
-    Path.join([@outdir, "js", manifest["app.js"]["file"]])
+    manifest = manifest()
+    Path.join(@outdir, manifest["app.js"]["file"])
+  end
+
+  defp manifest do
+    @outdir |> Path.join("manifest.json") |> File.read!() |> Jason.decode!()
   end
 end

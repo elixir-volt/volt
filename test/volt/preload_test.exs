@@ -37,6 +37,22 @@ defmodule Volt.PreloadTest do
       refute result =~ "lazy-fedcba.js"
     end
 
+    test "resolves cyclic and nested import keys to emitted paths" do
+      manifest = %{
+        "app.js" => %{
+          "file" => "js/app-hash.js",
+          "imports" => ["shared", "missing"],
+          "dynamicImports" => ["lazy"]
+        },
+        "shared" => %{"file" => "js/shared-hash.js", "imports" => ["vendor"]},
+        "vendor" => %{"file" => "js/vendor-hash.js", "imports" => ["shared"]},
+        "lazy" => %{"file" => "js/lazy-hash.js"}
+      }
+
+      assert Volt.Preload.tags(manifest, entry: "app.js", prefix: "https://cdn.example/assets") ==
+               ~s(<link rel="modulepreload" href="https://cdn.example/assets/js/shared-hash.js">\n<link rel="modulepreload" href="https://cdn.example/assets/js/vendor-hash.js">)
+    end
+
     test "joins prefix with URI semantics" do
       manifest = %{"app.js" => "app-abc123.js"}
 

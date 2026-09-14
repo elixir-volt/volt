@@ -26,7 +26,7 @@ defmodule Volt.DevServer.BasicTest do
 
       root = Path.join(@fixture_dir, "src")
       opts = Volt.DevServer.init(root: root, prefix: "/assets", watch: true)
-      key = {:watcher, :default, Path.expand(root)}
+      key = {:session, opts.session}
 
       assert [] = Registry.lookup(Volt.Dev.WatcherRegistry, key)
 
@@ -35,10 +35,44 @@ defmodule Volt.DevServer.BasicTest do
       assert [{pid, _}] = Registry.lookup(Volt.Dev.WatcherRegistry, key)
       assert Process.alive?(pid)
 
+      assert %Volt.Dev.Session.Tables{} = Volt.Dev.tables(opts.session)
+      on_exit(fn -> Volt.Dev.stop(opts.session) end)
+    end
+
+    test "normalizes configured Tailwind root into watcher options" do
+      previous = Application.get_env(:volt, :tailwind)
+      css = Path.join(@fixture_dir, "src/site.css")
+
+      Application.put_env(:volt, :tailwind,
+        css: css,
+        name: "site",
+        dev_url: "/assets/css/site.css",
+        sources: [%{base: @fixture_dir, pattern: "**/*.html"}]
+      )
+
       on_exit(fn ->
-        if Process.alive?(pid),
-          do: DynamicSupervisor.terminate_child(Volt.Dev.WatcherSupervisor, pid)
+        if previous,
+          do: Application.put_env(:volt, :tailwind, previous),
+          else: Application.delete_env(:volt, :tailwind)
       end)
+
+      opts =
+        Volt.DevServer.init(
+          root: Path.join(@fixture_dir, "src"),
+          prefix: "/assets",
+          watch: true
+        )
+
+      assert opts.watcher_opts[:tailwind]
+      assert opts.watcher_opts[:tailwind_css] == Path.expand(css)
+      assert opts.watcher_opts[:tailwind_name] == "site"
+
+      assert opts.watcher_opts[:tailwind_sources] == [
+               %{base: @fixture_dir, pattern: "**/*.html"}
+             ]
+
+      assert opts.watcher_opts[:tailwind_url] == "/assets/css/site.css"
+      assert opts.watcher_opts[:tailwind_key] == {:profile, :default, Path.expand(css)}
     end
 
     test "passes through non-asset requests for downstream HTML plugs" do

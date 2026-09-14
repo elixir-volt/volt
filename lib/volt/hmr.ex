@@ -10,8 +10,10 @@ defmodule Volt.HMR do
 
   @doc "Broadcast an HMR message to all connected clients."
   @spec broadcast(:update | :error | :ping | :pong, term()) :: :ok
-  def broadcast(type, payload \\ nil) do
-    Registry.dispatch(Volt.HMR.Registry, :clients, fn entries ->
+  def broadcast(type, payload \\ nil, opts \\ []) do
+    session = Keyword.get(opts, :session, :default)
+
+    Registry.dispatch(Volt.HMR.Registry, Volt.HMR.Channel.key(session), fn entries ->
       for {pid, _} <- entries do
         send(pid, {:volt_hmr, type, payload})
       end
@@ -31,26 +33,27 @@ defmodule Volt.HMR do
     payload = maybe_put(payload, :boundary, Keyword.get(opts, :boundary))
     payload = maybe_put(payload, :timestamp, Keyword.get(opts, :timestamp))
 
-    broadcast(:update, payload)
+    broadcast(:update, payload, opts)
   end
 
   @doc "Broadcast a full page reload request for a changed path."
   @spec full_reload(String.t()) :: :ok
-  def full_reload(path), do: update(path, [:full])
+  def full_reload(path, opts \\ []), do: update(path, [:full], opts)
 
   @doc "Broadcast a style-only update for a changed stylesheet path."
   @spec style_update(String.t()) :: :ok
-  def style_update(path), do: update(path, [:style])
+  def style_update(path, opts \\ []), do: update(path, [:style], opts)
 
   @doc "Broadcast an error payload for a source path."
   @spec error(String.t(), term()) :: :ok
-  def error(path, reason), do: broadcast(:error, %{path: path, reason: reason})
+  def error(path, reason, opts \\ []), do: broadcast(:error, %{path: path, reason: reason}, opts)
 
   @doc "Invalidate Volt's dev compilation state for a source file without broadcasting."
   @spec invalidate_file(String.t()) :: :ok
-  def invalidate_file(path) do
-    Volt.Cache.evict_file(path)
-    Volt.HMR.ModuleGraph.invalidate_file(path)
+  def invalidate_file(path, opts \\ []) do
+    session = Keyword.get(opts, :session, :default)
+    Volt.Cache.evict_file(path, session)
+    Volt.HMR.ModuleGraph.invalidate_file(path, System.system_time(:millisecond), session)
     :ok
   end
 

@@ -10,8 +10,12 @@ defmodule Volt.Watcher.Ignore do
   ]
 
   @spec compile([String.t()], [String.t()]) :: [GlobEx.t()]
-  def compile(patterns, roots) do
-    (@default_patterns ++ patterns)
+  def compile(patterns, roots), do: compile_patterns(@default_patterns ++ patterns, roots)
+
+  def compile_explicit(patterns, roots), do: compile_patterns(patterns, roots)
+
+  defp compile_patterns(patterns, roots) do
+    patterns
     |> Enum.uniq()
     |> Enum.flat_map(&compile_pattern(&1, roots))
   end

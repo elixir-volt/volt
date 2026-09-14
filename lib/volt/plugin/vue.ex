@@ -1,6 +1,8 @@
 defmodule Volt.Plugin.Vue do
   @behaviour Volt.Plugin
 
+  alias Vize.SFC
+
   @impl true
   def name, do: "vue"
 
@@ -22,7 +24,10 @@ defmodule Volt.Plugin.Vue do
     {base_path, query} = Volt.URL.split_query(path)
 
     if query == "" and Path.extname(base_path) == ".vue" do
+      scope_id = SFC.scope_id(base_path)
+
       sfc_opts = [
+        scope_id: scope_id,
         filename: base_path,
         vapor: Keyword.get(opts, :vapor, false),
         strip_types: true,
@@ -30,16 +35,22 @@ defmodule Volt.Plugin.Vue do
         source_map: Keyword.get(opts, :sourcemap, true)
       ]
 
-      with {:ok, assets} <- Vize.SFC.collect_template_assets(source, filename: base_path),
+      with {:ok, descriptor} <- Vize.parse_sfc(source),
+           {:ok, assets} <- SFC.collect_template_assets(source, filename: base_path),
            {:ok, result} <- Vize.compile_sfc(source, sfc_opts) do
+        assembled =
+          result.code
+          |> assemble_template_component(descriptor, sfc_opts[:vapor])
+          |> attach_scope(descriptor, scope_id, sfc_opts[:vapor])
+
         {:ok,
          %Volt.Pipeline.Result{
            code:
-             result.code
-             |> Vize.SFC.rewrite_asset_references(assets)
+             assembled
+             |> SFC.rewrite_asset_references(assets)
              |> append_template_asset_imports(assets)
              |> maybe_append_style_imports(path, source, opts),
-           sourcemap: result.source_map,
+           sourcemap: if(assembled == result.code, do: result.source_map),
            css: result.css,
            hashes: %Volt.Pipeline.Result.Hashes{
              template: result.template_hash,
@@ -50,6 +61,38 @@ defmodule Volt.Plugin.Vue do
       end
     end
   end
+
+  defp assemble_template_component(
+         code,
+         %{script: nil, script_setup: nil, template: template},
+         false
+       )
+       when not is_nil(template), do: code <> "\nexport default { render };\n"
+
+  defp assemble_template_component(code, _descriptor, _vapor), do: code
+
+  defp attach_scope(code, %{styles: styles}, scope_id, false) do
+    if Enum.any?(styles, & &1.scoped) do
+      {:ok, %{body: nodes}} = OXC.parse(code, "component.js")
+
+      patches =
+        for %{type: :export_default_declaration, declaration: declaration} <- nodes do
+          %{start: first, end: last} = declaration
+          expression = binary_part(code, first, last - first)
+
+          value =
+            "((component) => { component.__scopeId = #{Jason.encode!("data-v-" <> scope_id)}; return component; })(#{expression})"
+
+          Volt.JS.Patch.new(first, last, value)
+        end
+
+      Volt.JS.Patch.apply(code, patches)
+    else
+      code
+    end
+  end
+
+  defp attach_scope(code, _descriptor, _scope_id, _vapor), do: code
 
   @impl true
   def extract_imports(path, source, _opts) do

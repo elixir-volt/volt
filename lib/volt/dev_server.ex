@@ -54,12 +54,27 @@ defmodule Volt.DevServer do
     module_types = config.module_types
     tailwind_config = Config.tailwind(profile)
 
+    tailwind_root =
+      if Volt.Config.Tailwind.enabled?(tailwind_config),
+        do: Volt.Config.Tailwind.new(tailwind_config)
+
     prebundle_vendor(expanded_root, node_modules, plugins, config.resolve_dirs, module_types)
 
-    watcher_opts =
+    session =
       if server_config.watch do
+        Volt.Dev.session_identity(
+          root: expanded_root,
+          id: profile || :default,
+          session: Keyword.get(opts, :session, :default)
+        )
+      else
+        Keyword.get(opts, :session, :default)
+      end
+
+    watcher_opts =
+      if server_config.watch and is_nil(Keyword.get(opts, :session_supervisor)) do
         watch_dirs =
-          if tailwind_config != [] and server_config.watch_dirs == [] do
+          if tailwind_root && server_config.watch_dirs == [] do
             [Volt.Paths.lib()]
           else
             server_config.watch_dirs
@@ -67,12 +82,17 @@ defmodule Volt.DevServer do
 
         [
           id: profile || :default,
+          session: session,
           root: expanded_root,
           watch_dirs: watch_dirs,
           reload_dirs: server_config.reload_dirs,
           watch_ignored: server_config.watch_ignored,
-          tailwind: tailwind_config != [],
-          tailwind_css: tailwind_config[:css],
+          tailwind_key: tailwind_key(profile, tailwind_root),
+          tailwind: not is_nil(tailwind_root),
+          tailwind_css: tailwind_root && tailwind_root.css,
+          tailwind_name: tailwind_root && tailwind_root.name,
+          tailwind_sources: tailwind_root && tailwind_root.sources,
+          tailwind_url: tailwind_root && tailwind_root.dev_url,
           tailwind_outdir: Path.join(to_string(config.outdir), "css"),
           target: config.target,
           import_source: config.import_source,
@@ -103,19 +123,152 @@ defmodule Volt.DevServer do
       define:
         Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix),
       hmr_timeout: server_config.hmr_timeout,
+      stylesheet_url: tailwind_root && tailwind_root.dev_url,
+      stylesheet_source: tailwind_root && tailwind_root.css,
+      session_supervisor: Keyword.get(opts, :session_supervisor),
+      tables: Keyword.get(opts, :tables),
+      session: session,
       watcher_opts: watcher_opts
     }
   end
 
+  defp stylesheet_for_generation(%{stylesheet_worker: worker}) when is_pid(worker) do
+    Volt.Tailwind.Worker.stylesheet(worker)
+  catch
+    :exit, {:noproc, _} -> {:error, :session_restarting}
+    :exit, {:normal, _} -> {:error, :session_restarting}
+    :exit, {:shutdown, _} -> {:error, :session_restarting}
+  end
+
+  defp stylesheet_for_generation(_tables), do: {:error, :not_built}
+
+  defp tailwind_key(_profile, nil), do: nil
+  defp tailwind_key(profile, root), do: {:profile, profile || :default, root.css || root.name}
+
   @impl true
+  def call(conn, %{session_supervisor: supervisor} = config) when not is_nil(supervisor) do
+    case Volt.Dev.Session.Supervisor.tables(supervisor) do
+      %Volt.Dev.Session.Tables{} = tables ->
+        call_generation(conn, config, tables)
+
+      {:error, :session_restarting} ->
+        conn |> Conn.send_resp(503, "Development session is restarting") |> Conn.halt()
+    end
+  end
+
+  def call(conn, %{session: session, watcher_opts: opts} = config)
+      when session != :default and is_list(opts) do
+    with {:ok, _watcher} <- Volt.Dev.start(opts),
+         %Volt.Dev.Session.Tables{} = tables <- Volt.Dev.tables(session) do
+      call_generation(conn, config, tables)
+    else
+      {:error, _reason} ->
+        conn |> Conn.send_resp(503, "Development session is unavailable") |> Conn.halt()
+    end
+  end
+
+  def call(conn, %{session: session, tables: nil} = config) when session != :default do
+    case Volt.Dev.tables(session) do
+      %Volt.Dev.Session.Tables{} = tables ->
+        call_generation(conn, config, tables)
+
+      {:error, _} ->
+        conn |> Conn.send_resp(503, "Development session is unavailable") |> Conn.halt()
+    end
+  end
+
+  def call(conn, %{tables: %Volt.Dev.Session.Tables{} = tables} = config) do
+    call_generation(conn, config, tables)
+  end
+
   def call(conn, config) do
     Volt.Dev.ensure_watcher(config.watcher_opts)
     do_call(conn, config)
   end
 
+  defp call_generation(conn, config, tables) do
+    do_call(conn, %{config | tables: tables})
+  rescue
+    error in ArgumentError ->
+      case __STACKTRACE__ do
+        [{:ets, _operation, [table | _], _} | _]
+        when table in [
+               tables.cache,
+               tables.imports,
+               tables.globs,
+               tables.styles,
+               tables.modules,
+               tables.assets
+             ] ->
+          if :ets.info(table) == :undefined do
+            conn
+            |> Conn.send_resp(503, "Development session restarted; retry the request")
+            |> Conn.halt()
+          else
+            reraise error, __STACKTRACE__
+          end
+
+        _ ->
+          reraise error, __STACKTRACE__
+      end
+  end
+
+  defp do_call(
+         %Conn{request_path: path, method: method} = conn,
+         %{stylesheet_url: path, tables: %Volt.Dev.Session.Tables{}} = config
+       )
+       when is_binary(path) and method in ["GET", "HEAD"] do
+    result =
+      with {:ok, css} <- stylesheet_for_generation(config.tables) do
+        Volt.CSS.AssetURLRewriter.rewrite_dev(
+          css,
+          config.stylesheet_source,
+          config.root,
+          config.prefix,
+          grant_asset: &Volt.Dev.Assets.register(&1, config.tables)
+        )
+      end
+
+    case result do
+      {:ok, css} ->
+        conn
+        |> Conn.put_resp_content_type("text/css")
+        |> Conn.put_resp_header("cache-control", "no-store")
+        |> Conn.send_resp(200, if(method == "HEAD", do: "", else: css))
+        |> Conn.halt()
+
+      {:error, _} ->
+        conn |> Conn.send_resp(503, "Stylesheet is not ready") |> Conn.halt()
+    end
+  end
+
+  defp do_call(%Conn{request_path: "/@volt/assets/" <> id, method: method} = conn, config)
+       when method in ["GET", "HEAD"] do
+    case Volt.Dev.Assets.fetch(id, config.tables || config.session) do
+      {:ok, path} ->
+        if File.regular?(path) do
+          if method == "HEAD" do
+            conn
+            |> Conn.put_resp_content_type(Volt.Assets.mime_type(path))
+            |> Conn.send_resp(200, "")
+            |> Conn.halt()
+          else
+            serve_public(conn, path)
+          end
+        else
+          conn |> Conn.send_resp(404, "Asset not found") |> Conn.halt()
+        end
+
+      :error ->
+        conn |> Conn.send_resp(404, "Asset not registered for this session") |> Conn.halt()
+    end
+  end
+
   defp do_call(%Conn{request_path: "/@volt/ws"} = conn, config) do
     conn
-    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [], timeout: config.hmr_timeout)
+    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [session: config.session],
+      timeout: config.hmr_timeout
+    )
     |> Conn.halt()
   end
 
@@ -210,7 +363,15 @@ defmodule Volt.DevServer do
         mod_url = virtual_url(id)
         code = code_for_request(result, mod_url, content_type, false)
 
-        update_module_graph(mod_url, id, id, code, source, content_type)
+        update_module_graph(
+          mod_url,
+          id,
+          id,
+          code,
+          source,
+          content_type,
+          config.tables || config.session
+        )
 
         send_compiled(conn, code, result.sourcemap, content_type)
 
@@ -267,15 +428,22 @@ defmodule Volt.DevServer do
   defp compilable?(path, config),
     do: Path.extname(path) in Volt.JS.Extensions.compilable(config.plugins)
 
+  defp file_mtime(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, %{mtime: mtime}} when is_integer(mtime) -> mtime
+      _ -> 0
+    end
+  end
+
   defp serve_compiled(conn, file_path, relative, config) do
     module_id = module_id_for_request(file_path, conn.query_string)
     request_relative = relative_for_module(relative, module_id)
-    mtime = Volt.Format.file_mtime(file_path)
+    mtime = file_mtime(file_path)
     css_import? = css_import_request?(conn, module_id)
     content_type = content_type_for(module_id, css_import?)
     cache_key = cache_key_for(module_id, css_import?)
 
-    case Volt.Cache.get(cache_key, mtime) do
+    case Volt.Cache.get(cache_key, mtime, config.tables || config.session) do
       %{code: code, sourcemap: sourcemap} ->
         send_compiled(conn, code, sourcemap, content_type)
 
@@ -308,15 +476,35 @@ defmodule Volt.DevServer do
 
     case Volt.Pipeline.compile(module_id, source, pipeline_opts(config, module_id)) do
       {:ok, result} ->
-        Volt.HMR.GlobGraph.update_from_source(file_path, source)
-        Volt.HMR.ImportGraph.update_from_compiled(file_path, result.code)
-        Volt.HMR.StyleDependencies.update_from_compile(file_path, source, result)
+        Volt.HMR.GlobGraph.update_from_source(file_path, source, config.tables || config.session)
+
+        Volt.HMR.ImportGraph.update_from_compiled(
+          file_path,
+          result.code,
+          config.tables || config.session
+        )
+
+        Volt.HMR.StyleDependencies.update_from_compile(
+          file_path,
+          source,
+          result,
+          config.tables || config.session
+        )
 
         result = rewrite_dev_css_urls(result, file_path, config)
         mod_url = Volt.URL.join(config.prefix, relative)
         code = code_for_request(result, mod_url, content_type, css_import?)
         graph_url = if css_import?, do: URL.append_query(mod_url, "import"), else: mod_url
-        update_module_graph(graph_url, graph_url, file_path, code, source, content_type)
+
+        update_module_graph(
+          graph_url,
+          graph_url,
+          file_path,
+          code,
+          source,
+          content_type,
+          config.tables || config.session
+        )
 
         entry = %Volt.DevServer.CacheEntry{
           code: code,
@@ -326,7 +514,7 @@ defmodule Volt.DevServer do
           content_type: content_type
         }
 
-        Volt.Cache.put(cache_key, mtime, entry)
+        Volt.Cache.put(cache_key, mtime, entry, config.tables || config.session)
         send_compiled(conn, code, result.sourcemap, content_type)
 
       {:error, errors} ->
@@ -353,7 +541,7 @@ defmodule Volt.DevServer do
     ]
   end
 
-  defp update_module_graph(mod_url, cache_key, file_path, code, source, content_type) do
+  defp update_module_graph(mod_url, cache_key, file_path, code, source, content_type, session) do
     imports =
       case OXC.select(code, Path.basename(file_path), :import_specifiers) do
         {:ok, imports} -> Enum.map(imports, &normalize_module_graph_import(&1, mod_url))
@@ -361,6 +549,7 @@ defmodule Volt.DevServer do
       end
 
     Volt.HMR.ModuleGraph.update_module(mod_url, cache_key, file_path, imports,
+      session: session,
       type: module_graph_type(content_type),
       self_accepting: Volt.HMR.Boundary.self_accepting?(source)
     )
@@ -518,14 +707,18 @@ defmodule Volt.DevServer do
   defp cache_key_for(file_path, false), do: file_path
 
   defp rewrite_dev_css_urls(%{type: :css, code: code} = result, file_path, config) do
-    case Volt.CSS.AssetURLRewriter.rewrite_dev(code, file_path, config.root, config.prefix) do
+    case Volt.CSS.AssetURLRewriter.rewrite_dev(code, file_path, config.root, config.prefix,
+           grant_asset: &Volt.Dev.Assets.register(&1, config.tables || config.session)
+         ) do
       {:ok, code} -> %{result | code: code}
       {:error, _} -> result
     end
   end
 
   defp rewrite_dev_css_urls(%{css: css} = result, file_path, config) when is_binary(css) do
-    case Volt.CSS.AssetURLRewriter.rewrite_dev(css, file_path, config.root, config.prefix) do
+    case Volt.CSS.AssetURLRewriter.rewrite_dev(css, file_path, config.root, config.prefix,
+           grant_asset: &Volt.Dev.Assets.register(&1, config.tables || config.session)
+         ) do
       {:ok, css} -> %{result | css: css}
       {:error, _} -> result
     end
@@ -589,6 +782,9 @@ defmodule Volt.DevServer do
 
       String.starts_with?(specifier, "#") ->
         rewrite_package_import(specifier, importer, config)
+
+      Path.type(elem(URL.split_query(specifier), 0)) == :absolute ->
+        rewrite_resolved_path(specifier, config)
 
       NPM.Resolution.PackageResolver.relative?(specifier) ->
         rewrite_relative(specifier, importer, config)

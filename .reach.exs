@@ -22,6 +22,7 @@ adapter = [
 ]
 
 orchestrator = [
+  "Volt.Build",
   "Volt.Builder",
   "Volt.Builder.Collector",
   "Volt.Builder.Compiler",
@@ -33,27 +34,36 @@ orchestrator = [
   "Volt.JS.Vendor",
   "Volt.Pipeline",
   "Volt.Tailwind",
+  "Volt.Tailwind.Build",
   "Volt.Watcher",
+  "Volt.Dev.Session.Watcher",
   "Volt.Watcher.Ignore",
   "Volt.Watcher.Path"
 ]
 
 model = [
   "Volt.Builder.BuildContext",
+  "Volt.Builder.Asset",
   "Volt.Builder.Bundle",
   "Volt.Builder.Collector.State",
   "Volt.Builder.Context",
+  "Volt.Builder.Compiled",
   "Volt.Builder.Dependencies",
   "Volt.Builder.ManifestEntry",
   "Volt.Builder.OutputContext",
   "Volt.Builder.OutputFile",
   "Volt.Builder.Result",
+  "Volt.Build.Result",
+  "Volt.Build.Layout",
+  "Volt.Config.Tailwind",
   "Volt.ChunkGraph.Chunk",
   "Volt.Config",
   "Volt.Config.*",
+  "Volt.Dev.Session.Tables",
   "Volt.DevServer.CacheEntry",
   "Volt.DevServer.Config",
   "Volt.HMR.Message",
+  "Volt.HMR.Channel",
   "Volt.JS.ImportExtractor.Result",
   "Volt.JS.PrebundleEntry.Export",
   "Volt.JS.PrebundleEntry.Import",
@@ -61,10 +71,19 @@ model = [
   "Volt.JS.TSConfig",
   "Volt.MIME",
   "Volt.Paths",
-  "Volt.Pipeline.Result.Hashes"
+  "Volt.Pipeline.Result.Hashes",
+  "Volt.Tailwind.CompileError",
+  "Volt.Tailwind.ResolveError",
+  "Volt.Tailwind.Context",
+  "Volt.Tailwind.Metadata",
+  "Volt.Tailwind.State",
+  "Volt.Tailwind.Compilation"
 ]
 
 logic = [
+  "Volt.Builder.Artifact",
+  "Volt.Builder.CSS.Prepared",
+  "Volt.Builder.Plan",
   "Volt.Assets",
   "Volt.Assets.Query",
   "Volt.Builder.Naming",
@@ -82,7 +101,7 @@ logic = [
   "Volt.JS.Check",
   "Volt.JS.Extensions",
   "Volt.JS.Format",
-  "Volt.JS.Helpers",
+  "Volt.JS.Discovery",
   "Volt.JS.ImportExtractor",
   "Volt.JS.Package",
   "Volt.JS.Patch",
@@ -115,8 +134,14 @@ infrastructure = [
   "Volt.Application",
   "Volt.Builder.CSS",
   "Volt.Builder.Writer",
+  "Volt.Builder.Publication",
   "Volt.Cache",
   "Volt.Dev",
+  "Volt.Dev.Cleanup",
+  "Volt.Dev.Assets",
+  "Volt.Dev.Session.Call",
+  "Volt.Dev.Session.State",
+  "Volt.Dev.Session.Supervisor",
   "Volt.Dev.ConsoleForwarder",
   "Volt.Dev.ConsoleForwarder.Payload",
   "Volt.ETS",
@@ -136,7 +161,11 @@ infrastructure = [
   "Volt.JS.Runtime.Error",
   "Volt.JS.Runtime.Installer",
   "Volt.JS.Runtime.PackageSet",
-  "Volt.Tailwind.Loader"
+  "Volt.Tailwind.Artifact",
+  "Volt.Tailwind.Loader",
+  "Volt.Tailwind.Runtime",
+  "Volt.Tailwind.Supervisor",
+  "Volt.Tailwind.Worker"
 ]
 
 plugin = [

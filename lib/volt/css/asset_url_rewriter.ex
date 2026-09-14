@@ -8,7 +8,7 @@ defmodule Volt.CSS.AssetURLRewriter do
 
   @type rewrite_result :: {:ok, String.t()} | {:error, term()}
   @type rewrite_assets_result ::
-          {:ok, %{code: String.t(), assets: [String.t() | map()]}} | {:error, term()}
+          {:ok, %{code: String.t(), assets: [Volt.Builder.Asset.t()]}} | {:error, term()}
 
   @doc "Rewrite relative CSS asset URLs to hashed output URLs."
   @spec rewrite(String.t(), String.t() | nil, String.t(), keyword()) :: rewrite_result()
@@ -26,26 +26,62 @@ defmodule Volt.CSS.AssetURLRewriter do
   def rewrite_with_assets(css, nil, _outdir, _opts), do: {:ok, %{code: css, assets: []}}
 
   def rewrite_with_assets(css, source_path, outdir, opts) do
+    with {:ok, result} <- prepare(css, source_path, opts) do
+      Volt.Assets.write_artifacts(result.artifacts, outdir)
+
+      {:ok, %{code: result.code, assets: result.assets}}
+    end
+  end
+
+  @doc false
+  def prepare(css, source_path, opts \\ [])
+
+  def prepare(css, nil, _opts),
+    do: {:ok, %Volt.Builder.CSS.Prepared{code: css, assets: [], artifacts: []}}
+
+  def prepare(css, source_path, opts) do
     prefix = Keyword.get(opts, :prefix, Volt.Paths.prefix())
 
-    with {:ok, code, {assets, _emitted}} <-
+    with {:ok, code, {assets, emitted}} <-
            rewrite_urls(css, [filename: source_path], {[], %{}}, fn url, state ->
-             rewrite_build_url(url, state, source_path, outdir, prefix, opts)
+             rewrite_build_url(url, state, source_path, prefix, opts)
            end) do
-      {:ok, %{code: code, assets: Enum.reverse(assets)}}
+      artifacts =
+        emitted
+        |> Enum.map(fn {_path, {_file, _asset, artifact}} -> artifact end)
+        |> Enum.sort_by(& &1.file)
+
+      {:ok,
+       %Volt.Builder.CSS.Prepared{code: code, assets: Enum.reverse(assets), artifacts: artifacts}}
     else
       {:error, reason} -> {:error, {:css_parse_failed, reason}}
     end
   end
 
+  @doc "Rebase relative asset URLs before an imported stylesheet loses its source location."
+  def rebase(css, source_path, output_base) do
+    Vize.CSS.rewrite_urls(css, [filename: source_path], fn url ->
+      uri = URI.parse(url)
+
+      if rewrite_candidate?(url) and Volt.Assets.asset?(uri.path) do
+        absolute = Path.expand(uri.path, Path.dirname(source_path))
+        relative = Path.relative_to(absolute, output_base, force: true)
+        {:rewrite, append_suffix(relative, uri)}
+      else
+        :keep
+      end
+    end)
+  end
+
   @doc "Rewrite relative CSS asset URLs to dev-server URLs without copying files."
   @spec rewrite_dev(String.t(), String.t() | nil, String.t(), String.t()) :: rewrite_result()
-  def rewrite_dev(css, nil, _root, _prefix), do: {:ok, css}
+  def rewrite_dev(css, source_path, root, prefix, opts \\ [])
+  def rewrite_dev(css, nil, _root, _prefix, _opts), do: {:ok, css}
 
-  def rewrite_dev(css, source_path, root, prefix) do
+  def rewrite_dev(css, source_path, root, prefix, opts) do
     with {:ok, css} <-
            Vize.CSS.rewrite_urls(css, [filename: source_path], fn url ->
-             case dev_url(url, source_path, root, prefix) do
+             case dev_url(url, source_path, root, prefix, opts) do
                {:ok, ^url} -> :keep
                {:ok, rewritten} -> {:rewrite, rewritten}
              end
@@ -56,8 +92,8 @@ defmodule Volt.CSS.AssetURLRewriter do
     end
   end
 
-  defp rewrite_build_url(url, {assets, emitted}, source_path, outdir, prefix, opts) do
-    case build_url(url, source_path, outdir, prefix, emitted, opts) do
+  defp rewrite_build_url(url, {assets, emitted}, source_path, prefix, opts) do
+    case build_url(url, source_path, prefix, emitted, opts) do
       {:ok, ^url, emitted, _asset} ->
         {:keep, {assets, emitted}}
 
@@ -67,13 +103,13 @@ defmodule Volt.CSS.AssetURLRewriter do
     end
   end
 
-  defp build_url(url, source_path, outdir, prefix, emitted, opts) do
+  defp build_url(url, source_path, prefix, emitted, opts) do
     if rewrite_candidate?(url) do
       uri = URI.parse(url)
       asset_path = Path.expand(uri.path || "", Path.dirname(source_path))
 
       if Volt.Assets.asset?(asset_path) and File.regular?(asset_path) do
-        {filename, asset, emitted} = emitted_filename(asset_path, outdir, emitted, opts)
+        {filename, asset, emitted} = emitted_filename(asset_path, emitted, opts)
         {:ok, append_suffix(Volt.URL.join(prefix, filename), uri), emitted, asset}
       else
         {:ok, url, emitted, nil}
@@ -83,15 +119,23 @@ defmodule Volt.CSS.AssetURLRewriter do
     end
   end
 
-  defp dev_url(url, source_path, root, prefix) do
+  defp dev_url(url, source_path, root, prefix, opts) do
     if rewrite_candidate?(url) do
       uri = URI.parse(url)
       asset_path = Path.expand(uri.path || "", Path.dirname(source_path))
 
-      if Volt.Assets.asset?(asset_path) and File.regular?(asset_path) and
-           Volt.Path.inside?(asset_path, root) do
-        relative = Path.relative_to(asset_path, root)
-        {:ok, append_suffix(Volt.URL.join(prefix, relative), uri)}
+      if Volt.Assets.asset?(asset_path) and File.regular?(asset_path) do
+        cond do
+          Volt.Path.inside?(asset_path, root) ->
+            relative = Path.relative_to(asset_path, root)
+            {:ok, append_suffix(Volt.URL.join(prefix, relative), uri)}
+
+          grant = Keyword.get(opts, :grant_asset) ->
+            {:ok, append_suffix(grant.(asset_path), uri)}
+
+          true ->
+            {:ok, url}
+        end
       else
         {:ok, url}
       end
@@ -100,15 +144,16 @@ defmodule Volt.CSS.AssetURLRewriter do
     end
   end
 
-  defp emitted_filename(asset_path, outdir, emitted, opts) do
+  defp emitted_filename(asset_path, emitted, opts) do
     case Map.fetch(emitted, asset_path) do
-      {:ok, {filename, asset}} ->
+      {:ok, {filename, asset, _artifact}} ->
         {filename, asset, emitted}
 
       :error ->
-        {:ok, filename} = Volt.Assets.copy_hashed(asset_path, outdir)
+        artifact = Volt.Assets.prepare_hashed(asset_path)
+        filename = artifact.file
         asset = Volt.Assets.manifest_asset(asset_path, filename, root: Keyword.get(opts, :root))
-        {filename, asset, Map.put(emitted, asset_path, {filename, asset})}
+        {filename, asset, Map.put(emitted, asset_path, {filename, asset, artifact})}
     end
   end
 

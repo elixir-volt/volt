@@ -6,6 +6,24 @@ defmodule Volt.CacheTest do
     :ok
   end
 
+  test "sessions isolate cached content and eviction" do
+    path = "/shared/app.css"
+    a = %Volt.DevServer.CacheEntry{code: "a"}
+    b = %Volt.DevServer.CacheEntry{code: "b"}
+    Volt.Cache.put(path, 1, a, :site_a)
+    Volt.Cache.put(path, 1, b, :site_b)
+    Volt.Cache.put(path <> "?import", 1, a, :site_a)
+    assert Volt.Cache.get(path, 1, :site_a) == a
+    assert Volt.Cache.get(path, 1, :site_b) == b
+    assert Volt.Cache.get(path, 1) == nil
+    Volt.Cache.evict_file(path, :site_a)
+    assert Volt.Cache.get_file(path, :site_a) == nil
+    assert Volt.Cache.get_file(path <> "?import", :site_a) == nil
+    assert Volt.Cache.get_file(path, :site_b) == b
+    Volt.Cache.clear_session(:site_b)
+    assert Volt.Cache.get_file(path, :site_b) == nil
+  end
+
   test "get returns nil on miss" do
     assert Volt.Cache.get("/app.ts", 12345) == nil
   end

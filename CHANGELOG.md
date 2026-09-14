@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Breaking changes
+
+- Rename `Volt.JS.Helpers` to `Volt.JS.Discovery`, with `files/0,1` and `format_files/0` replacing `discover_files/0,1` and `discover_format_files/0`.
+
+### Added
+
+- Add `Volt.build/1` as the library API for complete frontend builds with one typed result and merged manifest for scripts, styles, chunks, and emitted assets.
+- Isolate Tailwind scanner and CSS state by profile and stylesheet root while sharing one supervised compiler runtime.
+- Allow Tailwind roots to configure their logical output name, development URL, and source globs.
+
+### Changed
+
+- Require QuickBEAM 0.11.1 or later in the 0.11 series for release-optimized, baseline-CPU precompiled runtimes and the Mint 1.10 security dependency floor.
+- Write one production manifest at the configured asset output root instead of separate JavaScript and Tailwind manifests.
+- Make `mix volt.build` a thin adapter over `Volt.build/1`.
+- Emit Tailwind development artifacts atomically and skip style HMR broadcasts when generated CSS is unchanged.
+- Normalize in-memory build manifests and emitted asset metadata to typed structs before JSON serialization.
+
+### Fixed
+
+- Allow JavaScript formatting and checks when the bundle format is configured as `:esm`, without treating the format atom as formatter options ([#36](https://github.com/elixir-volt/volt/pull/36), fixes [#34](https://github.com/elixir-volt/volt/issues/34)).
+- Handle filesystem watcher events for the watched root itself when normalizing macOS path aliases.
+- Apply Vue scoped styles without capturing component-module bindings such as `Object`.
+
+### Security
+
+- Require Igniter 0.8.4 or later to prevent terminal escape injection through package metadata in installer confirmation prompts (CVE-2026-82584).
+- Require Bandit 1.12.5 or later in the Phoenix examples to address HTTP/2 header validation and connection-window starvation (CVE-2026-75484, CVE-2026-74836).
+
+- Update Phoenix example locks to patched Phoenix and LiveView releases for channel-join and long-poll denial of service, presence-client crashes, link scheme validation, and redirect validation.
+
 ## 0.17.11 - 2026-09-04
 
 ### Added

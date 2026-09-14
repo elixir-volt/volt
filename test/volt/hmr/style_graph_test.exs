@@ -6,6 +6,19 @@ defmodule Volt.HMR.StyleGraphTest do
     :ok
   end
 
+  test "transitive edges and cleanup remain inside their session" do
+    alias Volt.HMR.StyleGraph
+    StyleGraph.update("/app.css", ["/theme.css"], :a)
+    StyleGraph.update("/theme.css", ["/tokens.css"], :a)
+    StyleGraph.update("/app.css", ["/other.css"], :b)
+    assert Enum.sort(StyleGraph.dependents("/tokens.css", :a)) == ["/app.css", "/theme.css"]
+    assert StyleGraph.dependents("/tokens.css", :b) == []
+    assert StyleGraph.dependents("/tokens.css") == []
+    StyleGraph.clear_session(:a)
+    assert StyleGraph.dependencies_of("/app.css", :a) == []
+    assert StyleGraph.dependents("/other.css", :b) == ["/app.css"]
+  end
+
   test "tracks direct dependencies and transitive dependents" do
     app = "/app/app.css"
     theme = "/app/theme.css"

@@ -14,6 +14,23 @@ defmodule Volt.CSS.AssetURLRewriterTest do
     :ok
   end
 
+  @tag :tmp_dir
+  test "prepares rewritten URLs and binary artifacts without copying files", %{tmp_dir: root} do
+    File.write!(Path.join(root, "icon.svg"), "<svg/>")
+    css = ~s|.a { background: url('./icon.svg?v=1#mark') } .b { background: url('./icon.svg') }|
+
+    assert {:ok, result} =
+             Volt.CSS.AssetURLRewriter.prepare(css, Path.join(root, "app.css"),
+               prefix: "https://cdn.example/assets",
+               root: root
+             )
+
+    assert [%Volt.Builder.Artifact{file: file, content: "<svg/>"}] = result.artifacts
+    assert [%Volt.Builder.Asset{src: "icon.svg", file: ^file}] = result.assets
+    assert result.code =~ "https://cdn.example/assets/#{file}?v=1#mark"
+    assert File.ls!(root) == ["icon.svg"]
+  end
+
   test "rewrites relative url nodes through hashed assets" do
     File.write!(Path.join(@fixture_dir, "src/icons/logo.svg"), "<svg></svg>")
     source_path = Path.join(@fixture_dir, "src/app.css")

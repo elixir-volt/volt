@@ -12,7 +12,7 @@ defmodule Volt.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      test_ignore_filters: [&String.starts_with?(&1, "test/support/")],
+      elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [plt_add_apps: [:mix, :ex_unit], flags: [:no_opaque]],
       name: "Volt",
       description:
@@ -31,6 +31,9 @@ defmodule Volt.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_env), do: ["lib"]
+
   defp deps do
     [
       {:reach, "~> 2.6.1", only: [:dev, :test], runtime: false},
@@ -38,7 +41,7 @@ defmodule Volt.MixProject do
       {:oxc, "~> 0.17.8"},
       {:vize, "~> 0.14.2"},
       {:oxide_ex, "~> 0.2.2"},
-      {:quickbeam, "~> 0.11.0"},
+      {:quickbeam, "~> 0.11.1"},
       {:dotenvy, "~> 1.1"},
       {:floki, "~> 0.38"},
       {:plug, "~> 1.16"},
@@ -47,7 +50,7 @@ defmodule Volt.MixProject do
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:json_codec, "~> 0.2.3"},
-      {:igniter, "~> 0.5", optional: true},
+      {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
       {:npm, "~> 0.7.6"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -55,7 +58,7 @@ defmodule Volt.MixProject do
       {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:makeup_js, "~> 0.1", only: :dev, runtime: false},
-      {:bandit, "~> 1.0", only: :test},
+      {:bandit, ">= 1.12.5 and < 2.0.0", only: :test},
       {:playwright_ex, "~> 0.5", only: :test}
     ]
   end
@@ -218,7 +221,7 @@ defmodule Volt.MixProject do
           Volt.JS.Asset,
           Volt.JS.AST,
           Volt.JS.Extensions,
-          Volt.JS.Helpers,
+          Volt.JS.Discovery,
           Volt.JS.ImportExtractor,
           Volt.JS.ImportExtractor.Result,
           Volt.JS.Package,

@@ -45,6 +45,7 @@ defmodule Volt.Builder do
     * `:chunks` — manual chunk definitions, map of chunk name to list of patterns:
 
           chunks: %{"vendor" => ["vue", "vue-router"], "ui" => ["assets/src/components"]}
+    * `:write_manifest` — write `manifest.json` after building (default: `true`)
     * `:external` — specifiers to exclude from the bundle and access as globals.
       Accepts a list (global name auto-derived) or a map of `specifier => global_name`:
 
@@ -53,16 +54,32 @@ defmodule Volt.Builder do
   """
   @spec build(keyword()) :: {:ok, Volt.Builder.Result.t()} | {:error, term()}
   def build(opts) do
+    outdir = opts |> Keyword.get(:outdir, Paths.static()) |> Path.expand()
+
+    public_dir = opts |> Keyword.get(:public_dir, false) |> Volt.PublicDir.resolve()
+
+    with {:ok, result, plan} <- prepare(opts),
+         {:ok, static_root, plan} <-
+           Volt.PublicDir.prepare_output(
+             plan,
+             outdir,
+             public_dir,
+             Path.dirname(outdir)
+           ),
+         :ok <- Volt.Builder.Writer.write_plan(static_root, plan) do
+      {:ok, result}
+    end
+  end
+
+  @doc "Prepare graph output and its manifest without writing destination files."
+  def prepare(opts) do
     plugins = Keyword.get(opts, :plugins, [])
 
     entries =
       opts |> Keyword.fetch!(:entry) |> List.wrap() |> Enum.map(&resolve_entry(&1, plugins))
 
-    public_dir = opts |> Keyword.get(:public_dir, false) |> Volt.PublicDir.resolve()
     name = Keyword.get(opts, :name)
     {ctx, build_ctx} = build_contexts(entries, opts)
-
-    Volt.PublicDir.copy(public_dir, Path.dirname(build_ctx.outdir))
 
     expanded_entries = entries |> Enum.flat_map(&expand_entry(&1, name)) |> unique_entry_names()
 
@@ -73,9 +90,17 @@ defmodule Volt.Builder do
         build_isolated_entries(expanded_entries, ctx, build_ctx)
       end
 
-    with {:ok, result} <- finalize_build_results(results) do
-      Volt.Builder.Writer.write_manifest(build_ctx.outdir, result.manifest)
-      {:ok, result}
+    with {:ok, result, plan} <- finalize_build_results(results),
+         :ok <- Volt.Builder.Plan.validate_manifest(plan, result.manifest) do
+      artifacts =
+        if Keyword.get(opts, :write_manifest, true),
+          do: [
+            %Volt.Builder.Artifact{file: "manifest.json", content: Jason.encode!(result.manifest)}
+            | plan.artifacts
+          ],
+          else: plan.artifacts
+
+      with {:ok, plan} <- Volt.Builder.Plan.new(artifacts), do: {:ok, result, plan}
     end
   end
 
@@ -89,7 +114,8 @@ defmodule Volt.Builder do
   defp build_shared_entries(entries, ctx, build_ctx) do
     with {:ok, collected} <- collect_shared_entries(entries, ctx),
          false <- label_collision?(collected.path_labels),
-         {:ok, worker_results} <- build_worker_results(collected.workers, ctx, build_ctx),
+         {:ok, worker_results, worker_artifacts, worker_metadata} <-
+           build_worker_results(collected.workers, ctx, build_ctx),
          {:ok, compiled} <- compile_all(collected.modules, build_ctx.target, ctx) do
       compiled =
         rewrite_nonlocal_labels(compiled, collected.specifier_labels, collected.path_labels)
@@ -112,7 +138,9 @@ defmodule Volt.Builder do
         asset_url_prefix: build_ctx.asset_url_prefix
       }
 
-      case Output.build_shared_entries(
+      compiled = %{compiled | artifacts: compiled.artifacts ++ worker_artifacts}
+
+      case Output.prepare_shared_entries(
              entries,
              compiled,
              collected.modules,
@@ -123,7 +151,7 @@ defmodule Volt.Builder do
           build_isolated_entries(entries, ctx, build_ctx) |> finalize_build_results()
 
         result ->
-          result
+          merge_worker_metadata(result, worker_metadata)
       end
     else
       true -> build_isolated_entries(entries, ctx, build_ctx) |> finalize_build_results()
@@ -275,8 +303,10 @@ defmodule Volt.Builder do
     with {:ok, modules, dep_map, workers, specifier_labels, path_labels} <-
            Collector.collect(entry, ctx),
          {:ok, compiled} <- compile_all(modules, target, ctx),
-         {:ok, worker_results} <- build_worker_results(workers, ctx, build_ctx) do
+         {:ok, worker_results, worker_artifacts, worker_metadata} <-
+           build_worker_results(workers, ctx, build_ctx) do
       compiled = rewrite_nonlocal_labels(compiled, specifier_labels, path_labels)
+      compiled = %{compiled | artifacts: compiled.artifacts ++ worker_artifacts}
 
       output_ctx = %Volt.Builder.OutputContext{
         plugins: ctx.plugins,
@@ -300,11 +330,14 @@ defmodule Volt.Builder do
         code_splitting and
           (has_dynamic_imports?(dep_map) or build_ctx.chunks != %{})
 
-      if use_chunks do
-        Output.build_chunks(entry, name, compiled, {modules, dep_map}, out)
-      else
-        Output.build_single(entry, name, compiled, out)
-      end
+      prepared =
+        if use_chunks do
+          Output.prepare_chunks(entry, name, compiled, {modules, dep_map}, out)
+        else
+          Output.prepare_single(entry, name, compiled, out)
+        end
+
+      merge_worker_metadata(prepared, worker_metadata)
     end
   end
 
@@ -316,9 +349,11 @@ defmodule Volt.Builder do
          {:ok, compiled} <-
            Volt.Pipeline.compile(entry, source,
              minify: bundle_opts[:minify] || false,
+             node_modules: bundle_opts[:node_modules],
+             resolve_dirs: bundle_opts[:resolve_dirs] || [],
              mode: :production
            ) do
-      Volt.Builder.Writer.build_style_entry(
+      Volt.Builder.Writer.prepare_style_entry(
         name,
         compiled.code,
         outdir,
@@ -448,9 +483,10 @@ defmodule Volt.Builder do
 
     duplicate_worker_basenames = duplicate_worker_basenames(worker_specs)
 
-    Enum.reduce_while(worker_specs, {:ok, %{}}, fn {_specifier, resolved_path}, {:ok, acc} ->
+    Enum.reduce_while(worker_specs, {:ok, %{}, [], []}, fn {_specifier, resolved_path},
+                                                           {:ok, acc, artifacts, metadata} ->
       if Map.has_key?(acc, resolved_path) do
-        {:cont, {:ok, acc}}
+        {:cont, {:ok, acc, artifacts, metadata}}
       else
         worker_name = worker_output_name(resolved_path, duplicate_worker_basenames)
 
@@ -461,14 +497,56 @@ defmodule Volt.Builder do
                ctx,
                %{build_ctx | code_splitting: false}
              ) do
-          {:ok, %{js: %{path: path}}} ->
-            {:cont, {:ok, Map.put(acc, resolved_path, Path.basename(path))}}
+          {:ok, %{js: %{path: path}} = result, plan} ->
+            {:cont,
+             {:ok, Map.put(acc, resolved_path, Path.basename(path)), [plan.artifacts | artifacts],
+              [result | metadata]}}
 
           {:error, reason} ->
             {:halt, {:error, {:worker_build_failed, resolved_path, reason}}}
         end
       end
     end)
+    |> case do
+      {:ok, urls, artifacts, metadata} ->
+        {:ok, urls, List.flatten(artifacts), Enum.reverse(metadata)}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp merge_worker_metadata({:error, _} = error, _workers), do: error
+
+  defp merge_worker_metadata({:ok, result, plan}, workers) do
+    Enum.reduce_while(workers, {:ok, result, plan}, fn worker, {:ok, acc, plan} ->
+      case Volt.Builder.ManifestEntry.conflicts(worker.manifest, acc.manifest) do
+        [] ->
+          merged = %{
+            acc
+            | manifest: Map.merge(acc.manifest, worker.manifest),
+              styles: [worker.styles | acc.styles],
+              chunks: [worker.js, worker.chunks | acc.chunks]
+          }
+
+          {:cont, {:ok, merged, plan}}
+
+        keys ->
+          {:halt, {:error, {:manifest_collision, Enum.sort(keys)}}}
+      end
+    end)
+    |> case do
+      {:ok, merged, plan} ->
+        {:ok,
+         %{
+           merged
+           | styles: merged.styles |> List.flatten() |> Enum.uniq(),
+             chunks: merged.chunks |> List.flatten() |> Enum.uniq()
+         }, plan}
+
+      {:error, _} = error ->
+        error
+    end
   end
 
   defp duplicate_worker_basenames(worker_specs) do
@@ -485,7 +563,7 @@ defmodule Volt.Builder do
     name = resolved_path |> Path.basename() |> Path.rootname()
 
     if MapSet.member?(duplicate_basenames, name) do
-      "#{name}-#{Volt.Format.content_hash(resolved_path)}"
+      "#{name}-#{Volt.Builder.Naming.hash(resolved_path)}"
     else
       name
     end
@@ -502,8 +580,11 @@ defmodule Volt.Builder do
   defp compile_modules(modules, ctx) do
     Enum.reduce_while(modules, {:ok, []}, fn {path, label, source}, {:ok, acc} ->
       case compile_module(path, label, source, ctx) do
-        {:ok, js, css, assets} -> {:cont, {:ok, [{label, js, css_part(path, css), assets} | acc]}}
-        {:error, _} = error -> {:halt, error}
+        {:ok, js, css, assets, artifacts} ->
+          {:cont, {:ok, [{label, js, css_part(path, css), assets, artifacts} | acc]}}
+
+        {:error, _} = error ->
+          {:halt, error}
       end
     end)
   end
@@ -522,16 +603,27 @@ defmodule Volt.Builder do
   end
 
   defp merge_compiled(compiled) do
-    {js_files, css_parts, assets} =
-      compiled
-      |> Enum.reverse()
-      |> Enum.reduce({[], [], []}, fn {label, js, css, assets}, {js_acc, css_acc, asset_acc} ->
-        {[{label, js} | js_acc], if(css, do: [css | css_acc], else: css_acc),
-         [assets | asset_acc]}
+    result =
+      Enum.reduce(Enum.reverse(compiled), %Volt.Builder.Compiled{}, fn {label, js, css, assets,
+                                                                        artifacts},
+                                                                       acc ->
+        %{
+          acc
+          | scripts: [{label, js} | acc.scripts],
+            styles: if(css, do: [css | acc.styles], else: acc.styles),
+            assets: [assets | acc.assets],
+            artifacts: [artifacts | acc.artifacts]
+        }
       end)
 
     {:ok,
-     {Enum.reverse(js_files), Enum.reverse(css_parts), assets |> List.flatten() |> Enum.uniq()}}
+     %{
+       result
+       | scripts: Enum.reverse(result.scripts),
+         styles: Enum.reverse(result.styles),
+         assets: result.assets |> List.flatten() |> Enum.uniq(),
+         artifacts: result.artifacts |> List.flatten() |> Enum.uniq()
+     }}
   end
 
   defp compile_module(module_id, _label, source, ctx) do
@@ -552,7 +644,7 @@ defmodule Volt.Builder do
 
       true ->
         case Volt.Builder.Compiler.compile(module_id, source, ctx) do
-          {:ok, %{code: code, css: css}} -> {:ok, code, css, []}
+          {:ok, %{code: code, css: css}} -> {:ok, code, css, [], []}
           {:error, _} = error -> error
         end
     end
@@ -578,9 +670,12 @@ defmodule Volt.Builder do
       root: ctx.asset_root
     ]
 
-    case Volt.Assets.emit_js_module(path, asset_opts) do
-      {:ok, %{code: js, assets: assets}} -> {:ok, js, nil, assets}
-      {:error, _} = error -> error
+    case Volt.Assets.prepare_js_module(path, asset_opts) do
+      {:ok, %{code: js, assets: assets, artifacts: artifacts}} ->
+        {:ok, js, nil, assets, artifacts}
+
+      {:error, _} = error ->
+        error
     end
   end
 
@@ -590,12 +685,16 @@ defmodule Volt.Builder do
 
   defp compile_css_import(path, source, ctx) do
     case Volt.Builder.Compiler.compile(path, source, ctx) do
-      {:ok, %{code: css}} -> {:ok, "export default undefined;", css, []}
+      {:ok, %{code: css}} -> {:ok, "export default undefined;", css, [], []}
       {:error, _} = error -> error
     end
   end
 
-  defp rewrite_nonlocal_labels({js_files, css_parts, assets}, specifier_labels, path_labels) do
+  defp rewrite_nonlocal_labels(
+         %Volt.Builder.Compiled{scripts: js_files} = compiled,
+         specifier_labels,
+         path_labels
+       ) do
     label_to_path = Map.new(path_labels, fn {path, label} -> {label, path} end)
 
     global_specifier_map =
@@ -627,7 +726,7 @@ defmodule Volt.Builder do
         {label, new_code}
       end)
 
-    {js_files, css_parts, assets}
+    %{compiled | scripts: js_files}
   end
 
   defp relative_label(from_label, to_label) do
@@ -839,20 +938,51 @@ defmodule Volt.Builder do
   defp to_string_or_nil(value), do: to_string(value)
 
   defp finalize_build_results(results) do
-    case Enum.split_with(results, &match?({:ok, _}, &1)) do
-      {[{:ok, single}], []} -> {:ok, single}
-      {successes, []} when successes != [] -> {:ok, merge_build_results(successes)}
-      {_, [first_error | _]} -> first_error
-    end
-  end
+    Enum.reduce_while(
+      results,
+      {:ok, %Volt.Builder.Result{}, []},
+      fn
+        {:error, _} = error, _acc ->
+          {:halt, error}
 
-  defp merge_build_results(results) do
-    Enum.reduce(results, %Volt.Builder.Result{}, fn {:ok, result}, acc ->
-      %Volt.Builder.Result{
-        js: [result.js | acc.js],
-        css: result.css || acc.css,
-        manifest: Map.merge(acc.manifest, result.manifest)
-      }
-    end)
+        {:ok, result, plan}, {:ok, acc, artifact_groups} ->
+          conflicts = Volt.Builder.ManifestEntry.conflicts(result.manifest, acc.manifest)
+
+          with [] <- conflicts do
+            merged = %Volt.Builder.Result{
+              js: [result.js | acc.js],
+              css: result.css || acc.css,
+              styles: [result.styles | acc.styles],
+              chunks: [result.chunks | acc.chunks],
+              manifest: Map.merge(acc.manifest, result.manifest)
+            }
+
+            {:cont, {:ok, merged, [plan.artifacts | artifact_groups]}}
+          else
+            keys -> {:halt, {:error, {:manifest_collision, Enum.sort(keys)}}}
+          end
+      end
+    )
+    |> case do
+      {:ok, result, artifact_groups} ->
+        js =
+          case result.js |> Enum.reverse() |> List.flatten() do
+            [single] -> single
+            entries -> entries
+          end
+
+        with {:ok, plan} <- Volt.Builder.Plan.new(List.flatten(artifact_groups)) do
+          {:ok,
+           %{
+             result
+             | js: js,
+               styles: result.styles |> Enum.reverse() |> List.flatten() |> Enum.uniq(),
+               chunks: result.chunks |> Enum.reverse() |> List.flatten()
+           }, plan}
+        end
+
+      {:error, _} = error ->
+        error
+    end
   end
 end

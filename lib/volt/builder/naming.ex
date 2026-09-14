@@ -3,6 +3,11 @@ defmodule Volt.Builder.Naming do
 
   @windows_reserved ~w(CON PRN AUX NUL COM1 COM2 COM3 COM4 COM5 COM6 COM7 COM8 COM9 LPT1 LPT2 LPT3 LPT4 LPT5 LPT6 LPT7 LPT8 LPT9)
 
+  @spec hash(iodata()) :: String.t()
+  def hash(content) do
+    :crypto.hash(:sha256, content) |> Base.encode16(case: :lower) |> binary_part(0, 8)
+  end
+
   @spec entry_name(String.t(), String.t() | nil) :: String.t()
   def entry_name(path, override \\ nil)
   def entry_name(_path, override) when is_binary(override), do: file_path(override)

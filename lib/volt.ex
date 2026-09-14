@@ -21,6 +21,10 @@ defmodule Volt do
 
   alias Volt.URL
 
+  @doc "Build the complete configured frontend output."
+  @spec build(keyword()) :: {:ok, Volt.Build.Result.t()} | {:error, term()}
+  def build(opts \\ []), do: Volt.Build.run(opts)
+
   @doc """
   Returns the browser path for a Volt-managed static asset.
 

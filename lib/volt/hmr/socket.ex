@@ -9,8 +9,11 @@ defmodule Volt.HMR.Socket do
   require Logger
 
   @impl true
-  def init(_args) do
-    Registry.register(Volt.HMR.Registry, :clients, nil)
+  def init(nil), do: init([])
+
+  def init(args) do
+    session = Keyword.get(args, :session, :default)
+    Registry.register(Volt.HMR.Registry, Volt.HMR.Channel.key(session), nil)
     {:ok, %{}}
   end
 

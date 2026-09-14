@@ -12,6 +12,16 @@ defmodule Volt.Watcher.PathTest do
              Path.join(root, "app.js")
   end
 
+  @tag :tmp_dir
+  test "normalizes an aliased event for the watched root itself", %{tmp_dir: tmp_dir} do
+    root = Path.join(tmp_dir, "root")
+    alias_path = Path.join(tmp_dir, "alias")
+    File.mkdir_p!(root)
+    File.ln_s!(root, alias_path)
+
+    assert Volt.Watcher.Path.normalize_from_roots(alias_path, [root]) == root
+  end
+
   test "preserves paths that do not belong to a configured root" do
     assert Volt.Watcher.Path.normalize_from_roots("/outside/app.js", ["/site/assets"]) ==
              "/outside/app.js"

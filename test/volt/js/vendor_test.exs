@@ -30,6 +30,26 @@ defmodule Volt.JS.VendorTest do
     :ok
   end
 
+  @tag :tmp_dir
+  test "distinct package roots cannot overwrite each other's vendor output", %{tmp_dir: root} do
+    contexts =
+      for name <- ["first", "second"] do
+        modules = Path.join([root, name, "node_modules"])
+        package = Path.join(modules, "same-lib")
+        File.mkdir_p!(package)
+        File.write!(Path.join(package, "package.json"), ~s({"name":"same-lib","main":"index.js"}))
+        File.write!(Path.join(package, "index.js"), "export const value = '#{name}'")
+        assert {:ok, code} = Volt.JS.Vendor.bundle_on_demand("same-lib", modules)
+        {modules, code}
+      end
+
+    [{first, first_code}, {second, second_code}] = contexts
+    assert first_code =~ "first"
+    assert second_code =~ "second"
+    assert {:ok, ^first_code} = Volt.JS.Vendor.read("same-lib", node_modules: first)
+    assert {:ok, ^second_code} = Volt.JS.Vendor.read("same-lib", node_modules: second)
+  end
+
   describe "prebundle/1" do
     test "detects bare imports and bundles them" do
       {:ok, vendor_map} =
@@ -47,7 +67,7 @@ defmodule Volt.JS.VendorTest do
         node_modules: @node_modules
       )
 
-      assert File.regular?("_build/volt/vendor/fake-lib.js")
+      assert [_] = Path.wildcard("_build/volt/vendor/*/fake-lib.js")
     end
 
     test "does not scan into node_modules under the root" do
@@ -126,8 +146,8 @@ defmodule Volt.JS.VendorTest do
       assert Map.has_key?(vendor_map, "editor-a")
       assert Map.has_key?(vendor_map, "editor-b")
 
-      {:ok, editor_a} = Volt.JS.Vendor.read("editor-a")
-      {:ok, editor_b} = Volt.JS.Vendor.read("editor-b")
+      {:ok, editor_a} = Volt.JS.Vendor.read("editor-a", node_modules: @node_modules)
+      {:ok, editor_b} = Volt.JS.Vendor.read("editor-b", node_modules: @node_modules)
 
       assert [chunk] =
                [editor_a, editor_b]
@@ -136,7 +156,7 @@ defmodule Volt.JS.VendorTest do
                |> Enum.uniq()
 
       chunk_specifier = chunk |> String.trim_leading("./") |> String.trim_trailing(".js")
-      {:ok, shared_chunk} = Volt.JS.Vendor.read(chunk_specifier)
+      {:ok, shared_chunk} = Volt.JS.Vendor.read(chunk_specifier, node_modules: @node_modules)
       assert shared_chunk =~ "singleton"
     end
 
@@ -185,7 +205,11 @@ defmodule Volt.JS.VendorTest do
                  plugins: [BrokenSyntheticVendor]
                )
 
-      assert {:ok, ^stable} = Volt.JS.Vendor.read("unstable-lib")
+      assert {:ok, ^stable} =
+               Volt.JS.Vendor.read("unstable-lib",
+                 node_modules: @node_modules,
+                 plugins: [StableSyntheticVendor]
+               )
     end
 
     test "rebuilds cached synthetic entries when plugin prebundle source changes" do
@@ -231,7 +255,7 @@ defmodule Volt.JS.VendorTest do
         node_modules: @node_modules
       )
 
-      {:ok, code} = Volt.JS.Vendor.read("fake-lib")
+      {:ok, code} = Volt.JS.Vendor.read("fake-lib", node_modules: @node_modules)
       assert code =~ "greet"
       refute code =~ "module.exports"
     end
@@ -252,7 +276,10 @@ defmodule Volt.JS.VendorTest do
         )
 
       assert Map.has_key?(vendor_map, "react")
-      {:ok, react_proxy} = Volt.JS.Vendor.read("react")
+
+      {:ok, react_proxy} =
+        Volt.JS.Vendor.read("react", node_modules: @node_modules, plugins: [Volt.Plugin.React])
+
       assert react_proxy =~ ~r/export \{[^}]*act/s
     end
 
@@ -285,8 +312,14 @@ defmodule Volt.JS.VendorTest do
       assert Map.has_key?(vendor_map, "react")
       assert Map.has_key?(vendor_map, "react-using-dom")
 
-      {:ok, react_proxy} = Volt.JS.Vendor.read("react")
-      {:ok, react_using_dom} = Volt.JS.Vendor.read("react-using-dom")
+      {:ok, react_proxy} =
+        Volt.JS.Vendor.read("react", node_modules: @node_modules, plugins: [Volt.Plugin.React])
+
+      {:ok, react_using_dom} =
+        Volt.JS.Vendor.read("react-using-dom",
+          node_modules: @node_modules,
+          plugins: [Volt.Plugin.React]
+        )
 
       assert [shared_chunk] =
                [react_proxy, react_using_dom]
@@ -295,7 +328,12 @@ defmodule Volt.JS.VendorTest do
                |> Enum.uniq()
 
       chunk_specifier = shared_chunk |> String.trim_leading("./") |> String.trim_trailing(".js")
-      {:ok, shared_code} = Volt.JS.Vendor.read(chunk_specifier)
+
+      {:ok, shared_code} =
+        Volt.JS.Vendor.read(chunk_specifier,
+          node_modules: @node_modules,
+          plugins: [Volt.Plugin.React]
+        )
 
       assert react_using_dom =~ "flushSync"
       assert shared_code =~ "domSingleton"
@@ -319,7 +357,13 @@ defmodule Volt.JS.VendorTest do
         )
 
       assert Map.has_key?(vendor_map, "react-dom")
-      {:ok, react_dom_proxy} = Volt.JS.Vendor.read("react-dom")
+
+      {:ok, react_dom_proxy} =
+        Volt.JS.Vendor.read("react-dom",
+          node_modules: @node_modules,
+          plugins: [Volt.Plugin.React]
+        )
+
       assert react_dom_proxy =~ ~r/export \{[^}]*flushSync/s
     end
   end
@@ -368,7 +412,7 @@ defmodule Volt.JS.VendorTest do
 
       assert Map.has_key?(vendor_map, "cjs-lib")
 
-      {:ok, code} = Volt.JS.Vendor.read("cjs-lib")
+      {:ok, code} = Volt.JS.Vendor.read("cjs-lib", node_modules: @node_modules)
       assert code =~ "export"
       refute String.starts_with?(code, "\"use strict\";(function()")
     end
@@ -414,7 +458,7 @@ defmodule Volt.JS.VendorTest do
           node_modules: @node_modules
         )
 
-      {:ok, code} = Volt.JS.Vendor.read("conditional-lib")
+      {:ok, code} = Volt.JS.Vendor.read("conditional-lib", node_modules: @node_modules)
       assert code =~ "development"
     end
 
@@ -457,7 +501,7 @@ defmodule Volt.JS.VendorTest do
           node_modules: @node_modules
         )
 
-      {:ok, code} = Volt.JS.Vendor.read("dep-b")
+      {:ok, code} = Volt.JS.Vendor.read("dep-b", node_modules: @node_modules)
       assert code =~ "require_dep_a"
       assert code =~ "exports.b = require_dep_a().a + 1"
     end
@@ -494,7 +538,10 @@ defmodule Volt.JS.VendorTest do
         )
 
       assert Map.has_key?(vendor_map, "hex-lib")
-      {:ok, code} = Volt.JS.Vendor.read("hex-lib")
+
+      {:ok, code} =
+        Volt.JS.Vendor.read("hex-lib", node_modules: @node_modules, resolve_dirs: [@deps_dir])
+
       assert code =~ "from deps"
     end
 
@@ -535,7 +582,13 @@ defmodule Volt.JS.VendorTest do
         )
 
       assert Map.has_key?(vendor_map, "phoenix-colocated/my_app")
-      {:ok, code} = Volt.JS.Vendor.read("phoenix-colocated/my_app")
+
+      {:ok, code} =
+        Volt.JS.Vendor.read("phoenix-colocated/my_app",
+          node_modules: @node_modules,
+          resolve_dirs: [@deps_dir]
+        )
+
       assert code =~ "MyAppWeb.DemoLive.Sortable"
       assert code =~ "colocated hook mounted"
     end
@@ -549,7 +602,7 @@ defmodule Volt.JS.VendorTest do
 
     test "caches the result for subsequent read/1 calls" do
       {:ok, _} = Volt.JS.Vendor.bundle_on_demand("fake-lib", @node_modules)
-      {:ok, code} = Volt.JS.Vendor.read("fake-lib")
+      {:ok, code} = Volt.JS.Vendor.read("fake-lib", node_modules: @node_modules)
       assert code =~ "greet"
     end
 
@@ -583,12 +636,13 @@ defmodule Volt.JS.VendorTest do
         node_modules: @node_modules
       )
 
-      {:ok, code} = Volt.JS.Vendor.read("fake-lib")
+      {:ok, code} = Volt.JS.Vendor.read("fake-lib", node_modules: @node_modules)
       assert code =~ "greet"
     end
 
     test "returns error for missing vendor" do
-      assert {:error, :not_found} = Volt.JS.Vendor.read("nonexistent")
+      assert {:error, :not_found} =
+               Volt.JS.Vendor.read("nonexistent", node_modules: @node_modules)
     end
   end
 

@@ -12,6 +12,302 @@ defmodule Volt.WatcherTest do
     {:ok, watch_dir: watch_dir}
   end
 
+  @tag :tmp_dir
+  test "installing a missing package repairs session compilation", %{tmp_dir: root} do
+    assets = Path.join(root, "assets")
+    modules = Path.join(root, "node_modules")
+    File.mkdir_p!(assets)
+    File.mkdir_p!(modules)
+    css = Path.join(assets, "app.css")
+    File.write!(css, "@plugin 'missing-recovery-fixture';")
+
+    supervisor =
+      start_supervised!(
+        {Volt.Dev.Session.Supervisor,
+         identity: make_ref(),
+         watcher: [
+           root: assets,
+           name: nil,
+           tailwind: true,
+           tailwind_css: css,
+           tailwind_sources: []
+         ]}
+      )
+
+    {_, watcher, _, _} =
+      Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
+        id == Volt.Dev.Session.Watcher
+      end)
+
+    state = :sys.get_state(watcher)
+    package = Path.join(modules, "missing-recovery-fixture")
+    metadata = Path.join(package, "package.json")
+    assert metadata in state.config.tailwind_dependencies
+    File.mkdir_p!(package)
+    File.write!(metadata, ~s({"name":"missing-recovery-fixture","main":"index.js"}))
+
+    File.write!(
+      Path.join(package, "index.js"),
+      "module.exports = ({addBase}) => addBase({'.installed': {color: 'red'}})"
+    )
+
+    assert {:noreply, queued} =
+             Volt.Watcher.handle_info({:file_event, self(), {metadata, [:created]}}, state)
+
+    assert is_reference(queued.tailwind_timer)
+    Process.cancel_timer(queued.tailwind_timer)
+    assert {:noreply, _} = Volt.Watcher.handle_info(:tailwind_rebuild, queued)
+    assert {:ok, code} = Volt.Tailwind.Worker.stylesheet(state.tables.stylesheet_worker)
+    assert code =~ ".installed"
+  end
+
+  @tag :tmp_dir
+  test "missing plugin helper creation repairs session compilation", %{tmp_dir: root} do
+    assets = Path.join(root, "assets")
+    external = Path.join(root, "plugins")
+    File.mkdir_p!(assets)
+    File.mkdir_p!(external)
+    plugin = Path.join(external, "theme.cjs")
+    helper = Path.join(external, "helper.cjs")
+
+    File.write!(
+      plugin,
+      "const values = require('./helper.cjs'); module.exports = ({addBase}) => addBase(values)"
+    )
+
+    css = Path.join(assets, "app.css")
+    File.write!(css, "@plugin '../plugins/theme.cjs';")
+
+    supervisor =
+      start_supervised!(
+        {Volt.Dev.Session.Supervisor,
+         identity: make_ref(),
+         watcher: [
+           root: assets,
+           name: nil,
+           tailwind: true,
+           tailwind_css: css,
+           tailwind_sources: []
+         ]}
+      )
+
+    {_, watcher, _, _} =
+      Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
+        id == Volt.Dev.Session.Watcher
+      end)
+
+    state = :sys.get_state(watcher)
+    assert helper in state.config.tailwind_dependencies
+    assert external in state.tailwind_dirs
+    File.write!(helper, "module.exports = {'.repaired': {color: 'red'}}")
+
+    assert {:noreply, queued} =
+             Volt.Watcher.handle_info({:file_event, self(), {helper, [:created]}}, state)
+
+    Process.cancel_timer(queued.tailwind_timer)
+    assert queued.tailwind_full?
+    assert {:noreply, _} = Volt.Watcher.handle_info(:tailwind_rebuild, queued)
+    assert {:ok, code} = Volt.Tailwind.Worker.stylesheet(state.tables.stylesheet_worker)
+    assert code =~ ".repaired"
+  end
+
+  @tag :tmp_dir
+  test "missing external CSS creation repairs failed initial compilation", %{tmp_dir: root} do
+    assets = Path.join(root, "assets")
+    File.mkdir_p!(assets)
+    css = Path.join(assets, "app.css")
+    missing = Path.join(root, "external/theme.css")
+    File.write!(css, "@import '../external/theme.css';")
+
+    supervisor =
+      start_supervised!(
+        {Volt.Dev.Session.Supervisor,
+         identity: make_ref(),
+         watcher: [
+           root: assets,
+           name: nil,
+           tailwind: true,
+           tailwind_css: css,
+           tailwind_sources: []
+         ]}
+      )
+
+    {_, watcher, _, _} =
+      Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
+        id == Volt.Dev.Session.Watcher
+      end)
+
+    state = :sys.get_state(watcher)
+    assert missing in state.config.tailwind_dependencies
+    assert root in state.tailwind_dirs
+    File.mkdir_p!(Path.dirname(missing))
+    File.write!(missing, ".repaired { color: red }")
+
+    assert {:noreply, queued} =
+             Volt.Watcher.handle_info({:file_event, self(), {missing, [:created]}}, state)
+
+    Process.cancel_timer(queued.tailwind_timer)
+    assert queued.tailwind_full?
+    assert {:noreply, _} = Volt.Watcher.handle_info(:tailwind_rebuild, queued)
+    assert {:ok, code} = Volt.Tailwind.Worker.stylesheet(state.tables.stylesheet_worker)
+    assert code =~ ".repaired"
+  end
+
+  @tag :tmp_dir
+  test "session observes compiler-discovered external stylesheet dependencies", %{tmp_dir: root} do
+    assets = Path.join(root, "assets")
+    external = Path.join(root, "external")
+    File.mkdir_p!(assets)
+    File.mkdir_p!(external)
+    imported = Path.join(external, "theme.css")
+    File.write!(imported, ".external { color: red }")
+    css = Path.join(assets, "app.css")
+
+    File.write!(
+      css,
+      "@import '../external/theme.css'; @source '../external/*.html'; @tailwind utilities source(none);"
+    )
+
+    supervisor =
+      start_supervised!(
+        {Volt.Dev.Session.Supervisor,
+         identity: make_ref(),
+         watcher: [
+           root: assets,
+           name: nil,
+           tailwind: true,
+           tailwind_css: css,
+           tailwind_sources: []
+         ]}
+      )
+
+    {_, watcher, _, _} =
+      Enum.find(Supervisor.which_children(supervisor), fn {id, _, _, _} ->
+        id == Volt.Dev.Session.Watcher
+      end)
+
+    state = :sys.get_state(watcher)
+    assert imported in state.config.tailwind_dependencies
+    assert external in state.tailwind_dirs
+    File.write!(imported, ".external { color: blue }")
+
+    assert {:noreply, queued} =
+             Volt.Watcher.handle_info({:file_event, self(), {imported, [:modified]}}, state)
+
+    assert queued.tailwind_full?
+    Process.cancel_timer(queued.tailwind_timer)
+    assert {:noreply, rebuilt} = Volt.Watcher.handle_info(:tailwind_rebuild, queued)
+    assert {:ok, updated} = Volt.Tailwind.Worker.stylesheet(state.tables.stylesheet_worker)
+    assert updated =~ "blue"
+    external_watcher = Map.fetch!(rebuilt.discovered_watches, external)
+    File.write!(css, "@tailwind utilities source(none);")
+
+    assert {:noreply, pruned} =
+             Volt.Watcher.handle_info(:tailwind_rebuild, %{rebuilt | tailwind_full?: true})
+
+    refute external in pruned.tailwind_dirs
+    refute imported in pruned.config.tailwind_dependencies
+    refute Process.alive?(external_watcher)
+    assert assets in pruned.tailwind_dirs
+  end
+
+  @tag :tmp_dir
+  test "document reload waits for successful CSS and remains pending on failure", %{tmp_dir: root} do
+    File.mkdir_p!(Path.join(root, "pages"))
+    page = Path.join(root, "pages/index.astral")
+    css = Path.join(root, "app.css")
+    File.write!(page, "<div class='flex'></div>")
+    File.write!(css, "@tailwind utilities;")
+
+    watcher =
+      start_supervised!(
+        {Volt.Watcher,
+         root: root,
+         name: nil,
+         tailwind: true,
+         tailwind_css: css,
+         reload_dirs: [Path.dirname(page)],
+         tailwind_sources: [%{base: root, pattern: "pages/*.astral"}]}
+      )
+
+    Registry.register(Volt.HMR.Registry, :clients, nil)
+    state = :sys.get_state(watcher)
+
+    assert {:noreply, queued} =
+             Volt.Watcher.handle_info({:file_event, self(), {page, [:modified]}}, state)
+
+    Process.cancel_timer(queued.tailwind_timer)
+    refute_received {:volt_hmr, _, _}
+    assert queued.pending_reloads == [page]
+    # Feed state directly to avoid filesystem timing; a missing input forces the rebuild error.
+    failed = %{
+      queued
+      | tailwind_full?: true,
+        config: Map.put(queued.config, :tailwind_css, Path.join(root, "missing.css"))
+    }
+
+    assert {:noreply, pending} = Volt.Watcher.handle_info(:tailwind_rebuild, failed)
+    assert pending.pending_reloads == [page]
+    assert pending.tailwind_full?
+    assert_receive {:volt_hmr, :error, _}
+    refute_received {:volt_hmr, :update, _}
+    File.write!(css, "@tailwind utilities; .changed { color: red }")
+
+    assert {:noreply, recovered} =
+             Volt.Watcher.handle_info(
+               {:file_event, self(), {page, [:modified]}},
+               %{pending | config: state.config}
+             )
+
+    Process.cancel_timer(recovered.tailwind_timer)
+    assert recovered.tailwind_full?
+    assert {:noreply, completed} = Volt.Watcher.handle_info(:tailwind_rebuild, recovered)
+    assert completed.pending_reloads == []
+    assert_receive {:volt_hmr, :update, %{changes: [:style]}}
+    assert_receive {:volt_hmr, :update, %{changes: ["full"]}}
+    repeated = %{completed | tailwind_full?: true, pending_reloads: [page]}
+
+    assert {:noreply, %{pending_reloads: []}} =
+             Volt.Watcher.handle_info(:tailwind_rebuild, repeated)
+
+    assert_receive {:volt_hmr, :update, %{changes: ["full"]}}
+    refute_received {:volt_hmr, :update, %{changes: [:style]}}
+  end
+
+  @tag :tmp_dir
+  test "external source roots are watched and unknown source extensions schedule Tailwind", %{
+    tmp_dir: root
+  } do
+    assets = Path.join(root, "assets")
+    pages = Path.join(root, "pages")
+    File.mkdir_p!(assets)
+    File.mkdir_p!(pages)
+    source = Path.join(pages, "index.astral")
+    File.write!(source, "<div class='flex'></div>")
+    css = Path.join(assets, "app.css")
+    File.write!(css, "@tailwind utilities;")
+
+    watcher =
+      start_supervised!(
+        {Volt.Watcher,
+         root: assets,
+         name: nil,
+         tailwind: true,
+         tailwind_css: css,
+         tailwind_sources: [%{base: pages, pattern: "**/*.astral"}]}
+      )
+
+    state = :sys.get_state(watcher)
+    assert pages in state.tailwind_dirs
+
+    assert {:noreply, scheduled} =
+             Volt.Watcher.handle_info({:file_event, self(), {source, [:modified]}}, state)
+
+    assert source in scheduled.tailwind_changed
+    assert is_reference(scheduled.tailwind_timer)
+    Process.cancel_timer(scheduled.tailwind_timer)
+  end
+
   test "broadcasts via registry on dispatch" do
     Registry.register(Volt.HMR.Registry, :clients, nil)
 
@@ -188,10 +484,9 @@ defmodule Volt.WatcherTest do
         name: :test_watcher_reload_dirs
       )
 
-    Process.sleep(100)
-    File.write!(page, "# Updated")
+    send_file_event(pid, page)
 
-    assert_receive {:volt_hmr, :update, %{path: path, changes: ["full"]}}, 2000
+    assert_receive {:volt_hmr, :update, %{path: path, changes: ["full"]}}
     assert path == Path.relative_to_cwd(page)
 
     GenServer.stop(pid)
@@ -220,7 +515,7 @@ defmodule Volt.WatcherTest do
 
     refute_receive {:volt_hmr, :update, %{path: "app.css", changes: [:style]}}, 50
 
-    assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+    assert_receive {:volt_hmr, :update, %{path: "/assets/css/app.css", changes: [:style]}},
                    3000
 
     assert File.regular?(Path.join(outdir, "app.css"))
@@ -249,7 +544,7 @@ defmodule Volt.WatcherTest do
     Process.sleep(100)
     File.write!(imported_css, ".imported-card { color: rgb(239 68 68); }")
 
-    assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+    assert_receive {:volt_hmr, :update, %{path: "/assets/css/app.css", changes: [:style]}},
                    3000
 
     css = File.read!(Path.join(outdir, "app.css"))
@@ -279,7 +574,7 @@ defmodule Volt.WatcherTest do
     Process.sleep(100)
     File.write!(heex_file, ~s(<div class="flex mt-4 bg-blue-500">hi</div>))
 
-    assert_receive {:volt_hmr, :update, %{path: "assets/css/app.css", changes: [:style]}},
+    assert_receive {:volt_hmr, :update, %{path: "/assets/css/app.css", changes: [:style]}},
                    3000
 
     assert File.exists?(Path.join(outdir, "app.css"))

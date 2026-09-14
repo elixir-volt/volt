@@ -16,50 +16,71 @@ defmodule Volt.Tailwind.Loader do
 
   def handlers(runtime_node_modules) do
     %{
-      "tailwind.load_stylesheet" => fn [id, base] ->
-        load_stylesheet(id, base, runtime_node_modules)
+      "tailwind.scan" => fn [sources] ->
+        sources
+        |> Enum.map(fn %{"base" => base, "pattern" => pattern, "negated" => negated} ->
+          %Oxide.Source{base: Path.expand(base), pattern: pattern, negated: negated}
+        end)
+        |> then(&Oxide.new(sources: &1))
+        |> Oxide.scan()
+      end,
+      "tailwind.load_stylesheet" => fn [id, base, output_base] ->
+        capture_resolution(fn -> load_stylesheet(id, base, output_base, runtime_node_modules) end)
       end,
       "tailwind.load_module" => fn [id, base, kind] ->
-        load_module(id, base, kind, runtime_node_modules)
+        capture_resolution(fn -> load_module(id, base, kind, runtime_node_modules) end)
       end
     }
   end
 
-  defp load_stylesheet(id, base, runtime_node_modules) do
+  defp capture_resolution(load) do
+    load.()
+  rescue
+    error in Volt.Tailwind.ResolveError ->
+      %{error: Exception.message(error), candidates: error.candidates}
+  end
+
+  defp load_stylesheet(id, base, output_base, runtime_node_modules) do
     path = Resolver.resolve_stylesheet_path!(id, base, runtime_node_modules)
+    {:ok, content} = Volt.CSS.AssetURLRewriter.rebase(File.read!(path), path, output_base)
 
     %{
+      path: path,
       base: Path.dirname(path),
-      content: File.read!(path)
+      content: content
     }
   end
 
   defp load_module(id, base, kind, runtime_node_modules) do
     path = Resolver.resolve_module_path!(id, base, kind, runtime_node_modules)
 
-    {code, format} =
+    {code, format, dependencies} =
       if Path.extname(path) == ".json" do
-        {File.read!(path), "json"}
+        {File.read!(path), "json", [path]}
       else
-        {bundle_module_source!(path, runtime_node_modules), "cjs"}
+        {code, dependencies} = bundle_module_source!(path, runtime_node_modules)
+        {code, "cjs", dependencies}
       end
 
     %{
       path: path,
       base: Path.dirname(path),
       code: code,
+      dependencies: dependencies,
       format: format
     }
   end
 
   defp bundle_module_source!(entry_path, runtime_node_modules) do
     with {:ok, files} <- collect_bundle_files(entry_path, runtime_node_modules) do
+      dependencies = Enum.map(files, fn {path, _source} -> path end)
+
       case OXC.bundle(files, entry: entry_path, format: :cjs) do
         {:ok, code} when is_binary(code) ->
-          code
+          {code, dependencies}
 
         {:ok, %{code: code}} when is_binary(code) ->
-          code
+          {code, dependencies}
 
         {:error, errors} ->
           raise "Could not bundle Tailwind module #{inspect(entry_path)}: #{inspect(errors)}"

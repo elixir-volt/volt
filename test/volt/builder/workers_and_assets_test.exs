@@ -2,6 +2,54 @@ defmodule Volt.Builder.WorkersAndAssetsTest do
   use Volt.TestSupport.BuilderCase
 
   describe "build/1 workers, assets, and externals" do
+    test "preserves worker manifest and asset metadata" do
+      entry = Path.join(@fixture_dir, "parent.ts")
+      worker = Path.join(@fixture_dir, "worker.ts")
+      File.write!(entry, "new Worker(new URL('./worker.ts', import.meta.url), {type: 'module'})")
+      File.write!(worker, "import logo from './logo.svg?url'; self.postMessage(logo)")
+      File.write!(Path.join(@fixture_dir, "logo.svg"), "<svg/>")
+
+      assert {:ok, result} =
+               Volt.Builder.build(
+                 entry: entry,
+                 outdir: @outdir,
+                 root: @fixture_dir,
+                 hash: false,
+                 minify: false,
+                 sourcemap: false
+               )
+
+      assert result.manifest["worker.js"].file == "worker.js"
+      assert %Volt.Builder.ManifestEntry{file: image} = result.manifest["logo.svg"]
+      assert image in result.manifest["worker.js"].assets
+      assert Enum.any?(result.chunks, &(Path.basename(&1.path) == "worker.js"))
+      assert Path.basename(result.js.path) == "parent.js"
+    end
+
+    test "does not copy imported assets before a later CSS failure" do
+      source = Path.join(@fixture_dir, "asset_failure.ts")
+
+      File.write!(
+        source,
+        "import image from './logo.svg?url'; import './broken.css'; console.log(image);"
+      )
+
+      File.write!(Path.join(@fixture_dir, "logo.svg"), "<svg/>")
+      File.write!(Path.join(@fixture_dir, "broken.css"), "a { color: } }")
+      before_files = Path.wildcard(Path.join(@outdir, "**/*"))
+
+      assert {:error, _} =
+               Volt.Builder.build(
+                 entry: source,
+                 outdir: @outdir,
+                 hash: false,
+                 minify: false,
+                 sourcemap: false
+               )
+
+      assert Path.wildcard(Path.join(@outdir, "**/*")) == before_files
+    end
+
     test "rewrites workers by importer path instead of basename" do
       File.mkdir_p!(Path.join(@fixture_dir, "src/a"))
       File.mkdir_p!(Path.join(@fixture_dir, "src/b"))

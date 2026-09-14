@@ -63,8 +63,14 @@ defmodule Volt.Preload do
     chunk
     |> Map.get("imports", [])
     |> Enum.reject(&MapSet.member?(seen, &1))
-    |> Enum.flat_map(fn file ->
-      [file | imported_files(manifest, manifest[file] || %{}, MapSet.put(seen, file))]
+    |> Enum.flat_map(fn key ->
+      case Map.get(manifest, key) do
+        %{"file" => file} = imported ->
+          [file | imported_files(manifest, imported, MapSet.put(seen, key))]
+
+        _ ->
+          []
+      end
     end)
     |> js_files()
   end

@@ -5,6 +5,7 @@ defmodule Volt.Application do
   @impl true
   def start(_type, _args) do
     Volt.Cache.create_table()
+    Volt.Dev.Assets.create_table()
     Volt.HMR.ImportGraph.create_table()
     Volt.HMR.GlobGraph.create_table()
     Volt.HMR.StyleGraph.create_table()
@@ -14,7 +15,9 @@ defmodule Volt.Application do
       {Registry, keys: :duplicate, name: Volt.HMR.Registry},
       {Registry, keys: :unique, name: Volt.Dev.WatcherRegistry},
       {DynamicSupervisor, strategy: :one_for_one, name: Volt.Dev.WatcherSupervisor},
-      {Volt.Tailwind, Volt.Config.tailwind()}
+      {Registry, keys: :unique, name: Volt.Tailwind.Registry},
+      {DynamicSupervisor, strategy: :one_for_one, name: Volt.Tailwind.WorkerSupervisor},
+      Volt.Tailwind.Runtime
     ]
 
     opts = [strategy: :one_for_one, name: Volt.Supervisor]

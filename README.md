@@ -88,13 +88,11 @@ The `Volt.DevServer` Plug starts its supervised file watcher on the first develo
 ```
 $ mix volt.build
 
-Building Tailwind CSS...
-  app-1a2b3c4d.css  23.9 KB
-Built Tailwind in 43ms
-Building "assets/js/app.ts"...
+Building ["assets/js/app.ts"]...
   app-5e6f7a8b.js  128.4 KB  (gzip: 38.2 KB)
+  app-1a2b3c4d.css  23.9 KB
   manifest.json  2 entries
-Built in 15ms
+Built in 58ms
 ```
 
 Tree-shaking, minification, code splitting, configurable env prefixes and asset URL prefixes, source maps, content-hashed JavaScript/CSS/assets, and manifest output. `Volt.Preload.tags/2` can generate modulepreload tags from the manifest, and the build is ready for `mix phx.digest`.

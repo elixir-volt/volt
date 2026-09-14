@@ -4,7 +4,12 @@ defmodule Volt.Builder.Output do
   alias Volt.Builder.{Naming, Rewriter, Writer}
 
   @doc "Bundle modules into a single in-memory JS bundle."
-  def bundle_single(entry, {js_files, css_parts, assets}, files, build_ctx) do
+  def bundle_single(
+        entry,
+        %Volt.Builder.Compiled{scripts: js_files, styles: css_parts, assets: assets},
+        files,
+        build_ctx
+      ) do
     %{
       outdir: outdir,
       bundle_opts: bundle_opts,
@@ -55,7 +60,25 @@ defmodule Volt.Builder.Output do
   end
 
   @doc "Bundle modules into a single JS file and write output."
-  def build_single(entry, name, {js_files, css_parts, assets}, build_ctx) do
+  def build_single(entry, name, compiled, build_ctx) do
+    with {:ok, result, plan} <- prepare_single(entry, name, compiled, build_ctx),
+         :ok <- Writer.write_plan(build_ctx.outdir, plan) do
+      {:ok, result}
+    end
+  end
+
+  @doc "Prepare one bundled entry and its stylesheet without writing output."
+  def prepare_single(
+        entry,
+        name,
+        %Volt.Builder.Compiled{
+          scripts: js_files,
+          styles: css_parts,
+          assets: assets,
+          artifacts: asset_artifacts
+        },
+        build_ctx
+      ) do
     %{
       outdir: outdir,
       hash: hash,
@@ -64,8 +87,6 @@ defmodule Volt.Builder.Output do
       sourcemap_hidden: sourcemap_hidden,
       asset_url_prefix: asset_url_prefix
     } = build_ctx
-
-    File.mkdir_p!(outdir)
 
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
     entry_label = entry |> Path.basename() |> Naming.file_path()
@@ -83,10 +104,18 @@ defmodule Volt.Builder.Output do
           Volt.PluginRunner.render_chunk(ctx.plugins, js_code, %{name: name, type: :entry})
 
         js_filename = Writer.hashed_name(name, js_code, ".js", hash)
-        Writer.write_js(outdir, js_filename, js_code, js_sourcemap, hidden: sourcemap_hidden)
+
+        js_artifacts =
+          Volt.Builder.Artifact.javascript(js_filename, js_code, js_sourcemap,
+            hidden: sourcemap_hidden
+          )
+
         css_opts = Keyword.put(bundle_opts, :asset_url_prefix, asset_url_prefix)
 
-        with {:ok, css_result} <- Writer.write_css(css_parts, outdir, name, hash, css_opts) do
+        with {:ok, css_result, css_plan} <-
+               Writer.prepare_css(css_parts, outdir, name, hash, css_opts),
+             {:ok, plan} <-
+               Volt.Builder.Plan.new(js_artifacts ++ css_plan.artifacts ++ asset_artifacts) do
           manifest = Writer.build_manifest(name, js_filename, css_result, assets)
 
           {:ok,
@@ -96,8 +125,9 @@ defmodule Volt.Builder.Output do
                size: byte_size(js_code)
              },
              css: css_result,
+             styles: List.wrap(css_result),
              manifest: manifest
-           }}
+           }, plan}
         end
 
       {:error, _} = error ->
@@ -106,9 +136,23 @@ defmodule Volt.Builder.Output do
   end
 
   @doc "Bundle multiple ESM entries together and write Rolldown shared chunks."
-  def build_shared_entries(
+  def build_shared_entries(entries, compiled, modules, path_labels, build_ctx) do
+    with {:ok, result, plan} <-
+           prepare_shared_entries(entries, compiled, modules, path_labels, build_ctx),
+         :ok <- Writer.write_plan(build_ctx.outdir, plan) do
+      {:ok, result}
+    end
+  end
+
+  @doc "Prepare shared ESM entries and associated artifacts without writing output."
+  def prepare_shared_entries(
         entries,
-        {js_files, css_parts, assets},
+        %Volt.Builder.Compiled{
+          scripts: js_files,
+          styles: css_parts,
+          assets: assets,
+          artifacts: asset_artifacts
+        },
         modules,
         path_labels,
         build_ctx
@@ -120,8 +164,6 @@ defmodule Volt.Builder.Output do
       sourcemap_hidden: sourcemap_hidden,
       asset_url_prefix: asset_url_prefix
     } = build_ctx
-
-    File.mkdir_p!(outdir)
 
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
 
@@ -144,8 +186,7 @@ defmodule Volt.Builder.Output do
       )
 
     with {:ok, bundle_result} <- OXC.Bundle.run(bundle),
-         :ok <- write_shared_assets(bundle_result.outputs, outdir),
-         {:ok, css_results} <-
+         {:ok, css_results, css_artifacts} <-
            write_shared_css(
              css_parts,
              bundle_result.outputs,
@@ -154,7 +195,7 @@ defmodule Volt.Builder.Output do
              bundle_opts,
              asset_url_prefix
            ) do
-      js_results =
+      prepared_js =
         bundle_result.outputs
         |> Enum.filter(&(&1.type in [:entry, :chunk]))
         |> Enum.map(fn output ->
@@ -166,33 +207,60 @@ defmodule Volt.Builder.Output do
               type: output.type
             })
 
-          Writer.write_js(outdir, output.file_name, code, output.sourcemap,
-            hidden: sourcemap_hidden
-          )
+          artifacts =
+            Volt.Builder.Artifact.javascript(output.file_name, code, output.sourcemap,
+              hidden: sourcemap_hidden
+            )
 
-          %Volt.Builder.OutputFile{
-            path: Path.join(outdir, output.file_name),
-            size: byte_size(code),
-            chunk_id: output.file_name,
-            type: output.type
-          }
+          {%Volt.Builder.OutputFile{
+             path: Path.join(outdir, output.file_name),
+             size: byte_size(code),
+             chunk_id: output.file_name,
+             type: output.type
+           }, artifacts}
+        end)
+
+      js_results = Enum.map(prepared_js, &elem(&1, 0))
+
+      artifacts =
+        Enum.flat_map(prepared_js, &elem(&1, 1)) ++
+          List.flatten(css_artifacts) ++ shared_assets(bundle_result.outputs) ++ asset_artifacts
+
+      chunk_keys =
+        Map.new(Enum.filter(bundle_result.outputs, &(&1.type in [:entry, :chunk])), fn output ->
+          {output.file_name,
+           if(output.type == :entry, do: "#{output.name}.js", else: output.file_name)}
         end)
 
       manifest =
         bundle_result.outputs
         |> Enum.reduce(%{}, fn output, acc ->
+          output =
+            if output.type in [:entry, :chunk] do
+              %{
+                output
+                | imports: manifest_imports(output.imports, chunk_keys),
+                  dynamic_imports: manifest_imports(output.dynamic_imports, chunk_keys)
+              }
+            else
+              output
+            end
+
           output_manifest_entry(output, css_results, assets, acc)
         end)
         |> Writer.add_asset_entries(assets)
         |> Writer.add_asset_entries(css_assets(css_results))
 
-      {:ok,
-       %Volt.Builder.Result{
-         js: Enum.filter(js_results, &(&1.type == :entry)),
-         css: nil,
-         manifest: manifest,
-         chunks: js_results
-       }}
+      with {:ok, plan} <- Volt.Builder.Plan.new(artifacts) do
+        {:ok,
+         %Volt.Builder.Result{
+           js: Enum.filter(js_results, &(&1.type == :entry)),
+           css: nil,
+           styles: css_results |> Map.values() |> Enum.sort_by(& &1.path),
+           manifest: manifest,
+           chunks: js_results
+         }, plan}
+      end
     end
   end
 
@@ -212,7 +280,7 @@ defmodule Volt.Builder.Output do
   defp shared_asset_file_names(false), do: "[name][extname]"
 
   defp write_shared_css([], _outputs, _modules, _outdir, _bundle_opts, _asset_url_prefix),
-    do: {:ok, %{}}
+    do: {:ok, %{}, []}
 
   defp write_shared_css(css_parts, outputs, modules, outdir, bundle_opts, asset_url_prefix) do
     label_to_output = shared_label_to_output(outputs)
@@ -226,13 +294,18 @@ defmodule Volt.Builder.Output do
       css_parts
       |> Enum.group_by(fn {path, _css} -> Map.get(label_to_output, module_labels[path]) end)
       |> Enum.reject(fn {file_name, _parts} -> is_nil(file_name) end)
-      |> Enum.reduce_while({:ok, %{}}, fn {file_name, parts}, {:ok, acc} ->
+      |> Enum.reduce_while({:ok, %{}, []}, fn {file_name, parts}, {:ok, acc, artifacts} ->
         name = file_name |> Path.basename() |> Path.rootname()
 
-        case Writer.write_css(parts, outdir, name, false, css_opts) do
-          {:ok, nil} -> {:cont, {:ok, acc}}
-          {:ok, css_result} -> {:cont, {:ok, Map.put(acc, file_name, css_result)}}
-          {:error, _} = error -> {:halt, error}
+        case Writer.prepare_css(parts, outdir, name, false, css_opts) do
+          {:ok, nil, _plan} ->
+            {:cont, {:ok, acc, artifacts}}
+
+          {:ok, css_result, plan} ->
+            {:cont, {:ok, Map.put(acc, file_name, css_result), [plan.artifacts | artifacts]}}
+
+          {:error, _} = error ->
+            {:halt, error}
         end
       end)
     end
@@ -249,17 +322,22 @@ defmodule Volt.Builder.Output do
     |> Map.new()
   end
 
-  defp write_shared_assets(outputs, outdir) do
+  defp shared_assets(outputs) do
     outputs
     |> Enum.filter(&(&1.type == :asset))
     |> Enum.reject(&String.ends_with?(&1.file_name, ".map"))
-    |> Enum.each(fn output ->
-      path = Path.join(outdir, output.file_name)
-      File.mkdir_p!(Path.dirname(path))
-      File.write!(path, output.source || "")
+    |> Enum.map(fn output ->
+      %Volt.Builder.Artifact{file: output.file_name, content: output.source || ""}
     end)
+  end
 
-    :ok
+  defp manifest_imports(imports, chunk_keys) do
+    Enum.flat_map(imports, fn reference ->
+      case Map.fetch(chunk_keys, reference) do
+        {:ok, key} -> [key]
+        :error -> []
+      end
+    end)
   end
 
   defp output_manifest_entry(%{type: :asset} = output, _css_results, _assets, acc) do
@@ -292,7 +370,26 @@ defmodule Volt.Builder.Output do
   defp maybe_add_entry_assets(entry, _type, _assets), do: entry
 
   @doc "Bundle modules into separate chunks based on the chunk graph."
-  def build_chunks(entry, name, {js_files, css_parts, assets}, {modules, dep_map}, build_ctx) do
+  def build_chunks(entry, name, compiled, graph_input, build_ctx) do
+    with {:ok, result, plan} <- prepare_chunks(entry, name, compiled, graph_input, build_ctx),
+         :ok <- Writer.write_plan(build_ctx.outdir, plan) do
+      {:ok, result}
+    end
+  end
+
+  @doc "Prepare split chunks and their stylesheets without writing output."
+  def prepare_chunks(
+        entry,
+        name,
+        %Volt.Builder.Compiled{
+          scripts: js_files,
+          styles: css_parts,
+          assets: assets,
+          artifacts: asset_artifacts
+        },
+        {modules, dep_map},
+        build_ctx
+      ) do
     %{
       outdir: outdir,
       hash: hash,
@@ -302,8 +399,6 @@ defmodule Volt.Builder.Output do
       chunks: manual_chunks,
       asset_url_prefix: asset_url_prefix
     } = build_ctx
-
-    File.mkdir_p!(outdir)
 
     graph = Volt.ChunkGraph.build(entry, modules, dep_map, manual_chunks: manual_chunks)
     js_map = Map.new(js_files)
@@ -321,7 +416,7 @@ defmodule Volt.Builder.Output do
            ) do
       css_opts = Keyword.put(bundle_opts, :asset_url_prefix, asset_url_prefix)
 
-      with {:ok, css_results} <-
+      with {:ok, css_results, css_artifacts} <-
              write_chunk_css(css_parts, graph, outdir, name, hash, css_opts) do
         {chunk_url_map, processed_chunks} =
           finalize_chunk_urls(
@@ -336,20 +431,29 @@ defmodule Volt.Builder.Output do
             dep_map
           )
 
-        js_results =
+        prepared_js =
           Enum.map(processed_chunks, fn {chunk_id, {code, sourcemap}} ->
             chunk = graph.chunks[chunk_id]
             filename = chunk_url_map[chunk_id]
 
-            Writer.write_js(outdir, filename, code, sourcemap, hidden: sourcemap_hidden)
+            artifacts =
+              Volt.Builder.Artifact.javascript(filename, code, sourcemap,
+                hidden: sourcemap_hidden
+              )
 
-            %Volt.Builder.OutputFile{
-              path: Path.join(outdir, filename),
-              size: byte_size(code),
-              chunk_id: chunk_id,
-              type: chunk.type
-            }
+            {%Volt.Builder.OutputFile{
+               path: Path.join(outdir, filename),
+               size: byte_size(code),
+               chunk_id: chunk_id,
+               type: chunk.type
+             }, artifacts}
           end)
+
+        js_results = Enum.map(prepared_js, &elem(&1, 0))
+
+        artifacts =
+          Enum.flat_map(prepared_js, &elem(&1, 1)) ++
+            List.flatten(css_artifacts) ++ asset_artifacts
 
         entry_js = Enum.find(js_results, &(&1.type == :entry)) || hd(js_results)
         entry_css = css_results[entry_js.chunk_id]
@@ -381,13 +485,16 @@ defmodule Volt.Builder.Output do
           |> Writer.add_asset_entries(assets)
           |> Writer.add_asset_entries(css_assets(css_results))
 
-        {:ok,
-         %Volt.Builder.Result{
-           js: entry_js,
-           css: entry_css,
-           manifest: manifest,
-           chunks: js_results
-         }}
+        with {:ok, plan} <- Volt.Builder.Plan.new(artifacts) do
+          {:ok,
+           %Volt.Builder.Result{
+             js: entry_js,
+             css: entry_css,
+             styles: css_results |> Map.values() |> Enum.sort_by(& &1.path),
+             manifest: manifest,
+             chunks: js_results
+           }, plan}
+        end
       end
     end
   end
@@ -539,13 +646,18 @@ defmodule Volt.Builder.Output do
   defp write_chunk_css(css_parts, graph, outdir, name, hash, css_opts) do
     css_parts
     |> Enum.group_by(fn {path, _css} -> Map.get(graph.module_to_chunk, path, "entry") end)
-    |> Enum.reduce_while({:ok, %{}}, fn {chunk_id, parts}, {:ok, acc} ->
+    |> Enum.reduce_while({:ok, %{}, []}, fn {chunk_id, parts}, {:ok, acc, artifacts} ->
       chunk = graph.chunks[chunk_id]
 
-      case Writer.write_css(parts, outdir, chunk_output_name(chunk, name), hash, css_opts) do
-        {:ok, nil} -> {:cont, {:ok, acc}}
-        {:ok, css_result} -> {:cont, {:ok, Map.put(acc, chunk_id, css_result)}}
-        {:error, _} = error -> {:halt, error}
+      case Writer.prepare_css(parts, outdir, chunk_output_name(chunk, name), hash, css_opts) do
+        {:ok, nil, _plan} ->
+          {:cont, {:ok, acc, artifacts}}
+
+        {:ok, css_result, plan} ->
+          {:cont, {:ok, Map.put(acc, chunk_id, css_result), [plan.artifacts | artifacts]}}
+
+        {:error, _} = error ->
+          {:halt, error}
       end
     end)
   end
