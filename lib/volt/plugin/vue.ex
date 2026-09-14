@@ -81,7 +81,7 @@ defmodule Volt.Plugin.Vue do
           expression = binary_part(code, first, last - first)
 
           value =
-            "Object.assign(#{expression}, { __scopeId: #{Jason.encode!("data-v-" <> scope_id)} })"
+            "((component) => { component.__scopeId = #{Jason.encode!("data-v-" <> scope_id)}; return component; })(#{expression})"
 
           Volt.JS.Patch.new(first, last, value)
         end

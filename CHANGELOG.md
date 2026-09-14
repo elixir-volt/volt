@@ -18,6 +18,7 @@
 ### Fixed
 
 - Handle filesystem watcher events for the watched root itself when normalizing macOS path aliases.
+- Apply Vue scoped styles without capturing component-module bindings such as `Object`.
 
 ## 0.17.11 - 2026-09-04
 
