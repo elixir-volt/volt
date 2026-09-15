@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Wire shared browser declarations into TypeScript configurations during installation. Create a configuration when absent, update ordinary JSON configurations without discarding existing settings, and provide manual guidance for JSONC and inherited or referenced projects.
+
 ## 0.18.0 - 2026-09-15
 
 ### Breaking changes
