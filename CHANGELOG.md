@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.18.0 - 2026-09-15
+
 ### Breaking changes
 
 - Rename `Volt.JS.Helpers` to `Volt.JS.Discovery`, with `files/0,1` and `format_files/0` replacing `discover_files/0,1` and `discover_format_files/0`.
@@ -17,9 +19,7 @@
 
 - Require QuickBEAM 0.11.1 or later in the 0.11 series for release-optimized, baseline-CPU precompiled runtimes and the Mint 1.10 security dependency floor.
 - Write one production manifest at the configured asset output root instead of separate JavaScript and Tailwind manifests.
-- Make `mix volt.build` a thin adapter over `Volt.build/1`.
 - Emit Tailwind development artifacts atomically and skip style HMR broadcasts when generated CSS is unchanged.
-- Normalize in-memory build manifests and emitted asset metadata to typed structs before JSON serialization.
 
 ### Fixed
 
@@ -32,7 +32,6 @@
 
 - Require Igniter 0.8.4 or later to prevent terminal escape injection through package metadata in installer confirmation prompts (CVE-2026-82584).
 - Require Bandit 1.12.5 or later in the Phoenix examples to address HTTP/2 header validation and connection-window starvation (CVE-2026-75484, CVE-2026-74836).
-
 - Update Phoenix example locks to patched Phoenix and LiveView releases for channel-join and long-poll denial of service, presence-client crashes, link scheme validation, and redirect validation.
 
 ## 0.17.11 - 2026-09-04
