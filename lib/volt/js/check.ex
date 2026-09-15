@@ -82,23 +82,23 @@ defmodule Volt.JS.Check do
     files
     |> Enum.group_by(fn file ->
       original = Map.get(source_files, Path.expand(file), file)
-
-      lint_config
-      |> Volt.JS.Lint.Config.options(original)
-      |> Keyword.fetch!(:rules)
-      |> typescript_rules()
+      lint_config |> Volt.JS.Lint.Config.options(original) |> OXC.Lint.type_aware_rules()
     end)
     |> Enum.sort_by(fn {rules, _files} -> rules end)
-    |> Enum.flat_map(fn {rules, batch} ->
-      case run_type_aware_lint(batch, Keyword.put(common_opts, :rules, rules)) do
-        {:ok, diagnostics} ->
-          Enum.map(diagnostics, fn diagnostic ->
-            diagnostic |> restore_sfc_file(source_files) |> promote_type_check_diagnostic(opts)
-          end)
+    |> Enum.flat_map(fn
+      {{:ok, rules}, batch} ->
+        case run_type_aware_lint(batch, Keyword.put(common_opts, :rules, rules)) do
+          {:ok, diagnostics} ->
+            Enum.map(diagnostics, fn diagnostic ->
+              diagnostic |> restore_sfc_file(source_files) |> promote_type_check_diagnostic(opts)
+            end)
 
-        {:error, errors} ->
-          errors
-      end
+          {:error, errors} ->
+            errors
+        end
+
+      {{:error, errors}, _batch} ->
+        errors
     end)
   end
 
@@ -176,12 +176,6 @@ defmodule Volt.JS.Check do
         [_, rule] -> rule
         _ -> nil
       end
-    end)
-  end
-
-  defp typescript_rules(rules) do
-    Map.filter(rules, fn {rule, _config} ->
-      String.starts_with?(to_string(rule), "typescript/")
     end)
   end
 
