@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+## 0.18.1 - 2026-09-15
+
 ### Added
 
 - Wire shared browser declarations into TypeScript configurations during installation. Create a configuration when absent, update ordinary JSON configurations without discarding existing settings, and provide manual guidance for JSONC and inherited or referenced projects.
+- Declare CSS side-effect imports and CSS modules in the shared browser declarations.
 
 ## 0.18.0 - 2026-09-15
 
