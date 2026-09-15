@@ -132,9 +132,86 @@ defmodule Mix.Tasks.Volt.InstallTest do
         igniter.rewrite.sources["mix.exs"]
         |> Rewrite.Source.get(:content)
 
+      tsconfig =
+        igniter.rewrite.sources["tsconfig.json"]
+        |> Rewrite.Source.get(:content)
+        |> Jason.decode!()
+
+      assert tsconfig["compilerOptions"]["strict"]
+      assert "deps/volt/priv/types/client/**/*.d.ts" in tsconfig["include"]
+
       assert mix_content =~ ~s("assets.setup": [])
       assert mix_content =~ ~s("assets.build": ["compile", "volt.build --tailwind"])
       assert mix_content =~ ~s("assets.deploy": ["volt.build --tailwind", "phx.digest"])
     end
+
+    test "preserves options, exclusions and explicit files while adding client types once" do
+      original = %{
+        "compilerOptions" => %{"strict" => false},
+        "exclude" => ["deps"],
+        "files" => ["assets/app.ts"]
+      }
+
+      igniter = install_with_config("tsconfig.json", Jason.encode!(original))
+      config = config(igniter, "tsconfig.json")
+      assert config["compilerOptions"] == original["compilerOptions"]
+      assert config["exclude"] == ["deps"]
+      refute Map.has_key?(config, "include")
+
+      assert config["files"] == [
+               "assets/app.ts",
+               "deps/volt/priv/types/client/hmr.d.ts",
+               "deps/volt/priv/types/client/preload.d.ts",
+               "deps/volt/priv/types/client/styles.d.ts"
+             ]
+
+      assert config(Mix.Tasks.Volt.Install.igniter(igniter), "tsconfig.json") == config
+    end
+
+    test "retains default source discovery when adding explicit declaration files" do
+      config =
+        install_with_config("tsconfig.json", ~s({"compilerOptions":{"strict":true}}))
+        |> config("tsconfig.json")
+
+      assert config["include"] == ["**/*"]
+    end
+
+    test "keeps an authored include list" do
+      config =
+        install_with_config("tsconfig.json", ~s({"include":["src/**/*.ts"]}))
+        |> config("tsconfig.json")
+
+      assert config["include"] == ["src/**/*.ts"]
+    end
+
+    test "updates an assets configuration with paths relative to that configuration" do
+      igniter = install_with_config("assets/tsconfig.json", ~s({"include":["**/*.ts"]}))
+      refute Map.has_key?(igniter.rewrite.sources, "tsconfig.json")
+
+      assert "../deps/volt/priv/types/client/hmr.d.ts" in config(igniter, "assets/tsconfig.json")[
+               "files"
+             ]
+    end
+
+    test "leaves JSONC and inherited or referenced configurations untouched with guidance" do
+      for content <- [
+            "{ // preserve this comment\n}",
+            ~s({"extends":"./base.json"}),
+            ~s({"references":[{"path":"./assets"}]})
+          ] do
+        igniter = install_with_config("tsconfig.json", content)
+        assert Rewrite.Source.get(igniter.rewrite.sources["tsconfig.json"], :content) == content
+        assert Enum.any?(igniter.warnings, &String.contains?(&1, "manual configuration"))
+      end
+    end
+  end
+
+  defp install_with_config(path, content) do
+    Test.test_project(app_name: :demo, files: %{path => content})
+    |> Mix.Tasks.Volt.Install.igniter()
+  end
+
+  defp config(igniter, path) do
+    igniter.rewrite.sources[path] |> Rewrite.Source.get(:content) |> Jason.decode!()
   end
 end

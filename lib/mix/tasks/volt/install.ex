@@ -21,6 +21,17 @@ if Code.ensure_loaded?(Igniter) do
     6. Add `Volt.Formatter` plugin to `.formatter.exs`
     7. Add `Volt.DevServer` plug to your endpoint
     8. Configure the automatic Volt watcher in `config/dev.exs`
+    9. Wire Volt client types into TypeScript configuration
+
+    The installer checks `tsconfig.json`, `assets/tsconfig.json`, and
+    `assets/js/tsconfig.json`. Ordinary JSON configurations retain their settings
+    and receive explicit declaration files, even when dependencies are excluded.
+    When none exists, the installer creates a root configuration from a template.
+
+    JSONC and configurations using `extends` or project references are left
+    unchanged with guidance to include `deps/volt/priv/types/client/**/*.d.ts`
+    (relative to the browser configuration). No local `ImportMeta` declaration
+    is needed.
     """
 
     use Igniter.Mix.Task
@@ -58,8 +69,66 @@ if Code.ensure_loaded?(Igniter) do
       |> add_format_config()
       |> add_lint_config()
       |> add_formatter_plugin()
+      |> add_typescript_config()
       |> add_dev_config(app_name, endpoint)
       |> add_dev_server_plug()
+    end
+
+    defp add_typescript_config(igniter) do
+      configs = [
+        {"tsconfig.json", "deps"},
+        {"assets/tsconfig.json", "../deps"},
+        {"assets/js/tsconfig.json", "../../deps"}
+      ]
+
+      existing = Enum.filter(configs, fn {path, _} -> Igniter.exists?(igniter, path) end)
+
+      case existing do
+        [] ->
+          template = Application.app_dir(:volt, "priv/templates/volt.install/tsconfig.json.eex")
+          Igniter.copy_template(igniter, template, "tsconfig.json", [])
+
+        paths ->
+          Enum.reduce(paths, igniter, fn {path, deps}, igniter ->
+            Igniter.update_file(igniter, path, &include_client_types(&1, deps))
+          end)
+      end
+    end
+
+    defp include_client_types(source, deps) do
+      with {:ok, config} when is_map(config) <- Jason.decode(Rewrite.Source.get(source, :content)),
+           false <- Map.has_key?(config, "extends") or Map.has_key?(config, "references"),
+           files when is_list(files) <- Map.get(config, "files", []),
+           true <- Enum.all?(files, &is_binary/1) do
+        types = [
+          "#{deps}/volt/priv/types/client/hmr.d.ts",
+          "#{deps}/volt/priv/types/client/preload.d.ts",
+          "#{deps}/volt/priv/types/client/styles.d.ts"
+        ]
+
+        updated =
+          config
+          |> preserve_default_include()
+          |> Map.put("files", Enum.uniq(files ++ types))
+
+        if updated == config do
+          source
+        else
+          Rewrite.Source.update(source, :content, Jason.encode!(updated, pretty: true) <> "\n")
+        end
+      else
+        _ ->
+          {:warning,
+           "Volt left #{source.path} unchanged: JSONC, inherited and referenced projects require " <>
+             "manual configuration. Include #{deps}/volt/priv/types/client/**/*.d.ts in the browser " <>
+             "project, ensuring it is not excluded. No application-local ImportMeta declaration is needed."}
+      end
+    end
+
+    defp preserve_default_include(config) do
+      if Map.has_key?(config, "files") or Map.has_key?(config, "include"),
+        do: config,
+        else: Map.put(config, "include", ["**/*"])
     end
 
     # ── Remove old tooling ──
