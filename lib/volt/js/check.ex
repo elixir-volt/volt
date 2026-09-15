@@ -83,12 +83,12 @@ defmodule Volt.JS.Check do
 
       lint_config
       |> Volt.JS.Lint.Config.options(original)
-      |> Keyword.fetch!(:rules)
-      |> typescript_rules()
+      |> Keyword.take([:plugins, :rules])
+      |> Keyword.update!(:rules, &typescript_rules/1)
     end)
-    |> Enum.sort_by(fn {rules, _files} -> rules end)
-    |> Enum.flat_map(fn {rules, batch} ->
-      case run_type_aware_lint(batch, Keyword.put(common_opts, :rules, rules)) do
+    |> Enum.sort_by(fn {options, _files} -> options end)
+    |> Enum.flat_map(fn {options, batch} ->
+      case run_type_aware_lint(batch, Keyword.merge(common_opts, options)) do
         {:ok, diagnostics} ->
           Enum.map(diagnostics, fn diagnostic ->
             diagnostic |> restore_sfc_file(source_files) |> promote_type_check_diagnostic(opts)
@@ -159,7 +159,7 @@ defmodule Volt.JS.Check do
             {:error, errors}
 
           rule ->
-            rules = Map.delete(lint_opts[:rules], "typescript/#{rule}")
+            rules = Map.put(lint_opts[:rules], "typescript/#{rule}", :allow)
             run_type_aware_lint(files, Keyword.put(lint_opts, :rules, rules))
         end
 
@@ -179,7 +179,8 @@ defmodule Volt.JS.Check do
 
   defp typescript_rules(rules) do
     Map.filter(rules, fn {rule, _config} ->
-      String.starts_with?(to_string(rule), "typescript/")
+      to_string(rule) in ~w(all correctness suspicious pedantic perf style restriction nursery) or
+        String.starts_with?(to_string(rule), "typescript/")
     end)
   end
 

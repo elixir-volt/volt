@@ -140,3 +140,7 @@ config :volt, :lint,
 Volt keeps the Oxlint-style rule shape: configure normal and type-aware rules together under `:rules`. When `--type-aware` is enabled, Volt still runs the normal syntax lint path and also invokes `tsgolint` for supported semantic TypeScript rules.
 
 Exits with non-zero status on issues.
+
+With `--type-aware`, categories also select supported type-aware rules from enabled plugins. For example, `"correctness" => :deny` with `plugins: [:typescript]` enables `typescript/no-floating-promises`. OXC expands categories using its bundled rule registry before invoking `tsgolint`; category names are never sent to the executable. Individual rule settings override categories, and per-file overrides are applied before expansion.
+
+Configurations without category entries keep their explicit type-aware rule selection. `--type-check` independently enables TypeScript compiler diagnostics.
