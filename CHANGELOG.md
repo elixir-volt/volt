@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Expand lint categories into supported type-aware rules before calling tsgolint, preserving explicit rule settings and per-file overrides.
+
 ## 0.18.1 - 2026-09-15
 
 ### Added

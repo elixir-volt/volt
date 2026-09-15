@@ -78,6 +78,54 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
     assert output =~ "typescript/no-floating-promises"
   end
 
+  test "category-only configuration submits semantic rules to tsgolint" do
+    file = Path.join(@tmp_dir, "typed.ts")
+    File.write!(file, "Promise.resolve(1);\n")
+
+    Application.put_env(:volt, :lint,
+      tsgolint: fake_tsgolint!(@tmp_dir),
+      plugins: [:typescript],
+      rules: %{"correctness" => :deny}
+    )
+
+    diagnostics = Volt.JS.Check.lint([file], type_aware: true)
+
+    assert Enum.any?(
+             diagnostics,
+             &(&1.rule == "typescript/no-floating-promises" and &1.severity == :deny)
+           )
+  end
+
+  test "category expansion honors per-file semantic rule exclusions" do
+    first = Path.join(@tmp_dir, "first.ts")
+    second = Path.join(@tmp_dir, "second.ts")
+    Enum.each([first, second], &File.write!(&1, "Promise.resolve(1);\n"))
+    payload_path = Path.join(@tmp_dir, "categories.jsonl")
+
+    tsgolint =
+      fake_executable!(@tmp_dir, "tsgolint-categories", """
+      input = IO.binread(:stdio, :eof)
+      File.write!(#{inspect(payload_path)}, [input, "\\n"], [:append])
+      """)
+
+    Application.put_env(:volt, :lint,
+      root: @tmp_dir,
+      tsgolint: tsgolint,
+      plugins: [:typescript],
+      rules: %{"correctness" => :deny},
+      overrides: [%{files: ["second.ts"], rules: %{"typescript/no-floating-promises" => :allow}}]
+    )
+
+    assert [] = Volt.JS.Check.lint([first, second], type_aware: true)
+    batches = payload_path |> File.stream!() |> Enum.map(&Jason.decode!/1)
+    configs = Enum.flat_map(batches, & &1["configs"])
+
+    for {file, selected} <- [{first, true}, {second, false}] do
+      config = Enum.find(configs, &(Path.expand(file) in &1["file_paths"]))
+      assert Enum.any?(config["rules"], &(&1["name"] == "no-floating-promises")) == selected
+    end
+  end
+
   test "type-check diagnostics are promoted to errors" do
     diagnostic = %{
       rule: "typescript/TS2322",
@@ -110,7 +158,13 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
     end)
 
     payload = @tmp_dir |> Path.join("payload.json") |> File.read!() |> Jason.decode!()
-    assert [%{"rules" => [%{"name" => "no-floating-promises"}]}] = payload["configs"]
+    assert [%{"rules" => rules}] = payload["configs"]
+    assert Enum.any?(rules, &(&1["name"] == "no-floating-promises"))
+
+    refute Enum.any?(
+             rules,
+             &(&1["name"] in ["correctness", "suspicious", "consistent-type-imports"])
+           )
   end
 
   test "type-aware check submits framework single-file component scripts as virtual files" do
@@ -176,7 +230,7 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
     Application.put_env(:volt, :lint,
       root: @tmp_dir,
       tsgolint: tsgolint,
-      rules: %{"typescript/no-floating-promises" => :deny},
+      rules: %{"correctness" => :deny, "typescript/no-floating-promises" => :deny},
       overrides: [
         %{files: ["**/*.{vue,svelte}"], rules: %{"typescript/no-floating-promises" => :warn}},
         %{files: ["**/*.script0.ts"], rules: %{"typescript/no-floating-promises" => :allow}}
@@ -196,9 +250,9 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
     configs = Enum.flat_map(batches, & &1["configs"])
     assert Enum.sort(Enum.map(configs, &length(&1["file_paths"]))) == [1, 2]
 
-    assert configs |> Enum.flat_map(& &1["rules"]) |> Enum.map(& &1["name"]) |> Enum.uniq() == [
-             "no-floating-promises"
-           ]
+    names = configs |> Enum.flat_map(& &1["rules"]) |> Enum.map(& &1["name"])
+    assert "no-floating-promises" in names
+    refute "correctness" in names
 
     assert Enum.find(diagnostics, &(&1.file == Path.expand(app))).severity == :deny
     assert Enum.find(diagnostics, &(&1.file == vue)).severity == :warn
