@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Accept diagnostic structs such as `Mix.Task.Compiler.Diagnostic` in `Volt.HMR.error/3`. Reading their fields with the Access syntax raised, so reporting compile errors crashed the caller.
+
 ## 0.19.1 - 2026-09-30
 
 ### Fixed

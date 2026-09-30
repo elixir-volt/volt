@@ -54,6 +54,36 @@ defmodule Volt.Dev.ErrorTest do
              Error.entries([diagnostic], file: "app.ts")
   end
 
+  test "reads Mix compiler diagnostics", %{tmp_dir: tmp_dir} do
+    path = Path.join(tmp_dir, "site.ex")
+    File.write!(path, "defmodule Site do\n  def domain, do: oops()\nend\n")
+
+    diagnostic = %Mix.Task.Compiler.Diagnostic{
+      file: path,
+      source: path,
+      severity: :error,
+      message: "undefined function oops/0",
+      position: {2, 19},
+      compiler_name: "Elixir",
+      details: nil,
+      stacktrace: [{Site, :domain, 0, [file: ~c"site.ex", line: 2]}]
+    }
+
+    assert [
+             %{
+               message: "undefined function oops/0",
+               line: 2,
+               column: 19,
+               frame: frame,
+               stack: stack
+             }
+           ] =
+             Error.entries([diagnostic])
+
+    assert frame =~ "> 2 |   def domain, do: oops()"
+    assert stack =~ "site.ex:2"
+  end
+
   test "formats a diagnostic's stacktrace" do
     stacktrace = [{MyApp.Page, :render, 1, [file: ~c"lib/my_app/page.ex", line: 12]}]
 
