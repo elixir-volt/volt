@@ -22,13 +22,14 @@
 
 ### Changed
 
-- Require `oxc` 0.18, `vize` 0.15, `quickbeam` 0.11.2, and `json_codec` 0.3.
+- Require `oxc` 0.18.1, `vize` 0.15, `quickbeam` 0.11.2, and `json_codec` 0.3.
 
 ### Fixed
 
 - Show the error overlay when a page loads with a module that fails to compile. The client previously loaded only through the failing module graph.
 - Hide the overlay once errors are fixed, and report Tailwind build failures, including at startup.
 - Reload the page after the HMR connection returns, since the server may have restarted.
+- Type-aware checks run the type-aware rules that lint categories such as `"correctness"` select, honoring individual rule settings and per-file overrides ([#40](https://github.com/elixir-volt/volt/issues/40)).
 - Type-aware checks extract single-file component scripts with the configured Volt plugins instead of the oxlint plugin names.
 
 ## 0.18.1 - 2026-09-15
