@@ -76,8 +76,8 @@ defmodule Volt.MixProject do
         "dialyzer"
       ],
       setup: ["deps.get", "volt.priv.vendor priv/ts"],
-      "hex.build": ["volt.priv.vendor priv/ts", "hex.build"],
-      "hex.publish": ["volt.priv.vendor priv/ts", "hex.publish"],
+      "hex.build": ["cmd mix volt.priv.vendor priv/ts", "hex.build"],
+      "hex.publish": ["cmd mix volt.priv.vendor priv/ts", "hex.publish"],
       ci: ["lint", "cmd env MIX_ENV=test mix test"]
     ]
   end

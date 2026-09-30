@@ -333,8 +333,9 @@ package and nothing is installed at runtime:
 defp aliases do
   [
     setup: ["deps.get", "volt.priv.vendor priv/ts"],
-    "hex.build": ["volt.priv.vendor priv/ts", "hex.build"],
-    "hex.publish": ["volt.priv.vendor priv/ts", "hex.publish"]
+    # A separate process, so compiling for vendoring leaves Hex's own tasks loaded.
+    "hex.build": ["cmd mix volt.priv.vendor priv/ts", "hex.build"],
+    "hex.publish": ["cmd mix volt.priv.vendor priv/ts", "hex.publish"]
   ]
 end
 ```
