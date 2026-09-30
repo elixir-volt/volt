@@ -41,18 +41,18 @@ defmodule Volt.Dev.Error do
     do: [entry(Exception.message(exception), opts, [])]
 
   def entries(%{message: message} = diagnostic, opts) when is_binary(message) do
-    {line, column} = position(diagnostic[:position])
-    hint = if is_binary(diagnostic[:details]), do: diagnostic[:details]
+    {line, column} = position(Map.get(diagnostic, :position))
+    hint = if is_binary(Map.get(diagnostic, :details)), do: diagnostic.details
 
     stack =
-      case diagnostic[:stacktrace] do
+      case Map.get(diagnostic, :stacktrace) do
         [_ | _] = stacktrace -> Exception.format_stacktrace(stacktrace)
         _none -> nil
       end
 
     [
       entry(message, opts,
-        file: diagnostic[:file],
+        file: Map.get(diagnostic, :file),
         line: line,
         column: column,
         hint: hint,
