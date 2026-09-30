@@ -122,7 +122,7 @@ defmodule Volt.Dev.Error do
 
   # The error line's marker and caret stand out; other gutters are dim.
   defp html_gutter(gutter) do
-    color = if String.contains?(gutter, [">", "^"]), do: "#ff5555", else: "#6e7681"
+    color = if String.contains?(gutter, [">", "^"]), do: "#ff6b9a", else: "#6b5b8f"
     ~s(<span style="color:#{color}">#{String.replace(gutter, ">", "&gt;")}</span>)
   end
 

@@ -31,8 +31,8 @@ defmodule Volt.Dev.ErrorTest do
     {:error, diagnostics} = OXC.parse(File.read!(path), "app.ts")
 
     assert [%{frame_html: html}] = Error.entries(diagnostics, file: path)
-    assert html =~ ~s(<span style="color:#ff5555">&gt; 4 | </span>)
-    assert html =~ ~s(<span style="color:#6e7681">  3 | </span>)
+    assert html =~ ~s(<span style="color:#ff6b9a">&gt; 4 | </span>)
+    assert html =~ ~s(<span style="color:#6b5b8f">  3 | </span>)
     assert html =~ ~s(<span style="color: #8b949e;">   comment */</span>)
     assert html =~ "&lt;"
     refute html =~ "1 < 2"
