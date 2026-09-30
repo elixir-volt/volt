@@ -98,8 +98,13 @@ defmodule Volt.TestSupport.DevServerCase do
         Volt.Cache.clear()
         Volt.HMR.StyleGraph.clear()
         Volt.HMR.ModuleGraph.clear()
+        Volt.HMR.Errors.clear_session(:default)
 
-        on_exit(fn -> File.rm_rf!(@fixture_dir) end)
+        on_exit(fn ->
+          Volt.HMR.Errors.clear_session(:default)
+          File.rm_rf!(@fixture_dir)
+        end)
+
         :ok
       end
 

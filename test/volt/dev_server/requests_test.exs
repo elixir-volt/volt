@@ -263,6 +263,30 @@ defmodule Volt.DevServer.RequestsTest do
       refute conn.halted
     end
 
+    test "loads the HMR client in pages the app renders" do
+      page = "<html><head><title>x</title></head><body></body></html>"
+      client = ~s(<script type="module" src="/@volt/client.js"></script>)
+
+      conn =
+        call_dev_server("/page") |> put_resp_content_type("text/html") |> send_resp(200, page)
+
+      assert conn.resp_body == "<html><head><title>x</title>#{client}</head><body></body></html>"
+
+      loaded = "<html><head>#{client}</head></html>"
+
+      conn =
+        call_dev_server("/page") |> put_resp_content_type("text/html") |> send_resp(200, loaded)
+
+      assert conn.resp_body == loaded
+
+      conn =
+        call_dev_server("/api")
+        |> put_resp_content_type("application/json")
+        |> send_resp(200, "{}")
+
+      assert conn.resp_body == "{}"
+    end
+
     test "serves static assets with correct MIME type" do
       File.write!(Path.join(@fixture_dir, "src/image.png"), "binary")
       conn = call_dev_server("/assets/image.png")
@@ -331,12 +355,21 @@ defmodule Volt.DevServer.RequestsTest do
   end
 
   describe "error handling" do
-    test "returns 500 with error overlay for invalid source" do
-      File.write!(Path.join(@fixture_dir, "src/bad.ts"), "const = ;")
+    test "reports compile errors to the HMR client until the module compiles" do
+      path = Path.join(@fixture_dir, "src/bad.ts")
+      File.write!(path, "const = ;")
+
       conn = call_dev_server("/assets/bad.ts")
       assert conn.status == 500
-      assert conn.resp_body =~ "renderErrorOverlay"
-      assert conn.resp_body =~ "Compilation error"
+      assert conn.resp_body =~ "Could not compile"
+
+      assert [%{line: 1, column: 7, frame: frame, file: file}] = Volt.HMR.Errors.list(:default)
+      assert file == Path.relative_to_cwd(path)
+      assert frame =~ "> 1 | const = ;"
+
+      File.write!(path, "export const ok = 1")
+      assert call_dev_server("/assets/bad.ts").status == 200
+      assert Volt.HMR.Errors.list(:default) == []
     end
   end
 end

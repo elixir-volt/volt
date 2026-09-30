@@ -9,6 +9,7 @@ defmodule Volt.Dev.Cleanup do
     Volt.HMR.GlobGraph.clear_session(session)
     Volt.HMR.StyleGraph.clear_session(session)
     Volt.HMR.ModuleGraph.clear_session(session)
+    Volt.HMR.Errors.clear_session(session)
     :ok
   end
 end

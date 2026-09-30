@@ -37,7 +37,7 @@ with the session's state generation.
 | `.ex`, `.heex`, `.eex` | Incremental Tailwind rebuild, CSS hot-swap |
 | `.vue` (style-only change) | CSS hot-swap, no page reload |
 
-The browser client auto-reconnects on disconnect and shows compilation errors as an overlay.
+The browser client auto-reconnects on disconnect, reloading the page when the connection returns, and shows compilation errors as an overlay. The dev server adds the client to HTML pages the app renders, so the overlay also appears when a page's scripts fail to load.
 
 ## Server-side broadcasts
 
@@ -53,9 +53,12 @@ Volt.HMR.full_reload("content/posts/hello.md")
 # Send a custom update payload, optionally with an HMR boundary
 Volt.HMR.update("src/counter.ts", [:hmr], boundary: "/assets/counter.ts")
 
-# Show the browser error overlay
+# Show the browser error overlay, then hide it once the file is fixed
 Volt.HMR.error("content/posts/hello.md", "Invalid frontmatter")
+Volt.HMR.clear_error("content/posts/hello.md")
 ```
+
+Errors can be messages, exceptions, or `OXC.Diagnostic` maps with a location, which the overlay shows with a source frame. They stay current until cleared, so browsers that connect later see them too.
 
 Use this when an external package owns additional dependency graphs, such as pages, layouts, or content collections, while Volt serves the asset graph.
 

@@ -8,6 +8,13 @@
 - Lint `:plugins`, `:env`, and `:globals` take names as strings, as in an oxlint config file, such as `plugins: ["typescript", "react"]` and `env: ["browser"]`. Atom names raise an `ArgumentError`.
 - Custom lint rules report findings with AST `start` and `end` offsets instead of `span`.
 - `Volt.JS.Transforms.Imports.rewrite!/3` raises `OXC.Error` on parse errors.
+- HMR `error` messages carry the current `errors` as `Volt.Dev.Error` entries instead of a `path` and `reason`; an empty list hides the overlay.
+
+### Added
+
+- The error overlay shows each error's file, line, column, source frame, and hint.
+- `Volt.HMR.clear_error/2` hides errors reported with `Volt.HMR.error/3`. Errors stay current until cleared, so browsers that connect later show them.
+- The dev server adds the HMR client to HTML pages the app renders.
 
 ### Changed
 
@@ -15,6 +22,9 @@
 
 ### Fixed
 
+- Show the error overlay when a page loads with a module that fails to compile. The client previously loaded only through the failing module graph.
+- Hide the overlay once errors are fixed, and report Tailwind build failures, including at startup.
+- Reload the page after the HMR connection returns, since the server may have restarted.
 - Type-aware checks extract single-file component scripts with the configured Volt plugins instead of the oxlint plugin names.
 
 ## 0.18.1 - 2026-09-15

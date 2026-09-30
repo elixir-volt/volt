@@ -14,7 +14,11 @@ defmodule Volt.HMR.Socket do
   def init(args) do
     session = Keyword.get(args, :session, :default)
     Registry.register(Volt.HMR.Registry, Volt.HMR.Channel.key(session), nil)
-    {:ok, %{}}
+
+    case Volt.HMR.Errors.list(session) do
+      [] -> {:ok, %{}}
+      errors -> push(%Volt.HMR.Message{type: :error, payload: %{errors: errors}}, %{})
+    end
   end
 
   # Heartbeat: the browser client sends a `{"type":"ping"}` JSON message

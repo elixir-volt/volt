@@ -210,7 +210,7 @@ In development, browser `console.log`, `console.warn`, and `console.error` calls
 
 ## Error Overlay
 
-Compilation errors in development are displayed as a full-screen browser overlay with the error message. The overlay dismisses on click and clears automatically when the error is fixed.
+Compilation errors in development are displayed as a full-screen browser overlay with each error's file, line, column, and source frame. It appears on page load as well as during HMR, dismisses on click, and clears automatically when the error is fixed.
 
 ## Plugins
 

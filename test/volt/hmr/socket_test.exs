@@ -1,11 +1,25 @@
 defmodule Volt.HMR.SocketTest do
   use ExUnit.Case, async: false
 
+  setup do
+    Volt.HMR.Errors.clear_session(:default)
+    on_exit(fn -> Volt.HMR.Errors.clear_session(:default) end)
+  end
+
   describe "init/1" do
     test "registers with registry" do
       {:ok, _state} = Volt.HMR.Socket.init(nil)
       me = self()
       assert {me, nil} in Registry.lookup(Volt.HMR.Registry, :clients)
+    end
+
+    test "sends current errors to a new client" do
+      Volt.HMR.error("app.ts", "boom")
+
+      {:push, {:text, json}, _state} = Volt.HMR.Socket.init(nil)
+
+      assert %{"type" => "error", "payload" => %{"errors" => [%{"message" => "boom"}]}} =
+               Jason.decode!(json)
     end
   end
 
