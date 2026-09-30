@@ -3,7 +3,7 @@ defmodule Volt.Test.Result do
 
   defmodule Metadata do
     @moduledoc "Metadata collected for a registered JavaScript test before execution."
-    use JSONCodec, case: :camel, fast_path: :json
+    use JSONCodec, case: :camel
 
     defstruct [:id, :name, :full_name, :suite, :mode, :skip_reason, tags: [], line: nil]
 
@@ -21,7 +21,7 @@ defmodule Volt.Test.Result do
 
   defmodule SerializedError do
     @moduledoc "Serialized JavaScript error details returned by a failed test."
-    use JSONCodec, fast_path: :json
+    use JSONCodec
 
     defstruct [:name, :message, :stack, :expected, :actual]
 
@@ -36,7 +36,7 @@ defmodule Volt.Test.Result do
 
   defmodule Test do
     @moduledoc "Execution result for one registered JavaScript test."
-    use JSONCodec, case: :camel, fast_path: :json
+    use JSONCodec, case: :camel
 
     defstruct [:id, :name, :full_name, :status, :duration, :error, :skip_reason]
 
@@ -51,7 +51,7 @@ defmodule Volt.Test.Result do
           }
   end
 
-  use JSONCodec, fast_path: :json
+  use JSONCodec
 
   defstruct [:file, :status, :duration, :total, :failed, :skipped, tests: []]
 

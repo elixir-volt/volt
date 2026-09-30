@@ -138,7 +138,7 @@ defmodule Volt.JS.Transforms.ImportsTest do
     end
 
     test "raises on parse error" do
-      assert_raise RuntimeError, fn ->
+      assert_raise OXC.Error, ~r"bad.js:1:", fn ->
         Volt.JS.Transforms.Imports.rewrite!("const = ;", "bad.js", fn _ -> :keep end)
       end
     end

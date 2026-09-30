@@ -295,7 +295,7 @@ config :volt, :format, arrow_parens: :always
 ### Plugins
 
 ```elixir
-config :volt, :lint, plugins: [:typescript, :react]
+config :volt, :lint, plugins: ["typescript", "react"]
 ```
 
 ### Rules

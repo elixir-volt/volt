@@ -47,7 +47,7 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
     File.write!(file, "document; describe; knownGlobal(); missingGlobal();\n")
 
     Application.put_env(:volt, :lint,
-      env: [:browser, :mocha],
+      env: ["browser", "mocha"],
       globals: %{"knownGlobal" => :readonly},
       rules: %{"no-undef" => :deny}
     )
@@ -81,12 +81,12 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
   test "type-check diagnostics are promoted to errors" do
     diagnostic = %{
       rule: "typescript/TS2322",
-      severity: :warn,
+      severity: :warning,
       file: "typed.ts",
       message: "Type number is not assignable to type string."
     }
 
-    assert %{severity: :deny} =
+    assert %{severity: :error} =
              Volt.JS.Check.promote_type_check_diagnostic(diagnostic, type_check: true)
   end
 
@@ -168,7 +168,7 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
       File.write!(#{inspect(payload_path)}, [input, "\\n"], [:append])
       payload = JSON.decode!(input)
       for config <- payload["configs"], file <- config["file_paths"] do
-        json = JSON.encode!(%{rule: "no-floating-promises", message: %{description: "batch diagnostic"}, file_path: file, range: %{pos: 0, end: 1}})
+        json = JSON.encode!(%{kind: 0, rule: "no-floating-promises", message: %{id: "floatingPromise", description: "batch diagnostic"}, file_path: file, range: %{pos: 0, end: 1}})
         IO.binwrite(<<byte_size(json)::32-little, 1, json::binary>>)
       end
       """)
@@ -200,9 +200,9 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
              "no-floating-promises"
            ]
 
-    assert Enum.find(diagnostics, &(&1.file == Path.expand(app))).severity == :deny
-    assert Enum.find(diagnostics, &(&1.file == vue)).severity == :warn
-    assert Enum.find(diagnostics, &(&1.file == svelte)).severity == :warn
+    assert Enum.find(diagnostics, &(&1.file == Path.expand(app))).severity == :error
+    assert Enum.find(diagnostics, &(&1.file == vue)).severity == :warning
+    assert Enum.find(diagnostics, &(&1.file == svelte)).severity == :warning
 
     for batch <- batches do
       assert batch["source_overrides"][Path.expand(vue <> ".script0.ts")] =~ "vueValue"
@@ -212,7 +212,7 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
 
   defp fake_tsgolint!(dir) do
     fake_executable!(dir, "tsgolint", """
-    json = ~s({"rule":"no-floating-promises","message":{"description":"floating promise"},"file_path":"typed.ts","range":{"pos":0,"end":5}})
+    json = ~s({"kind":0,"rule":"no-floating-promises","message":{"id":"floatingPromise","description":"floating promise"},"file_path":"typed.ts","range":{"pos":0,"end":5}})
     IO.binwrite(<<byte_size(json)::32-little, 1, json::binary>>)
     """)
   end

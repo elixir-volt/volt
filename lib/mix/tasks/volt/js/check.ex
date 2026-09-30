@@ -45,9 +45,7 @@ defmodule Mix.Tasks.Volt.Js.Check do
         Mix.shell().error("#{length(errors)} file(s) could not be formatted:")
 
         Enum.each(errors, fn {file, format_errors} ->
-          Mix.shell().error(
-            "  #{file}: #{format_errors |> List.wrap() |> Enum.map_join(", ", &Volt.JS.Check.lint_error_message/1)}"
-          )
+          Mix.shell().error("  #{file}: #{Enum.map_join(format_errors, ", ", & &1.message)}")
         end)
 
         false
@@ -94,12 +92,13 @@ defmodule Mix.Tasks.Volt.Js.Check do
   end
 
   defp print_lint_diags(diags) do
-    errors = Enum.count(diags, &(&1.severity == :deny))
-    warnings = Enum.count(diags, &(&1.severity == :warn))
+    errors = Enum.count(diags, &(&1.severity == :error))
+    warnings = Enum.count(diags, &(&1.severity == :warning))
 
     Enum.each(diags, fn diag ->
-      tag = if diag.severity == :deny, do: "error", else: "warn"
-      Mix.shell().error("  [#{tag}] #{diag.file}: #{diag.message} (#{diag.rule})")
+      location = if location = Volt.JS.Check.location(diag), do: "#{location}: ", else: ""
+      rule = if rule = diag[:rule], do: " (#{rule})", else: ""
+      Mix.shell().error("  [#{diag.severity}] #{location}#{diag.message}#{rule}")
     end)
 
     Mix.shell().error("#{errors} error(s), #{warnings} warning(s)")

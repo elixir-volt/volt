@@ -27,7 +27,7 @@ defmodule Mix.Tasks.Volt.LintTest do
 
   test "reports no issues for clean code" do
     File.write!(Path.join(@tmp_dir, "clean.ts"), "export const x = 1;\n")
-    Application.put_env(:volt, :lint, plugins: [:typescript])
+    Application.put_env(:volt, :lint, plugins: ["typescript"])
 
     output = capture_io(fn -> Mix.Tasks.Volt.Lint.run([]) end)
     assert output =~ "No issues found"
@@ -50,7 +50,7 @@ defmodule Mix.Tasks.Volt.LintTest do
     File.write!(Path.join(@tmp_dir, "typed.ts"), "export function foo(x: any) { return x; }\n")
 
     Application.put_env(:volt, :lint,
-      plugins: [:typescript],
+      plugins: ["typescript"],
       rules: %{"typescript/no-explicit-any" => :warn}
     )
 
@@ -77,7 +77,7 @@ defmodule Mix.Tasks.Volt.LintTest do
     for file <- [generated, authored], do: File.write!(file, "export const value = 1;\n")
 
     Application.put_env(:volt, :lint,
-      plugins: [:unicorn],
+      plugins: ["unicorn"],
       rules: %{"unicorn/filename-case" => :deny},
       overrides: [%{files: ["colocated/**/*.js"], rules: %{"unicorn/filename-case" => :allow}}]
     )
@@ -114,13 +114,13 @@ defmodule Mix.Tasks.Volt.LintTest do
 
     Application.put_env(:volt, :lint,
       root: @tmp_dir,
-      plugins: [:unicorn],
-      env: [:browser],
+      plugins: ["unicorn"],
+      env: ["browser"],
       rules: %{"no-undef" => :deny, "unicorn/no-null" => :deny},
       overrides: [
         %{
           files: ["scripts/**/*.js"],
-          env: %{browser: false, node: true},
+          env: %{"browser" => false, "node" => true},
           globals: %{"externalValue" => :readonly},
           rules: %{"unicorn/no-null" => :allow}
         }
@@ -161,13 +161,13 @@ defmodule Mix.Tasks.Volt.LintTest do
     File.write!(file, "document.title = sharedGlobal;\nprocess.exitCode = 0;\n")
 
     Application.put_env(:volt, :lint,
-      env: [:browser],
+      env: ["browser"],
       globals: %{"sharedGlobal" => :readonly},
       rules: %{"no-undef" => :deny},
       overrides: [
         %{
           files: ["server.js"],
-          env: %{browser: false, node: true},
+          env: %{"browser" => false, "node" => true},
           globals: %{"sharedGlobal" => :off}
         }
       ]
@@ -224,8 +224,8 @@ defmodule Mix.Tasks.Volt.LintTest do
       @impl true
       def run(ast, _ctx) do
         OXC.collect(ast, fn
-          %{type: :debugger_statement, start: s, end: e} ->
-            {:keep, %{span: {s, e}, message: "custom debugger ban"}}
+          %{type: :debugger_statement, start: start, end: stop} ->
+            {:keep, %{start: start, end: stop, message: "custom debugger ban"}}
 
           _ ->
             :skip

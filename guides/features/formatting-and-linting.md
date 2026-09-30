@@ -47,7 +47,7 @@ mix volt.lint
 mix volt.lint --plugin react --plugin typescript
 ```
 
-Available plugins: `react`, `typescript`, `unicorn`, `import`, `jsdoc`, `jest`, `vitest`, `jsx_a11y`, `nextjs`, `react_perf`, `promise`, `node`, `vue`, `oxc`.
+Plugin, environment, and global names are strings, as in an oxlint config file: `"react"`, `"unicorn"`, `"jsx-a11y"`, and so on. Unknown plugin names are reported as errors.
 
 ### Configuration
 
@@ -55,9 +55,9 @@ Available plugins: `react`, `typescript`, `unicorn`, `import`, `jsdoc`, `jest`, 
 config :volt, :lint,
   sources: ["priv/ts/**/*.ts", "test/javascript/**/*.mjs"],
   ignore: ["test/javascript/fixtures/**"],
-  env: [:browser, :node, :mocha],
+  env: ["browser", "node", "mocha"],
   globals: %{"AppRuntime" => :readonly},
-  plugins: [:typescript],
+  plugins: ["typescript"],
   rules: %{
     "no-debugger" => :deny,
     "eqeqeq" => :deny,
@@ -75,8 +75,8 @@ Both `mix volt.lint` and `mix volt.js.check` resolve the same per-file settings:
 config :volt, :lint,
   root: ".",
   sources: ["assets/**/*.js", "scripts/**/*.js"],
-  plugins: [:typescript, :unicorn],
-  env: [:browser],
+  plugins: ["typescript", "unicorn"],
+  env: ["browser"],
   rules: %{"correctness" => :deny, "unicorn/no-null" => :deny},
   overrides: [
     %{
@@ -89,7 +89,7 @@ config :volt, :lint,
     },
     %{
       files: ["scripts/**/*.js"],
-      env: %{browser: false, node: true},
+      env: %{"browser" => false, "node" => true},
       globals: %{"BuildContext" => :readonly}
     }
   ]

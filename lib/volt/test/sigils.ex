@@ -63,8 +63,13 @@ defmodule Volt.Test.Sigils do
 
   defp validate!(source, filename) do
     case OXC.parse(source, filename) do
-      {:ok, _ast} -> :ok
-      {:error, errors} -> raise ArgumentError, "invalid #{filename} source: #{inspect(errors)}"
+      {:ok, _ast} ->
+        :ok
+
+      {:error, errors} ->
+        raise ArgumentError,
+              "invalid #{filename} source:\n" <>
+                Enum.map_join(errors, "\n", &OXC.Diagnostic.format/1)
     end
   end
 end

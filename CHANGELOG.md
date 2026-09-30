@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Breaking changes
+
+- Lint diagnostics are `OXC.Diagnostic` maps: severities are `:error` and `:warning`, and locations are 1-based `position` and `span` instead of byte offsets. Parse errors are diagnostics too, without a `rule`.
+- Lint `:plugins`, `:env`, and `:globals` take names as strings, as in an oxlint config file, such as `plugins: ["typescript", "react"]` and `env: ["browser"]`. Atom names raise an `ArgumentError`.
+- Custom lint rules report findings with AST `start` and `end` offsets instead of `span`.
+- `Volt.JS.Transforms.Imports.rewrite!/3` raises `OXC.Error` on parse errors.
+
+### Changed
+
+- Require `oxc` 0.18, `quickbeam` 0.11.2, and `json_codec` 0.3.
+
+### Fixed
+
+- Type-aware checks extract single-file component scripts with the configured Volt plugins instead of the oxlint plugin names.
+
 ## 0.18.1 - 2026-09-15
 
 ### Added

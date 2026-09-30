@@ -40,10 +40,7 @@ defmodule Volt.JS.Transforms.Imports do
   @spec rewrite!(String.t(), String.t(), (String.t() -> {:rewrite, String.t()} | :keep)) ::
           String.t()
   def rewrite!(source, filename, rewrite_fn) do
-    case rewrite(source, filename, rewrite_fn) do
-      {:ok, result} -> result
-      {:error, errors} -> raise "Import rewrite error: #{inspect(errors)}"
-    end
+    source |> rewrite(filename, rewrite_fn) |> OXC.Error.unwrap!()
   end
 
   @doc """

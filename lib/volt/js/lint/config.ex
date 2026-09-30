@@ -2,6 +2,9 @@ defmodule Volt.JS.Lint.Config do
   @moduledoc """
   Resolves lint options for a source file without reading the filesystem.
 
+  Plugin, rule, environment, and global names are strings, as in an oxlint
+  config file.
+
   Override globs are relative to the lint discovery root. Every matching override
   is applied in declaration order; later entries replace individual rules,
   environments and globals, not their entire maps. Environment lists enable
@@ -21,9 +24,11 @@ defmodule Volt.JS.Lint.Config do
   @spec new(keyword(), String.t()) :: t()
   def new(config, root) do
     options =
-      [plugins: [:typescript], custom_rules: [], fix: false]
+      [plugins: ["typescript"], custom_rules: [], fix: false]
       |> Keyword.merge(Keyword.take(config, [:plugins, :custom_rules, :fix]))
       |> Keyword.merge(maps(config))
+
+    names!(options[:plugins], :plugins)
 
     overrides =
       Enum.map(Keyword.get(config, :overrides, []), fn override ->
@@ -62,10 +67,16 @@ defmodule Volt.JS.Lint.Config do
     if Path.type(relative) == :relative and List.first(Path.split(relative)) != ".." do
       relative = relative |> Path.split() |> Enum.join("/")
 
-      Enum.reduce(config.overrides, config.options, &apply_override(&1, relative, &2))
+      config.overrides
+      |> Enum.reduce(config.options, &apply_override(&1, relative, &2))
+      |> enabled_environments()
     else
-      config.options
+      enabled_environments(config.options)
     end
+  end
+
+  defp enabled_environments(options) do
+    Keyword.update!(options, :env, fn env -> for {name, true} <- env, do: name end)
   end
 
   defp apply_override({globs, options}, relative, inherited) do
@@ -78,16 +89,27 @@ defmodule Volt.JS.Lint.Config do
 
   defp maps(config) do
     [
-      rules: names(Keyword.get(config, :rules, %{})),
-      globals: names(Keyword.get(config, :globals, %{})),
-      env: environments(Keyword.get(config, :env, []))
+      rules: named!(Keyword.get(config, :rules, %{}), :rules),
+      globals: named!(Keyword.get(config, :globals, %{}), :globals),
+      env: environments!(Keyword.get(config, :env, []))
     ]
   end
 
-  defp names(map), do: Map.new(map, fn {name, value} -> {to_string(name), value} end)
+  defp environments!(env) when is_list(env), do: env |> names!(:env) |> Map.new(&{&1, true})
+  defp environments!(env) when is_map(env), do: named!(env, :env)
 
-  defp environments(env) when is_list(env), do: Map.new(env, &{to_string(&1), true})
-  defp environments(env) when is_map(env), do: names(env)
+  defp named!(map, key) when is_map(map) do
+    names!(Map.keys(map), key)
+    map
+  end
+
+  defp names!(names, key) do
+    unless is_list(names) and Enum.all?(names, &is_binary/1) do
+      raise ArgumentError, "lint #{inspect(key)} names must be strings, got: #{inspect(names)}"
+    end
+
+    names
+  end
 
   defp compile_glob!(pattern) when is_binary(pattern) do
     if Path.type(pattern) != :relative or ".." in Path.split(pattern) do

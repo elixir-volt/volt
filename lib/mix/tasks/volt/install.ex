@@ -259,7 +259,7 @@ if Code.ensure_loaded?(Igniter) do
         {:code,
          Sourceror.parse_string!("""
          [
-           plugins: [:typescript, :import, :unicorn],
+           plugins: ["typescript", "import", "unicorn"],
            rules: %{
              "no-debugger" => :deny,
              "no-unused-vars" => :warn,

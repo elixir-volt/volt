@@ -9,7 +9,7 @@ config :volt, :format,
   arrow_parens: :always
 
 config :volt, :lint,
-  plugins: [:typescript, :import, :unicorn],
+  plugins: ["typescript", "import", "unicorn"],
   rules: %{
     "no-unused-expressions" => :allow,
     "no-unused-vars" => :warn,

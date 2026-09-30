@@ -39,11 +39,17 @@ defmodule Volt.JS.Check do
 
   def promote_type_check_diagnostic(%{rule: rule} = diagnostic, opts) do
     if Keyword.get(opts, :type_check, false) and type_check_diagnostic?(rule) do
-      %{diagnostic | severity: :deny}
+      %{diagnostic | severity: :error}
     else
       diagnostic
     end
   end
+
+  @doc "Formats a diagnostic's location as `file:line:column`, `file`, or `nil` without a file."
+  @spec location(OXC.Diagnostic.t()) :: String.t() | nil
+  def location(%{file: nil}), do: nil
+  def location(%{file: file, position: {line, column}}), do: "#{file}:#{line}:#{column}"
+  def location(%{file: file}), do: file
 
   def type_check_diagnostic?(rule) do
     rule
@@ -51,24 +57,20 @@ defmodule Volt.JS.Check do
     |> String.match?(~r/^(typescript\/)?TS\d+$/)
   end
 
-  def lint_error_message(%{message: message}), do: message
-  def lint_error_message(message) when is_binary(message), do: message
-  def lint_error_message(message), do: inspect(message)
-
   defp ast_lint(files, config) do
     Enum.flat_map(files, fn file ->
       source = File.read!(file)
       options = Volt.JS.Lint.Config.options(config, file)
 
       case OXC.Lint.run(source, file, options) do
-        {:ok, diagnostics} -> Enum.map(diagnostics, &Map.put(&1, :file, file))
-        {:error, errors} -> Enum.map(errors, &lint_error(&1, file))
+        {:ok, diagnostics} -> diagnostics
+        {:error, errors} -> errors
       end
     end)
   end
 
   defp type_aware_lint(files, config, lint_config, opts) do
-    {files, source_overrides, source_files} = type_aware_inputs(files, config)
+    {files, source_overrides, source_files} = type_aware_inputs(files)
 
     common_opts =
       [
@@ -95,13 +97,13 @@ defmodule Volt.JS.Check do
           end)
 
         {:error, errors} ->
-          Enum.map(errors, &lint_error/1)
+          errors
       end
     end)
   end
 
-  defp type_aware_inputs(files, config) do
-    plugins = Keyword.get(config, :plugins, [])
+  defp type_aware_inputs(files) do
+    plugins = Volt.Config.build().plugins
 
     Enum.reduce(files, {[], %{}, %{}}, fn file, {files, overrides, source_files} ->
       if type_aware_file?(file) do
@@ -170,7 +172,7 @@ defmodule Volt.JS.Check do
 
   defp unknown_tsgolint_rule(errors) do
     Enum.find_value(errors, fn error ->
-      case Regex.run(~r/unknown rule: ([\w-]+)/, lint_error_message(error)) do
+      case Regex.run(~r/unknown rule: ([\w-]+)/, error.message) do
         [_, rule] -> rule
         _ -> nil
       end
@@ -187,11 +189,5 @@ defmodule Volt.JS.Check do
     config
     |> Keyword.take([:tsgolint, :fix, :fix_suggestions, :cwd])
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-  end
-
-  defp lint_error(message), do: lint_error(message, "volt.js.check")
-
-  defp lint_error(message, file) do
-    %{severity: :deny, file: file, message: lint_error_message(message), rule: "oxc/lint"}
   end
 end
