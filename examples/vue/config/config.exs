@@ -37,7 +37,7 @@ config :volt, :format,
   single_quote: true
 
 config :volt, :lint,
-  plugins: [:typescript, :vue],
+  plugins: ["typescript", "vue"],
   tsgolint: System.find_executable("tsgolint"),
   rules: %{
     "correctness" => :deny,
