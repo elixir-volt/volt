@@ -1,0 +1,2 @@
+priv/ts/node_modules/** linguist-vendored
+priv/ts/npm.lock linguist-generated

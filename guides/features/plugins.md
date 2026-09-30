@@ -305,6 +305,35 @@ iodata containing multiple nodes, or a list of those values. `render!/4` preserv
 TypeScript for the subsequent Volt build; use `js!/4` when the caller needs compiled
 browser JavaScript immediately.
 
+### Browser code with npm packages
+
+Browser code in `priv` can import npm packages that ship with your library. List them
+in a `package.json` beside the sources, pinned to exact versions:
+
+```json
+// priv/ts/package.json
+{"private": true, "dependencies": {"lit-html": "3.3.3"}}
+```
+
+Then vendor them and commit the result:
+
+```bash
+mix volt.priv.vendor priv/ts
+```
+
+`priv/ts/node_modules` keeps only the files your sources reach: the browser build of
+each imported module, its type declarations, and each package's `package.json` and
+license, so the files ship in your Hex package without an install at runtime.
+`priv/ts/npm.lock` pins the versions; pass `--update` to resolve them again. Add
+`mix volt.priv.vendor priv/ts --check` to CI to catch a stale vendored tree.
+
+`Volt.Priv.bundle!/3` bundles an entry with everything it imports, including the
+vendored packages:
+
+```elixir
+Volt.Priv.bundle!({:my_framework, "ts"}, "widget.ts", format: :esm)
+```
+
 ### Example: AST transform with OXC
 
 Use `transform/2` to modify compiled JavaScript. OXC provides `parse/2`, `postwalk/3`, and `patch_string/2` for AST-based transforms:

@@ -70,6 +70,7 @@ defmodule Volt.MixProject do
       lint: [
         "format --check-formatted",
         "volt.js.check --type-aware --type-check",
+        "volt.priv.vendor priv/ts --check",
         "credo --strict",
         "ex_dna --min-mass 20",
         "reach.check --arch --dead-code --smells --strict",

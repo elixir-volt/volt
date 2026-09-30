@@ -140,6 +140,7 @@ infrastructure = [
   "Volt.Dev",
   "Volt.Dev.Cleanup",
   "Volt.Dev.Error",
+  "Volt.Priv.Vendor",
   "Volt.DevServer.ClientTag",
   "Volt.Dev.Assets",
   "Volt.Dev.Session.Call",

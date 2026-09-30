@@ -23,6 +23,13 @@ defmodule Volt.Priv do
   Volt build. `js!/3` and `js!/4` additionally compile the rendered source to browser
   JavaScript. This keeps templates valid TypeScript or JavaScript files instead of
   requiring EEx or textual source replacement.
+
+  `bundle!/3` bundles an entry with everything it imports into one module. npm
+  packages it imports are vendored beside the sources with `mix volt.priv.vendor`
+  (see `Volt.Priv.Vendor`), so they ship in the package and no install happens at
+  runtime:
+
+      Volt.Priv.bundle!(assets, "widget.ts", format: :esm)
   """
 
   @type source :: atom() | {atom(), String.t()}
@@ -64,6 +71,26 @@ defmodule Volt.Priv do
     source
     |> render_source(relative, bindings, Keyword.get(opts, :splices, []))
     |> rewrite_specifiers(opts[:rewrite_specifiers], relative)
+  end
+
+  @doc """
+  Bundles an entry under `priv` with the modules it imports, including npm packages
+  vendored beside it with `mix volt.priv.vendor`.
+
+  Options are passed to `OXC.bundle/2`, such as `:format` and `:define`.
+  """
+  @spec bundle(source(), String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  def bundle(source, relative, opts \\ []) when is_binary(relative) do
+    source |> path(relative) |> Volt.JS.Runtime.Bundler.bundle_file(opts)
+  end
+
+  @doc "Like `bundle/3`, but raises when the entry cannot be bundled."
+  @spec bundle!(source(), String.t(), keyword()) :: String.t()
+  def bundle!(source, relative, opts \\ []) do
+    case bundle(source, relative, opts) do
+      {:ok, code} -> code
+      {:error, reason} -> raise "could not bundle #{relative}: #{inspect(reason)}"
+    end
   end
 
   @doc """

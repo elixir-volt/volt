@@ -952,15 +952,10 @@ defmodule Volt.DevServer do
   end
 
   defp client_module!(heartbeat_interval) do
-    entry = Volt.Priv.path(@support_modules, "client/hmr.ts")
-
-    case Volt.JS.Runtime.Bundler.bundle_file(entry,
-           format: :esm,
-           define: %{"__VOLT_HEARTBEAT__" => Integer.to_string(heartbeat_interval)}
-         ) do
-      {:ok, code} when is_binary(code) -> code
-      {:error, reason} -> raise "Could not bundle Volt dev client: #{inspect(reason)}"
-    end
+    Volt.Priv.bundle!(@support_modules, "client/hmr.ts",
+      format: :esm,
+      define: %{"__VOLT_HEARTBEAT__" => Integer.to_string(heartbeat_interval)}
+    )
   end
 
   defp support_module!(relative, bindings) do
