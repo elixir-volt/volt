@@ -18,7 +18,7 @@
 
 ### Changed
 
-- Require `oxc` 0.18, `quickbeam` 0.11.2, and `json_codec` 0.3.
+- Require `oxc` 0.18, `vize` 0.15, `quickbeam` 0.11.2, and `json_codec` 0.3.
 
 ### Fixed
 
