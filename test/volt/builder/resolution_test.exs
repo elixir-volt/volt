@@ -137,6 +137,62 @@ defmodule Volt.Builder.ResolutionTest do
       assert js =~ "scoped-transitive"
     end
 
+    test "resolves a package's dependency from its nested node_modules" do
+      files = %{
+        "node_modules/a/package.json" => ~s({"name":"a","version":"1.0.0","main":"index.js"}),
+        "node_modules/a/index.js" => ~s(import { b } from "b"; export const a = "a+" + b;),
+        "node_modules/a/node_modules/b/package.json" =>
+          ~s({"name":"b","version":"1.0.0","main":"index.js"}),
+        "node_modules/a/node_modules/b/index.js" => ~s(export const b = "nested-b";),
+        "src/nested_app.js" => ~s(import { a } from "a"; globalThis.out = a;)
+      }
+
+      for {path, contents} <- files do
+        path = Path.join(@fixture_dir, path)
+        File.mkdir_p!(Path.dirname(path))
+        File.write!(path, contents)
+      end
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/nested_app.js"),
+          outdir: @outdir,
+          node_modules: Path.join(@fixture_dir, "node_modules"),
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "nested-b"
+      refute js =~ "})(b)"
+    end
+
+    test "fails the build for a bare import of a package that is not installed" do
+      File.mkdir_p!(Path.join(@fixture_dir, "src"))
+
+      File.write!(
+        Path.join(@fixture_dir, "src/missing_app.js"),
+        ~s|import { x } from "not-installed"; console.log(x)|
+      )
+
+      assert {:error, {:not_found, "not-installed"}} =
+               Volt.Builder.build(
+                 entry: Path.join(@fixture_dir, "src/missing_app.js"),
+                 outdir: @outdir,
+                 minify: false,
+                 sourcemap: false
+               )
+
+      assert {:ok, _result} =
+               Volt.Builder.build(
+                 entry: Path.join(@fixture_dir, "src/missing_app.js"),
+                 outdir: @outdir,
+                 external: ["not-installed"],
+                 minify: false,
+                 sourcemap: false
+               )
+    end
+
     test "resolves package imports from nearest package imports map" do
       File.mkdir_p!(Path.join(@fixture_dir, "node_modules/pkg/src/internal"))
 
@@ -185,6 +241,7 @@ defmodule Volt.Builder.ResolutionTest do
 
       {:ok, result} =
         Volt.Builder.build(
+          external: ["react"],
           entry: Path.join(@fixture_dir, "src/jsx_app.js"),
           outdir: @outdir,
           minify: false,

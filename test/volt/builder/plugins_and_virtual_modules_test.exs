@@ -19,6 +19,7 @@ defmodule Volt.Builder.PluginsAndVirtualModulesTest do
 
       {:ok, result} =
         Volt.Builder.build(
+          external: ["vue"],
           entry: Path.join(@fixture_dir, "src/glob_app.ts"),
           outdir: @outdir,
           minify: false,
@@ -183,6 +184,7 @@ defmodule Volt.Builder.PluginsAndVirtualModulesTest do
 
       {:ok, result} =
         Volt.Builder.build(
+          external: ["vue"],
           entry: Path.join(@fixture_dir, "src/app.ts"),
           outdir: @outdir,
           minify: false,
@@ -224,6 +226,7 @@ defmodule Volt.Builder.PluginsAndVirtualModulesTest do
 
       {:ok, result} =
         Volt.Builder.build(
+          external: ["vue"],
           entry: Path.join(@fixture_dir, "src/alias_app.ts"),
           outdir: @outdir,
           minify: false,
