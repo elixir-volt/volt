@@ -14,6 +14,7 @@ defmodule Volt.Dev.Error do
   @theme "github_dark"
 
   @type entry :: %{
+          title: String.t(),
           message: String.t(),
           file: String.t() | nil,
           line: pos_integer() | nil,
@@ -31,6 +32,7 @@ defmodule Volt.Dev.Error do
 
     * `:file` — the source path the errors belong to. It names entries that have
       no file or only its basename, and is read for source frames.
+    * `:title` — the overlay heading for these errors. Default: `"Build error"`
   """
   @spec entries(term(), keyword()) :: [entry()]
   def entries(reason, opts \\ [])
@@ -71,6 +73,7 @@ defmodule Volt.Dev.Error do
     {frame, frame_html} = frames(file, line, column)
 
     %{
+      title: opts[:title] || "Build error",
       message: message,
       file: file && Path.relative_to_cwd(file),
       line: line,

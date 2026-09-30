@@ -74,6 +74,11 @@ defmodule Volt.Dev.ErrorTest do
              )
   end
 
+  test "titles entries as build errors unless given a title" do
+    assert [%{title: "Build error"}] = Error.entries("boom")
+    assert [%{title: "Render error"}] = Error.entries("boom", title: "Render error")
+  end
+
   test "entries encode as JSON" do
     {:error, diagnostics} = OXC.parse("const = ;", "app.ts")
     assert {:ok, _json} = diagnostics |> Error.entries(file: "app.ts") |> Jason.encode()

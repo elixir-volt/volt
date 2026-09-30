@@ -50,11 +50,18 @@ defmodule Volt.HMR do
   `reason` may be `OXC.Diagnostic` maps, messages, exceptions, or any other term;
   see `Volt.Dev.Error.entries/2`. The errors stay current until `clear_error/2`,
   so browsers that connect later show them too.
+
+  ## Options
+
+    * `:session` — the development session. Default: `:default`
+    * `:title` — the overlay heading for these errors, such as `"Render error"`.
+      Default: `"Build error"`
   """
   @spec error(String.t(), term(), keyword()) :: :ok
   def error(path, reason, opts \\ []) do
     session = Keyword.get(opts, :session, :default)
-    Volt.HMR.Errors.put(session, path, Volt.Dev.Error.entries(reason, file: path))
+    entries = Volt.Dev.Error.entries(reason, file: path, title: Keyword.get(opts, :title))
+    Volt.HMR.Errors.put(session, path, entries)
     broadcast_errors(session)
   end
 

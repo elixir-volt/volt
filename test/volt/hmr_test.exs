@@ -70,8 +70,10 @@ defmodule Volt.HMRTest do
   end
 
   test "error broadcasts the current errors until they are cleared" do
-    assert :ok = Volt.HMR.error("index.html", "boom")
-    assert_receive {:volt_hmr, :error, %{errors: [%{message: "boom", file: "index.html"}]}}
+    assert :ok = Volt.HMR.error("index.html", "boom", title: "Render error")
+
+    assert_receive {:volt_hmr, :error,
+                    %{errors: [%{message: "boom", file: "index.html", title: "Render error"}]}}
 
     assert :ok = Volt.HMR.error("app.ts", "bang")
     assert_receive {:volt_hmr, :error, %{errors: [%{message: "bang"}, %{message: "boom"}]}}

@@ -203,7 +203,7 @@ function importVersion(url: string, timestamp: number) {
 
 function showErrors(errors: VoltError[]) {
   if (errors.length > 0) {
-    renderErrorOverlay(errors, { title: 'Build error' })
+    renderErrorOverlay(errors)
   } else {
     clearErrorOverlay()
   }

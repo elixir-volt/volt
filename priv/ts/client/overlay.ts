@@ -2,6 +2,7 @@ import { html, render } from 'lit-html'
 import { unsafeHTML } from 'lit-html/directives/unsafe-html.js'
 
 export type VoltError = {
+  title: string
   message: string
   file?: string | null
   line?: number | null
@@ -10,10 +11,6 @@ export type VoltError = {
   frame?: string | null
   frame_html?: string | null
   stack?: string | null
-}
-
-type VoltErrorOverlayOptions = {
-  title?: string
 }
 
 const TAG = 'volt-error-overlay'
@@ -110,7 +107,9 @@ class VoltErrorOverlay extends HTMLElement {
     })
   }
 
-  show(errors: VoltError[], title: string) {
+  show(errors: VoltError[]) {
+    const title = heading(errors)
+
     render(
       html`${styles}
         <div class="backdrop">
@@ -144,9 +143,8 @@ function errorTemplate(error: VoltError) {
   </section>`
 }
 
-export function renderErrorOverlay(errors: VoltError[], options: VoltErrorOverlayOptions = {}) {
-  const title = options.title ?? 'Build error'
-  console.error(`[Volt] ${title}:\n${errors.map(errorText).join('\n\n')}`)
+export function renderErrorOverlay(errors: VoltError[]) {
+  console.error(`[Volt] ${heading(errors)}:\n${errors.map(errorText).join('\n\n')}`)
 
   if (typeof document === 'undefined') {
     return
@@ -156,7 +154,7 @@ export function renderErrorOverlay(errors: VoltError[], options: VoltErrorOverla
 
   clearErrorOverlay()
   const overlay = document.createElement(TAG) as VoltErrorOverlay
-  overlay.show(errors, title)
+  overlay.show(errors)
   document.body.appendChild(overlay)
 }
 
@@ -164,6 +162,12 @@ export function clearErrorOverlay() {
   if (typeof document !== 'undefined') {
     document.querySelector(TAG)?.remove()
   }
+}
+
+// The errors' shared title, or a neutral one when they differ.
+function heading(errors: VoltError[]) {
+  const titles = new Set(errors.map((error) => error.title))
+  return titles.size === 1 ? [...titles][0] : 'Errors'
 }
 
 function locationText({ file, line, column }: VoltError) {
