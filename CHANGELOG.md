@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Compile without warnings in apps that do not depend on the optional `lumis` package.
+
 ## 0.19.0 - 2026-09-30
 
 ### Breaking changes
