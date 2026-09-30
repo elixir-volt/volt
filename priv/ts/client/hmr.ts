@@ -5,7 +5,7 @@ import {
   preserveHotData,
   type HotCallback
 } from './hot'
-import { renderErrorOverlay } from './overlay'
+import { clearErrorOverlay, renderErrorOverlay, type VoltError } from './overlay'
 import { removeStyle, updateStyle, updateStyles } from './styles'
 
 export { createHotContext, removeStyle, updateStyle }
@@ -19,6 +19,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 let lastPongAt = 0
 let reconnectAttempts = 0
+let connected = false
 
 const HEARTBEAT_INTERVAL = __VOLT_HEARTBEAT__
 const PONG_GRACE = HEARTBEAT_INTERVAL * 2
@@ -30,6 +31,13 @@ function connect() {
   ws = new WebSocket(`${proto}//${location.host}/@volt/ws`)
 
   ws.onopen = () => {
+    // The server may have restarted while we were away, so the page can be stale.
+    if (connected) {
+      location.reload()
+      return
+    }
+
+    connected = true
     console.log('[Volt] HMR connected')
 
     if (reconnectTimer) {
@@ -72,7 +80,7 @@ function connect() {
         )
         break
       case 'error':
-        showOverlay(payload.reason)
+        showErrors(payload.errors as VoltError[])
         break
       case 'full-reload':
         location.reload()
@@ -193,8 +201,12 @@ function importVersion(url: string, timestamp: number) {
   return import(/* @vite-ignore */ `${url}${url.includes('?') ? '&' : '?'}t=${timestamp}`)
 }
 
-function showOverlay(reason: unknown) {
-  renderErrorOverlay(reason, { title: 'Build error', dismissible: true })
+function showErrors(errors: VoltError[]) {
+  if (errors.length > 0) {
+    renderErrorOverlay(errors)
+  } else {
+    clearErrorOverlay()
+  }
 }
 
 connect()

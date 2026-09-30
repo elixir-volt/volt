@@ -44,9 +44,37 @@ defmodule Volt.HMR do
   @spec style_update(String.t()) :: :ok
   def style_update(path, opts \\ []), do: update(path, [:style], opts)
 
-  @doc "Broadcast an error payload for a source path."
-  @spec error(String.t(), term()) :: :ok
-  def error(path, reason, opts \\ []), do: broadcast(:error, %{path: path, reason: reason}, opts)
+  @doc """
+  Report the errors for a source path and show them in connected browsers.
+
+  `reason` may be `OXC.Diagnostic` maps, messages, exceptions, or any other term;
+  see `Volt.Dev.Error.entries/2`. The errors stay current until `clear_error/2`,
+  so browsers that connect later show them too.
+
+  ## Options
+
+    * `:session` — the development session. Default: `:default`
+    * `:title` — the overlay heading for these errors, such as `"Render error"`.
+      Default: `"Build error"`
+  """
+  @spec error(String.t(), term(), keyword()) :: :ok
+  def error(path, reason, opts \\ []) do
+    session = Keyword.get(opts, :session, :default)
+    entries = Volt.Dev.Error.entries(reason, file: path, title: Keyword.get(opts, :title))
+    Volt.HMR.Errors.put(session, path, entries)
+    broadcast_errors(session)
+  end
+
+  @doc "Clear the errors reported for a source path, hiding the overlay when none remain."
+  @spec clear_error(String.t(), keyword()) :: :ok
+  def clear_error(path, opts \\ []) do
+    session = Keyword.get(opts, :session, :default)
+    if Volt.HMR.Errors.delete(session, path), do: broadcast_errors(session), else: :ok
+  end
+
+  defp broadcast_errors(session) do
+    broadcast(:error, %{errors: Volt.HMR.Errors.list(session)}, session: session)
+  end
 
   @doc "Invalidate Volt's dev compilation state for a source file without broadcasting."
   @spec invalidate_file(String.t()) :: :ok

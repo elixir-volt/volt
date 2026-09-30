@@ -210,7 +210,16 @@ In development, browser `console.log`, `console.warn`, and `console.error` calls
 
 ## Error Overlay
 
-Compilation errors in development are displayed as a full-screen browser overlay with the error message. The overlay dismisses on click and clears automatically when the error is fixed.
+Compilation errors in development are displayed as a browser overlay with each error's file, line, column, and source frame. It appears on page load as well as during HMR, dismisses on click outside it, and clears automatically when the error is fixed.
+
+Add [Lumis](https://hex.pm/packages/lumis) and parser packages for your languages to highlight the source frame:
+
+```elixir
+{:lumis, "~> 0.10", only: :dev},
+{:lumis_wasm_typescript, "~> 0.26", only: :dev}
+```
+
+Without them, or for a language without an installed parser, the frame is plain text.
 
 ## Plugins
 

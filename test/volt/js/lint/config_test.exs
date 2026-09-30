@@ -3,24 +3,24 @@ defmodule Volt.JS.Lint.ConfigTest do
 
   alias Volt.JS.Lint.Config
 
-  test "merges all matching overrides in order and normalizes environment/global names" do
+  test "merges all matching overrides in order and resolves enabled environments" do
     config =
       Config.new(
         [
           rules: %{"correctness" => :deny, "unicorn/no-null" => :deny},
-          env: [:browser],
-          globals: %{shared: :readonly, retained: :readonly},
+          env: ["browser"],
+          globals: %{"shared" => :readonly, "retained" => :readonly},
           overrides: [
             %{
               files: ["scripts/**/*.{js,ts}", "build.js"],
-              env: %{browser: false, node: true},
+              env: %{"browser" => false, "node" => true},
               globals: %{"shared" => :writable},
               rules: %{"unicorn/no-null" => :allow}
             },
             [
               files: ["scripts/release.*"],
-              env: [:mocha],
-              globals: %{shared: :off},
+              env: ["mocha"],
+              globals: %{"shared" => :off},
               rules: %{"unicorn/no-null" => :warn}
             ]
           ]
@@ -30,9 +30,9 @@ defmodule Volt.JS.Lint.ConfigTest do
 
     options = Config.options(config, "assets/scripts/release.ts")
     assert options[:rules] == %{"correctness" => :deny, "unicorn/no-null" => :warn}
-    assert options[:env] == %{"browser" => false, "node" => true, "mocha" => true}
+    assert Enum.sort(options[:env]) == ["mocha", "node"]
     assert options[:globals] == %{"shared" => :off, "retained" => :readonly}
-    assert options[:plugins] == [:typescript]
+    assert options[:plugins] == ["typescript"]
     assert Config.options(config, "assets/build.js")[:rules]["unicorn/no-null"] == :allow
     assert Config.options(config, "assets/app.js")[:rules]["unicorn/no-null"] == :deny
   end
@@ -64,11 +64,9 @@ defmodule Volt.JS.Lint.ConfigTest do
 
   test "matches already-discovered hidden files without expanding the filesystem" do
     config =
-      Config.new([overrides: [%{files: ["**/*.js"], env: [:node]}]], "hidden/.worktree/assets")
+      Config.new([overrides: [%{files: ["**/*.js"], env: ["node"]}]], "hidden/.worktree/assets")
 
-    assert Config.options(config, "hidden/.worktree/assets/.generated/build.js")[:env] == %{
-             "node" => true
-           }
+    assert Config.options(config, "hidden/.worktree/assets/.generated/build.js")[:env] == ["node"]
   end
 
   test "requires scoped globs and rejects unsupported override settings" do
@@ -77,7 +75,13 @@ defmodule Volt.JS.Lint.ConfigTest do
     end
 
     assert_raise ArgumentError, ~r/unsupported lint override keys/, fn ->
-      Config.new([overrides: [%{files: ["*.js"], plugins: [:node]}]], "assets")
+      Config.new([overrides: [%{files: ["*.js"], plugins: ["node"]}]], "assets")
+    end
+
+    for config <- [[plugins: [:react]], [env: [:browser]], [globals: %{jQuery: :readonly}]] do
+      assert_raise ArgumentError, ~r/names must be strings/, fn ->
+        Config.new(config, "assets")
+      end
     end
 
     assert_raise GlobEx.CompileError, fn ->

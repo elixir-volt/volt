@@ -10,6 +10,7 @@ defmodule Volt.Application do
     Volt.HMR.GlobGraph.create_table()
     Volt.HMR.StyleGraph.create_table()
     Volt.HMR.ModuleGraph.create_table()
+    Volt.HMR.Errors.create_table()
 
     children = [
       {Registry, keys: :duplicate, name: Volt.HMR.Registry},

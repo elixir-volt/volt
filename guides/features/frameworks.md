@@ -15,7 +15,7 @@ config :volt,
   sources: ["**/*.{js,ts,jsx,tsx}"],
   import_source: "react"
 
-config :volt, :lint, plugins: [:typescript, :react]
+config :volt, :lint, plugins: ["typescript", "react"]
 ```
 
 ```json
@@ -62,7 +62,7 @@ config :volt,
     ]
   ]
 
-config :volt, :lint, plugins: [:typescript, :vue]
+config :volt, :lint, plugins: ["typescript", "vue"]
 ```
 
 ```json
@@ -115,7 +115,7 @@ config :volt,
     ]
   ]
 
-config :volt, :lint, plugins: [:typescript]
+config :volt, :lint, plugins: ["typescript"]
 ```
 
 ```json
@@ -155,7 +155,7 @@ config :volt,
   sources: ["**/*.{js,ts,jsx,tsx}"],
   plugins: [Volt.Plugin.Solid]
 
-config :volt, :lint, plugins: [:typescript]
+config :volt, :lint, plugins: ["typescript"]
 ```
 
 ```json

@@ -335,7 +335,7 @@ defmodule Volt.DevServer do
             serve(conn, relative, config)
 
           :no_match ->
-            conn
+            Volt.DevServer.ClientTag.register(conn)
         end
     end
   end
@@ -359,6 +359,7 @@ defmodule Volt.DevServer do
   defp compile_and_serve_virtual(conn, id, source, content_type, config) do
     case Volt.Pipeline.compile(id, source, pipeline_opts(config, id)) do
       {:ok, result} ->
+        Volt.HMR.clear_error(id, session: config.session)
         content_type = content_type || Volt.MIME.javascript()
         mod_url = virtual_url(id)
         code = code_for_request(result, mod_url, content_type, false)
@@ -376,10 +377,7 @@ defmodule Volt.DevServer do
         send_compiled(conn, code, result.sourcemap, content_type)
 
       {:error, errors} ->
-        conn
-        |> Conn.put_resp_content_type(Volt.MIME.javascript())
-        |> Conn.send_resp(500, error_overlay(errors))
-        |> Conn.halt()
+        send_compile_error(conn, id, errors, config)
     end
   end
 
@@ -476,6 +474,7 @@ defmodule Volt.DevServer do
 
     case Volt.Pipeline.compile(module_id, source, pipeline_opts(config, module_id)) do
       {:ok, result} ->
+        Volt.HMR.clear_error(file_path, session: config.session)
         Volt.HMR.GlobGraph.update_from_source(file_path, source, config.tables || config.session)
 
         Volt.HMR.ImportGraph.update_from_compiled(
@@ -518,10 +517,7 @@ defmodule Volt.DevServer do
         send_compiled(conn, code, result.sourcemap, content_type)
 
       {:error, errors} ->
-        conn
-        |> Conn.put_resp_content_type(Volt.MIME.javascript())
-        |> Conn.send_resp(500, error_overlay(errors))
-        |> Conn.halt()
+        send_compile_error(conn, file_path, errors, config)
     end
   end
 
@@ -943,40 +939,24 @@ defmodule Volt.DevServer do
     if Volt.MIME.javascript?(content_type), do: Volt.Dev.ConsoleForwarder.inject(code), else: code
   end
 
-  defp error_overlay(errors) do
-    msg =
-      errors
-      |> List.wrap()
-      |> Enum.map_join("\n", fn
-        %{message: m} -> m
-        e when is_binary(e) -> e
-        e -> inspect(e)
-      end)
+  # The HMR client shows the errors: a failed module fails its importers before
+  # any script in this response could run.
+  defp send_compile_error(conn, path, errors, config) do
+    Volt.HMR.error(path, errors, session: config.session)
+    message = "[Volt] Could not compile #{Path.relative_to_cwd(path)}"
 
-    overlay = support_module!("client/overlay.ts")
-    overlay <> "\n" <> error_overlay_invocation(msg)
-  end
-
-  defp error_overlay_invocation(message) do
-    "renderErrorOverlay($message, $options)"
-    |> OXC.parse!("volt-error-overlay-call.ts")
-    |> OXC.bind(message: {:literal, message}, options: {:literal, %{title: "Compilation error"}})
-    |> OXC.codegen!()
+    conn
+    |> Conn.put_resp_content_type(Volt.MIME.javascript())
+    |> Conn.send_resp(500, "throw new Error(#{Jason.encode!(message)})")
+    |> Conn.halt()
   end
 
   defp client_module!(heartbeat_interval) do
-    entry = Volt.Priv.path(@support_modules, "client/hmr.ts")
-
-    case Volt.JS.Runtime.Bundler.bundle_file(entry,
-           format: :esm,
-           define: %{"__VOLT_HEARTBEAT__" => Integer.to_string(heartbeat_interval)}
-         ) do
-      {:ok, code} when is_binary(code) -> code
-      {:error, reason} -> raise "Could not bundle Volt dev client: #{inspect(reason)}"
-    end
+    Volt.Priv.bundle!(@support_modules, "client/hmr.ts",
+      format: :esm,
+      define: %{"__VOLT_HEARTBEAT__" => Integer.to_string(heartbeat_interval)}
+    )
   end
-
-  defp support_module!(relative), do: Volt.Priv.js!(@support_modules, relative)
 
   defp support_module!(relative, bindings) do
     Volt.Priv.js!(@support_modules, relative, bindings, rewrite_specifiers: @runtime_rewrites)

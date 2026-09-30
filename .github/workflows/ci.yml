@@ -21,6 +21,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install --yes inotify-tools
         mix deps.get
+        mix volt.priv.vendor priv/ts
         npm ci
         npx playwright install --with-deps chromium
       latest-command: MIX_ENV=dev mix lint && MIX_ENV=test mix test

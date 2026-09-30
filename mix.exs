@@ -38,10 +38,10 @@ defmodule Volt.MixProject do
     [
       {:reach, "~> 2.6.1", only: [:dev, :test], runtime: false},
       {:glob_ex, "~> 0.1.12"},
-      {:oxc, "~> 0.17.8"},
-      {:vize, "~> 0.14.2"},
+      {:oxc, "~> 0.18.1"},
+      {:vize, "~> 0.15.0"},
       {:oxide_ex, "~> 0.2.2"},
-      {:quickbeam, "~> 0.11.1"},
+      {:quickbeam, "~> 0.11.2"},
       {:dotenvy, "~> 1.1"},
       {:floki, "~> 0.38"},
       {:plug, "~> 1.16"},
@@ -49,7 +49,9 @@ defmodule Volt.MixProject do
       {:websock_adapter, "~> 0.5"},
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
-      {:json_codec, "~> 0.2.3"},
+      {:json_codec, "~> 0.3"},
+      {:lumis, "~> 0.10", optional: true},
+      {:lumis_wasm_typescript, "~> 0.26", only: :test},
       {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
       {:npm, "~> 0.7.6"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -73,7 +75,9 @@ defmodule Volt.MixProject do
         "reach.check --arch --dead-code --smells --strict",
         "dialyzer"
       ],
-      setup: ["deps.get"],
+      setup: ["deps.get", "volt.priv.vendor priv/ts"],
+      "hex.build": ["cmd mix volt.priv.vendor priv/ts", "hex.build"],
+      "hex.publish": ["cmd mix volt.priv.vendor priv/ts", "hex.publish"],
       ci: ["lint", "cmd env MIX_ENV=test mix test"]
     ]
   end

@@ -9,7 +9,7 @@ defmodule Volt.Dev.ConsoleForwarder do
   defmodule Payload do
     @moduledoc false
 
-    use JSONCodec, fast_path: :json
+    use JSONCodec
 
     defstruct [:level, :source, :args]
 

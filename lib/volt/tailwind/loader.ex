@@ -83,7 +83,11 @@ defmodule Volt.Tailwind.Loader do
           {code, dependencies}
 
         {:error, errors} ->
-          raise "Could not bundle Tailwind module #{inspect(entry_path)}: #{inspect(errors)}"
+          raise OXC.Error,
+            message:
+              "Could not bundle Tailwind module #{inspect(entry_path)}:\n" <>
+                Enum.map_join(errors, "\n", &OXC.Diagnostic.format/1),
+            errors: errors
       end
     else
       {:error, reason} ->

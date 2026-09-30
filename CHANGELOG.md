@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Breaking changes
+
+- Lint diagnostics are `OXC.Diagnostic` maps: severities are `:error` and `:warning`, and locations are 1-based `position` and `span` instead of byte offsets. Parse errors are diagnostics too, without a `rule`.
+- Lint `:plugins`, `:env`, and `:globals` take names as strings, as in an oxlint config file, such as `plugins: ["typescript", "react"]` and `env: ["browser"]`. Atom names raise an `ArgumentError`.
+- Custom lint rules report findings with AST `start` and `end` offsets instead of `span`.
+- `Volt.JS.Transforms.Imports.rewrite!/3` raises `OXC.Error` on parse errors.
+- HMR `error` messages carry the current `errors` as `Volt.Dev.Error` entries instead of a `path` and `reason`; an empty list hides the overlay.
+
+### Added
+
+- The error overlay shows each error's file, line, column, source frame, and hint.
+- The error overlay is a `<volt-error-overlay>` element rendered with lit-html into a Shadow DOM, so the app's styles cannot affect it.
+- Highlight the error overlay's source frame with the optional `lumis` dependency and its parser packages, such as `lumis_wasm_typescript`.
+- `Volt.HMR.error/3` takes a `:title` for the overlay heading, such as `"Render error"`. `Volt.HMR.clear_error/2` hides errors reported with `Volt.HMR.error/3`. Errors stay current until cleared, so browsers that connect later show them.
+- The dev server adds the HMR client to HTML pages the app renders.
+- `mix volt.priv.vendor` vendors npm packages for browser code under `priv`, keeping only the files the sources reach, for the Hex package rather than git. `Volt.Priv.bundle!/3` bundles a `priv` entry with them and vendors on first use in a git or path checkout. See "Browser code with npm packages" in the plugins guide.
+- The error overlay shows a diagnostic's stacktrace.
+
+### Changed
+
+- Require `oxc` 0.18.1, `vize` 0.15, `quickbeam` 0.11.2, and `json_codec` 0.3.
+
+### Fixed
+
+- Show the error overlay when a page loads with a module that fails to compile. The client previously loaded only through the failing module graph.
+- Hide the overlay once errors are fixed, and report Tailwind build failures, including at startup.
+- Reload the page after the HMR connection returns, since the server may have restarted.
+- Type-aware checks run the type-aware rules that lint categories such as `"correctness"` select, honoring individual rule settings and per-file overrides ([#40](https://github.com/elixir-volt/volt/issues/40)).
+- Type-aware checks extract single-file component scripts with the configured Volt plugins instead of the oxlint plugin names.
+
 ## 0.18.1 - 2026-09-15
 
 ### Added

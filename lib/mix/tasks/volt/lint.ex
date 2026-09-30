@@ -11,10 +11,8 @@ defmodule Mix.Tasks.Volt.Lint do
 
   ## Options
 
-    * `--plugin` — enable an oxlint plugin (repeatable).
-      Available: `react`, `typescript`, `unicorn`, `import`, `jsdoc`,
-      `jest`, `vitest`, `jsx_a11y`, `nextjs`, `react_perf`, `promise`,
-      `node`, `vue`, `oxc`
+    * `--plugin` — enable an oxlint plugin (repeatable), such as `react`,
+      `unicorn`, or `jsx-a11y`. Accepts the plugin names of an oxlint config file.
 
     * `--fix` — show fix suggestions in output
 
@@ -23,7 +21,7 @@ defmodule Mix.Tasks.Volt.Lint do
   Configure lint settings in `config :volt, :lint`:
 
       config :volt, :lint,
-        plugins: [:typescript, :react],
+        plugins: ["typescript", "react"],
         rules: %{
           "no-console" => :warn,
           "eqeqeq" => :deny,
@@ -81,8 +79,8 @@ defmodule Mix.Tasks.Volt.Lint do
 
     plugins =
       case Keyword.get_values(parsed, :plugin) do
-        [] -> Keyword.get(config, :plugins, [:typescript])
-        cli_plugins -> Enum.map(cli_plugins, &String.to_atom/1)
+        [] -> Keyword.get(config, :plugins, ["typescript"])
+        cli_plugins -> cli_plugins
       end
 
     lint_config = Volt.JS.Lint.Config.new(config, Volt.Config.build().root)
@@ -106,21 +104,8 @@ defmodule Mix.Tasks.Volt.Lint do
       options = Keyword.merge(options, plugins: plugins, fix: fix)
 
       case OXC.Lint.run(source, file, options) do
-        {:ok, diags} ->
-          Enum.map(diags, &Map.put(&1, :file, file))
-
-        {:error, parse_errors} ->
-          Enum.map(parse_errors, fn msg ->
-            %{
-              file: file,
-              rule: "parse-error",
-              message: msg,
-              severity: :deny,
-              span: {0, 0},
-              labels: [],
-              help: nil
-            }
-          end)
+        {:ok, diags} -> diags
+        {:error, parse_errors} -> parse_errors
       end
     end)
   end
@@ -171,8 +156,6 @@ defmodule Mix.Tasks.Volt.Lint do
   defp print_diagnostic(diag, edge_color) do
     tag = severity_tag(diag.severity)
     arrow = priority_arrow(diag.severity)
-    source = File.read!(diag.file)
-    {line, col} = offset_to_line_col(source, elem(diag.span, 0))
 
     Mix.shell().info(
       IO.ANSI.format([
@@ -196,20 +179,17 @@ defmodule Mix.Tasks.Volt.Lint do
         "┃       ",
         :reset,
         :faint,
-        diag.file,
+        Volt.JS.Check.location(diag) || "",
         :default_color,
         :faint,
-        ":#{line}:#{col}",
-        " #(",
-        diag.rule,
-        ")"
+        if(rule = diag[:rule], do: " #(#{rule})", else: "")
       ])
     )
   end
 
   defp print_summary(results, files) do
-    errors = Enum.count(results, &(&1.severity == :deny))
-    warnings = Enum.count(results, &(&1.severity == :warn))
+    errors = Enum.count(results, &(&1.severity == :error))
+    warnings = Enum.count(results, &(&1.severity == :warning))
 
     by_category =
       results
@@ -260,24 +240,14 @@ defmodule Mix.Tasks.Volt.Lint do
     end)
   end
 
-  defp severity_tag(:deny), do: "[E]"
-  defp severity_tag(:warn), do: "[W]"
-  defp severity_tag(_), do: "[I]"
+  defp severity_tag(:error), do: "[E]"
+  defp severity_tag(:warning), do: "[W]"
 
-  defp priority_arrow(:deny), do: "↗"
-  defp priority_arrow(:warn), do: "→"
-  defp priority_arrow(_), do: "→"
+  defp priority_arrow(:error), do: "↗"
+  defp priority_arrow(:warning), do: "→"
 
   defp pl(1), do: ""
   defp pl(_), do: "s"
-
-  defp offset_to_line_col(source, offset) do
-    prefix = binary_part(source, 0, min(offset, byte_size(source)))
-    lines = String.split(prefix, "\n")
-    line = length(lines)
-    col = lines |> List.last() |> String.length() |> Kernel.+(1)
-    {line, col}
-  end
 
   defp term_columns do
     case :io.columns() do

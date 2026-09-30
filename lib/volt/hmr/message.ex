@@ -8,7 +8,8 @@ defmodule Volt.HMR.Message do
   ## Wire types
 
     * `update` — an HMR update payload (`path`, `changes`, optional `boundary`, `timestamp`)
-    * `error` — a build/runtime error to surface in the overlay
+    * `error` — the current build errors (`errors`, as `t:Volt.Dev.Error.entry/0` maps);
+      an empty list hides the overlay
     * `ping` — heartbeat sent by the browser client
     * `pong` — heartbeat reply from the server
 

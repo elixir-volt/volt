@@ -146,15 +146,7 @@ defmodule Volt.Builder.Rewriter do
     patches
   end
 
-  defp preload_helper do
-    {:volt, "ts"}
-    |> Volt.Priv.path("client/preload-global.ts")
-    |> Volt.JS.Runtime.Bundler.bundle_file()
-    |> case do
-      {:ok, code} -> code <> "\n"
-      {:error, reason} -> raise "could not bundle Volt preload helper: #{inspect(reason)}"
-    end
-  end
+  defp preload_helper, do: Volt.Priv.bundle!({:volt, "ts"}, "client/preload-global.ts") <> "\n"
 
   defp worker_filename_map(worker_specs, ctx) do
     worker_specs

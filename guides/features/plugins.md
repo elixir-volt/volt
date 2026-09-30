@@ -305,6 +305,50 @@ iodata containing multiple nodes, or a list of those values. `render!/4` preserv
 TypeScript for the subsequent Volt build; use `js!/4` when the caller needs compiled
 browser JavaScript immediately.
 
+### Browser code with npm packages
+
+Browser code in `priv` can import npm packages that ship with your library. List them
+in a `package.json` beside the sources, pinned to exact versions:
+
+```json
+// priv/ts/package.json
+{"private": true, "dependencies": {"lit-html": "3.3.3"}}
+```
+
+Then vendor them:
+
+```bash
+mix volt.priv.vendor priv/ts
+```
+
+`priv/ts/node_modules` keeps only the files your sources reach: the browser build of
+each imported module, its type declarations, and each package's `package.json` and
+license. Commit `package.json` and the `npm.lock` that pins the versions, but keep
+`node_modules` out of git and vendor before publishing, so the files ship in your Hex
+package and nothing is installed at runtime:
+
+```elixir
+# .gitignore: /priv/ts/node_modules/
+
+defp aliases do
+  [
+    setup: ["deps.get", "volt.priv.vendor priv/ts"],
+    # A separate process, so compiling for vendoring leaves Hex's own tasks loaded.
+    "hex.build": ["cmd mix volt.priv.vendor priv/ts", "hex.build"],
+    "hex.publish": ["cmd mix volt.priv.vendor priv/ts", "hex.publish"]
+  ]
+end
+```
+
+Pass `--update` to resolve the versions again.
+
+`Volt.Priv.bundle!/3` bundles an entry with everything it imports, including the
+vendored packages. In a git or path checkout without them, it vendors on first use:
+
+```elixir
+Volt.Priv.bundle!({:my_framework, "ts"}, "widget.ts", format: :esm)
+```
+
 ### Example: AST transform with OXC
 
 Use `transform/2` to modify compiled JavaScript. OXC provides `parse/2`, `postwalk/3`, and `patch_string/2` for AST-based transforms:

@@ -56,7 +56,7 @@ defmodule Volt.Test.BrowserRunner do
   end
 
   defp browser_runtime_code do
-    Volt.JS.Runtime.Bundler.bundle_file(Volt.Priv.path({:volt, "ts"}, "test/browser.ts"))
+    Volt.Priv.bundle({:volt, "ts"}, "test/browser.ts")
   end
 
   defp ensure_playwright_started(%Config{} = config, timeout) do

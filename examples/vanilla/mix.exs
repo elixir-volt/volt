@@ -36,7 +36,9 @@ defmodule VanillaExample.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, ">= 1.12.5 and < 2.0.0"},
-      {:volt, path: "../..", override: true}
+      {:volt, path: "../..", override: true},
+      {:lumis, "~> 0.10", only: :dev},
+      {:lumis_wasm_typescript, "~> 0.26", only: :dev}
     ]
   end
 

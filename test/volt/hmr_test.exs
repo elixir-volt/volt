@@ -3,7 +3,8 @@ defmodule Volt.HMRTest do
 
   setup do
     Registry.register(Volt.HMR.Registry, :clients, nil)
-    :ok
+    Volt.HMR.Errors.clear_session(:default)
+    on_exit(fn -> Volt.HMR.Errors.clear_session(:default) end)
   end
 
   test "scoped broadcasts do not reach other sessions or default subscribers" do
@@ -68,9 +69,20 @@ defmodule Volt.HMRTest do
     assert_receive {:volt_hmr, :update, %{path: "app.css", changes: ["style"]}}
   end
 
-  test "error broadcasts error payload" do
-    assert :ok = Volt.HMR.error("index.html", "boom")
-    assert_receive {:volt_hmr, :error, %{path: "index.html", reason: "boom"}}
+  test "error broadcasts the current errors until they are cleared" do
+    assert :ok = Volt.HMR.error("index.html", "boom", title: "Render error")
+
+    assert_receive {:volt_hmr, :error,
+                    %{errors: [%{message: "boom", file: "index.html", title: "Render error"}]}}
+
+    assert :ok = Volt.HMR.error("app.ts", "bang")
+    assert_receive {:volt_hmr, :error, %{errors: [%{message: "bang"}, %{message: "boom"}]}}
+
+    assert :ok = Volt.HMR.clear_error("index.html")
+    assert_receive {:volt_hmr, :error, %{errors: [%{message: "bang"}]}}
+
+    assert :ok = Volt.HMR.clear_error("index.html")
+    refute_receive {:volt_hmr, :error, _payload}
   end
 
   test "invalidate_file evicts dev compilation state" do

@@ -164,17 +164,7 @@ defmodule Volt.Watcher do
       watch_ignored: watch_ignored
     }
 
-    if config[:tailwind] do
-      initial_tailwind_build(
-        tailwind_sources,
-        config[:tailwind_css],
-        tailwind_outdir,
-        tailwind_key,
-        tailwind_name,
-        config[:tailwind_runtime],
-        config[:tailwind_worker]
-      )
-    end
+    if config[:tailwind], do: initial_tailwind_build(state)
 
     {:ok, refresh_tailwind_inputs(state)}
   end
@@ -233,13 +223,22 @@ defmodule Volt.Watcher do
 
   defp watcher_sources(dirs), do: Enum.map(dirs, &%{base: &1, pattern: "**/*"})
 
-  defp initial_tailwind_build(sources, css_path, outdir, key, name, runtime, worker) do
-    case build_tailwind(sources, css_path, outdir, key, name, runtime, worker) do
+  defp initial_tailwind_build(%{config: config} = state) do
+    case build_tailwind(
+           config.tailwind_sources,
+           config[:tailwind_css],
+           state.tailwind_outdir,
+           config.tailwind_key,
+           config.tailwind_name,
+           config[:tailwind_runtime],
+           config[:tailwind_worker]
+         ) do
       {:ok, css} ->
         Logger.debug("[Volt] Initial Tailwind build: #{byte_size(css)} bytes")
 
       {:error, reason} ->
         Logger.warning("[Volt] Initial Tailwind build failed: #{inspect(reason)}")
+        tailwind_error(reason, state)
     end
   end
 
@@ -434,13 +433,14 @@ defmodule Volt.Watcher do
               state.tables || state.session
             )
 
+            HMR.clear_error(path, session: state.session)
             changes = if css?, do: [:style], else: detect_changes(old_entry, result)
             broadcast_change(path, relative, changes, state)
             broadcast_css_dependents(css_dependents, state)
             broadcast_glob_dependents(path, state)
 
           {:error, reason} ->
-            HMR.broadcast(:error, %{path: relative, reason: reason}, session: state.session)
+            HMR.error(path, reason, session: state.session)
         end
 
       {:error, reason} when reason in [:enoent, :eacces, :eperm] ->
@@ -448,11 +448,13 @@ defmodule Volt.Watcher do
         Volt.HMR.GlobGraph.remove(path, state.tables || state.session)
         if css?, do: Volt.HMR.StyleGraph.remove(path, state.tables || state.session)
         Volt.HMR.ModuleGraph.remove_file(path, state.tables || state.session)
+        HMR.clear_error(path, session: state.session)
         HMR.update(relative, [:full], session: state.session)
         broadcast_glob_dependents(path, state)
 
       {:error, reason} ->
-        HMR.broadcast(:error, %{path: relative, reason: inspect(reason)}, session: state.session)
+        message = "Could not read #{relative}: #{:file.format_error(reason)}"
+        HMR.error(path, message, session: state.session)
     end
   end
 
@@ -603,6 +605,8 @@ defmodule Volt.Watcher do
            state.config[:tailwind_worker]
          ) do
       {:ok, css} ->
+        clear_tailwind_error(state)
+
         if previous != {:ok, css} do
           HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]},
             session: state.session
@@ -613,7 +617,7 @@ defmodule Volt.Watcher do
         :ok
 
       {:error, reason} ->
-        tailwind_error(reason, state.session)
+        tailwind_error(reason, state)
     end
   end
 
@@ -641,6 +645,7 @@ defmodule Volt.Watcher do
                ]
            ) do
       Volt.Tailwind.Artifact.write(state.tailwind_outdir, state.config.tailwind_name, css)
+      clear_tailwind_error(state)
 
       HMR.broadcast(:update, %{path: state.config.tailwind_url, changes: [:style]},
         session: state.session
@@ -653,7 +658,7 @@ defmodule Volt.Watcher do
         :ok
 
       {:error, reason} ->
-        tailwind_error(reason, state.session)
+        tailwind_error(reason, state)
     end
   end
 
@@ -668,10 +673,15 @@ defmodule Volt.Watcher do
     if worker, do: Volt.Tailwind.Worker.stylesheet(worker), else: {:error, :not_built}
   end
 
-  defp tailwind_error(reason, session) do
-    HMR.broadcast(:error, %{path: "tailwind", reason: inspect(reason)}, session: session)
+  defp tailwind_error(reason, state) do
+    HMR.error(tailwind_error_path(state), reason, session: state.session)
     {:error, reason}
   end
+
+  defp clear_tailwind_error(state),
+    do: HMR.clear_error(tailwind_error_path(state), session: state.session)
+
+  defp tailwind_error_path(state), do: state.config[:tailwind_css] || "tailwind"
 
   defp detect_changes(nil, _new), do: [:full]
 
