@@ -150,10 +150,10 @@ defmodule Volt.Builder.Resolver do
       if ctx.node_modules, do: [ctx.node_modules | ctx.resolve_dirs], else: ctx.resolve_dirs
 
     dirs =
-      importer
-      |> scoped_package_dirs(ctx.package_scopes)
-      |> Kernel.++(global_dirs)
-      |> Enum.uniq()
+      Enum.uniq(
+        ancestor_node_modules(importer) ++
+          scoped_package_dirs(importer, ctx.package_scopes) ++ global_dirs
+      )
 
     case Enum.find_value(dirs, fn dir ->
            {package_name, _subpath} = NPM.Resolution.PackageResolver.split_specifier(specifier)
@@ -163,10 +163,31 @@ defmodule Volt.Builder.Resolver do
              resolve_in_package(specifier, dir, package_dir, ctx.plugins) || :unresolved_package
            end
          end) do
-      nil -> :skip
+      nil -> {:error, {:not_found, specifier}}
       :unresolved_package -> {:error, {:not_found, specifier}}
       result -> result
     end
+  end
+
+  # Bare imports resolve as Node does, nearest first: from `D/node_modules` for each
+  # directory `D` above the importer that is not itself a `node_modules`. That finds
+  # dependencies nested under their dependent, as npm installs conflicting versions,
+  # pnpm's sibling layout, and packages vendored beside `priv` sources.
+  defp ancestor_node_modules(nil), do: []
+
+  defp ancestor_node_modules(importer) do
+    {importer_path, _query} = Volt.URL.split_query(importer)
+
+    importer_path
+    |> Path.expand()
+    |> Path.dirname()
+    |> Stream.unfold(fn
+      nil -> nil
+      dir -> {dir, if(Path.dirname(dir) == dir, do: nil, else: Path.dirname(dir))}
+    end)
+    |> Stream.reject(&(Path.basename(&1) == "node_modules"))
+    |> Stream.map(&Path.join(&1, "node_modules"))
+    |> Enum.filter(&File.dir?/1)
   end
 
   defp resolve_in_package(specifier, dir, package_dir, plugins) do

@@ -95,6 +95,7 @@ defmodule Volt.Builder.StylesheetsTest do
 
       {:ok, result} =
         Volt.Builder.build(
+          external: ["vue"],
           entry: Path.join(@fixture_dir, "src/main.ts"),
           outdir: @outdir,
           minify: false,
@@ -234,6 +235,7 @@ defmodule Volt.Builder.StylesheetsTest do
 
       {:ok, result} =
         Volt.Builder.build(
+          external: ["vue"],
           entry: Path.join(@fixture_dir, "src/vue_css_asset.ts"),
           outdir: @outdir,
           minify: false,

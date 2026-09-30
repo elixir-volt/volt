@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Resolve bare imports from the `node_modules` directories above the importer, nearest first, as Node does, before the configured `node_modules` and `resolve_dirs`. Dependencies nested under their dependent, pnpm layouts, and packages vendored beside `priv` sources now bundle instead of becoming undefined IIFE globals ([#44](https://github.com/elixir-volt/volt/issues/44)).
+- Fail the build with `{:error, {:not_found, specifier}}` for a bare import that resolves nowhere and is not listed in `:external`. It used to build and throw a `ReferenceError` at runtime.
+
 ## 0.19.1 - 2026-09-30
 
 ### Fixed
