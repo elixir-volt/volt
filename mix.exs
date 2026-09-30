@@ -50,6 +50,8 @@ defmodule Volt.MixProject do
       {:file_system, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:json_codec, "~> 0.3"},
+      {:lumis, "~> 0.10", optional: true},
+      {:lumis_wasm_typescript, "~> 0.26", only: :test},
       {:igniter, ">= 0.8.4 and < 1.0.0", optional: true},
       {:npm, "~> 0.7.6"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

@@ -11,6 +11,7 @@ export type VoltError = {
   column?: number | null
   hint?: string | null
   frame?: string | null
+  frame_html?: string | null
 }
 
 type VoltErrorOverlayOptions = {
@@ -44,13 +45,14 @@ export function renderErrorOverlay(errors: VoltError[], options: VoltErrorOverla
     if (location) entry.append(block('div', location, 'color:#9aa0a6'))
     entry.append(block('div', error.message, 'color:#ff8080;white-space:pre-wrap'))
     if (error.frame) {
-      entry.append(
-        block(
-          'pre',
-          error.frame,
-          'margin:0.75em 0 0;padding:12px 16px;background:#0f0f0f;border-radius:4px;overflow-x:auto;color:#e8e8e8;font:inherit'
-        )
+      const frame = block(
+        'pre',
+        error.frame,
+        'margin:0.75em 0 0;padding:12px 16px;background:#0d1117;border-radius:4px;overflow-x:auto;color:#e6edf3;font:inherit'
       )
+      // Built by the dev server from escaped, syntax-highlighted source.
+      if (error.frame_html) frame.innerHTML = error.frame_html
+      entry.append(frame)
     }
     if (error.hint) {
       entry.append(block('div', error.hint, 'margin-top:0.5em;color:#8ab4f8;white-space:pre-wrap'))

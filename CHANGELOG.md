@@ -13,6 +13,7 @@
 ### Added
 
 - The error overlay shows each error's file, line, column, source frame, and hint.
+- Highlight the error overlay's source frame with the optional `lumis` dependency and its parser packages, such as `lumis_wasm_typescript`.
 - `Volt.HMR.clear_error/2` hides errors reported with `Volt.HMR.error/3`. Errors stay current until cleared, so browsers that connect later show them.
 - The dev server adds the HMR client to HTML pages the app renders.
 

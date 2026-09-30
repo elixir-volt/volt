@@ -25,6 +25,28 @@ defmodule Volt.Dev.ErrorTest do
            """
   end
 
+  test "highlights the frame with Lumis when a parser covers the language", %{tmp_dir: tmp_dir} do
+    path = Path.join(tmp_dir, "app.ts")
+    File.write!(path, "/* a\n   comment */\nconst a = 1 < 2\nconst = ;\n")
+    {:error, diagnostics} = OXC.parse(File.read!(path), "app.ts")
+
+    assert [%{frame_html: html}] = Error.entries(diagnostics, file: path)
+    assert html =~ ~s(<span style="color:#ff5555">&gt; 4 | </span>)
+    assert html =~ ~s(<span style="color:#6e7681">  3 | </span>)
+    assert html =~ ~s(<span style="color: #8b949e;">   comment */</span>)
+    assert html =~ "&lt;"
+    refute html =~ "1 < 2"
+    assert length(String.split(html, "\n")) == 5
+  end
+
+  test "keeps only the plain frame without a parser for the language", %{tmp_dir: tmp_dir} do
+    path = Path.join(tmp_dir, "app.css")
+    File.write!(path, ".a { color: red\n")
+
+    assert [%{frame: "> 1 | .a { color: red" <> _, frame_html: nil}] =
+             Error.entries(%{message: "x", position: {1, 2}}, file: path)
+  end
+
   test "keeps a diagnostic's own file when it differs from the source path" do
     diagnostic = %{message: "boom", file: "other.ts", position: {2, 1}, details: "try this"}
 
