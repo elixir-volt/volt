@@ -17,7 +17,8 @@
 - Highlight the error overlay's source frame with the optional `lumis` dependency and its parser packages, such as `lumis_wasm_typescript`.
 - `Volt.HMR.clear_error/2` hides errors reported with `Volt.HMR.error/3`. Errors stay current until cleared, so browsers that connect later show them.
 - The dev server adds the HMR client to HTML pages the app renders.
-- `mix volt.priv.vendor` vendors npm packages for browser code under `priv`, keeping only the files the sources reach, and `Volt.Priv.bundle!/3` bundles a `priv` entry with them. See "Browser code with npm packages" in the plugins guide.
+- `mix volt.priv.vendor` vendors npm packages for browser code under `priv`, keeping only the files the sources reach, for the Hex package rather than git. `Volt.Priv.bundle!/3` bundles a `priv` entry with them and vendors on first use in a git or path checkout. See "Browser code with npm packages" in the plugins guide.
+- The error overlay shows a diagnostic's stacktrace.
 
 ### Changed
 

@@ -70,13 +70,14 @@ defmodule Volt.MixProject do
       lint: [
         "format --check-formatted",
         "volt.js.check --type-aware --type-check",
-        "volt.priv.vendor priv/ts --check",
         "credo --strict",
         "ex_dna --min-mass 20",
         "reach.check --arch --dead-code --smells --strict",
         "dialyzer"
       ],
-      setup: ["deps.get"],
+      setup: ["deps.get", "volt.priv.vendor priv/ts"],
+      "hex.build": ["volt.priv.vendor priv/ts", "hex.build"],
+      "hex.publish": ["volt.priv.vendor priv/ts", "hex.publish"],
       ci: ["lint", "cmd env MIX_ENV=test mix test"]
     ]
   end

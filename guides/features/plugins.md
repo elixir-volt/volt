@@ -315,7 +315,7 @@ in a `package.json` beside the sources, pinned to exact versions:
 {"private": true, "dependencies": {"lit-html": "3.3.3"}}
 ```
 
-Then vendor them and commit the result:
+Then vendor them:
 
 ```bash
 mix volt.priv.vendor priv/ts
@@ -323,12 +323,26 @@ mix volt.priv.vendor priv/ts
 
 `priv/ts/node_modules` keeps only the files your sources reach: the browser build of
 each imported module, its type declarations, and each package's `package.json` and
-license, so the files ship in your Hex package without an install at runtime.
-`priv/ts/npm.lock` pins the versions; pass `--update` to resolve them again. Add
-`mix volt.priv.vendor priv/ts --check` to CI to catch a stale vendored tree.
+license. Commit `package.json` and the `npm.lock` that pins the versions, but keep
+`node_modules` out of git and vendor before publishing, so the files ship in your Hex
+package and nothing is installed at runtime:
+
+```elixir
+# .gitignore: /priv/ts/node_modules/
+
+defp aliases do
+  [
+    setup: ["deps.get", "volt.priv.vendor priv/ts"],
+    "hex.build": ["volt.priv.vendor priv/ts", "hex.build"],
+    "hex.publish": ["volt.priv.vendor priv/ts", "hex.publish"]
+  ]
+end
+```
+
+Pass `--update` to resolve the versions again.
 
 `Volt.Priv.bundle!/3` bundles an entry with everything it imports, including the
-vendored packages:
+vendored packages. In a git or path checkout without them, it vendors on first use:
 
 ```elixir
 Volt.Priv.bundle!({:my_framework, "ts"}, "widget.ts", format: :esm)

@@ -30,3 +30,4 @@ volt-*.tar
 
 # Git worktrees for parallel agent work
 .worktrees/
+/priv/ts/node_modules/

@@ -32,6 +32,8 @@ defmodule Volt.Priv do
       Volt.Priv.bundle!(assets, "widget.ts", format: :esm)
   """
 
+  require Logger
+
   @type source :: atom() | {atom(), String.t()}
   @type bindings :: keyword() | map()
 
@@ -81,7 +83,30 @@ defmodule Volt.Priv do
   """
   @spec bundle(source(), String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def bundle(source, relative, opts \\ []) when is_binary(relative) do
-    source |> path(relative) |> Volt.JS.Runtime.Bundler.bundle_file(opts)
+    entry = path(source, relative)
+    entry |> vendor_root() |> ensure_vendored()
+    Volt.JS.Runtime.Bundler.bundle_file(entry, opts)
+  end
+
+  # The nearest directory above the entry with a vendoring `package.json`.
+  defp vendor_root(entry) do
+    entry
+    |> Path.dirname()
+    |> Stream.iterate(&Path.dirname/1)
+    |> Enum.take_while(&(Path.basename(&1) != "priv"))
+    |> Enum.find(&File.regular?(Path.join(&1, "package.json")))
+  end
+
+  # Git and path checkouts have no vendored files, so vendor them on first use.
+  defp ensure_vendored(nil), do: :ok
+
+  defp ensure_vendored(dir) do
+    unless File.dir?(Path.join(dir, "node_modules")) do
+      Logger.info("[Volt] Vendoring npm packages for #{dir}")
+      Volt.Priv.Vendor.run!(dir)
+    end
+
+    :ok
   end
 
   @doc "Like `bundle/3`, but raises when the entry cannot be bundled."

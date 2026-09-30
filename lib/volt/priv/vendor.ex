@@ -3,20 +3,22 @@ defmodule Volt.Priv.Vendor do
   Vendors npm packages for browser code kept under `priv`.
 
   List the packages in a `package.json` beside the sources, pinned to exact
-  versions:
+  versions, and commit it with the `npm.lock` that vendoring writes:
 
   ```json
   {"private": true, "dependencies": {"lit-html": "3.3.3"}}
   ```
 
-  Then run `mix volt.priv.vendor priv/ts`. The packages are installed with the
-  versions locked in `npm.lock`, and `node_modules` beside the sources keeps only
-  the files they reach: the browser build of every imported module, the type
-  declarations behind it, and each package's `package.json` and license. Nothing
-  is installed at runtime, and the files ship in the Hex package.
+  `mix volt.priv.vendor priv/ts` installs the locked versions and writes only the
+  files the sources reach to `node_modules` beside them: the browser build of every
+  imported module, the type declarations behind it, and each package's
+  `package.json` and license. Keep that directory out of git and vendor before
+  publishing, so the files ship in the Hex package and nothing is installed at
+  runtime.
 
   `Volt.Priv.bundle!/3` resolves imports such as `import { html } from 'lit-html'`
-  from there, and TypeScript finds the types.
+  from there, and vendors on first use when the directory is missing, as in a git
+  checkout.
   """
 
   alias NPM.Resolution.PackageResolver
@@ -45,25 +47,6 @@ defmodule Volt.Priv.Vendor do
 
       File.cp!(Path.join(install_dir, "npm.lock"), Path.join(dir, "npm.lock"))
       files
-    end)
-  end
-
-  @doc "Returns the vendored files under `dir/node_modules` that differ from a fresh vendoring."
-  @spec stale(Path.t()) :: [Path.t()]
-  def stale(dir) do
-    node_modules = Path.join(dir, "node_modules")
-
-    with_install(dir, [], fn install_dir, files ->
-      present = node_modules |> Path.join("**") |> Path.wildcard(match_dot: true)
-      present = for path <- present, File.regular?(path), do: Path.relative_to(path, node_modules)
-
-      changed =
-        Enum.reject(files, fn file ->
-          File.read(Path.join(node_modules, file)) ==
-            File.read(Path.join([install_dir, "node_modules", file]))
-        end)
-
-      Enum.sort(changed ++ (present -- files))
     end)
   end
 

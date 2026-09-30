@@ -9,44 +9,26 @@ defmodule Mix.Tasks.Volt.Priv.Vendor do
 
       mix volt.priv.vendor priv/ts
       mix volt.priv.vendor priv/ts --update
-      mix volt.priv.vendor priv/ts --check
+
+  Run it before `mix hex.publish`, so the package ships the vendored files.
 
   ## Options
 
     * `--update` — resolve the versions again instead of using `DIR/npm.lock`
-    * `--check` — fail if the vendored files differ from a fresh vendoring
   """
 
   @impl true
   def run(args) do
-    {opts, dirs} = OptionParser.parse!(args, strict: [update: :boolean, check: :boolean])
+    {opts, dirs} = OptionParser.parse!(args, strict: [update: :boolean])
 
     if dirs == [], do: Mix.raise("Expected a directory, such as: mix volt.priv.vendor priv/ts")
 
     Mix.Task.run("app.config")
     Application.ensure_all_started(:req)
 
-    Enum.each(dirs, fn dir ->
-      if opts[:check], do: check!(dir), else: vendor!(dir, opts)
-    end)
-  end
-
-  defp vendor!(dir, opts) do
-    files = Volt.Priv.Vendor.run!(dir, update: opts[:update] == true)
-    Mix.shell().info("Vendored #{length(files)} files into #{Path.join(dir, "node_modules")}")
-  end
-
-  defp check!(dir) do
-    case Volt.Priv.Vendor.stale(dir) do
-      [] ->
-        Mix.shell().info(IO.ANSI.format([:green, "✓ #{dir} vendored packages are current"]))
-
-      stale ->
-        Mix.raise("""
-        #{dir}/node_modules is out of date. Run `mix volt.priv.vendor #{dir}`. Differing files:
-
-        #{Enum.map(stale, &["  ", &1, "\n"])}
-        """)
+    for dir <- dirs do
+      files = Volt.Priv.Vendor.run!(dir, update: opts[:update] == true)
+      Mix.shell().info("Vendored #{length(files)} files into #{Path.join(dir, "node_modules")}")
     end
   end
 end
