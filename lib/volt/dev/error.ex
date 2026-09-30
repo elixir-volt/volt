@@ -20,7 +20,8 @@ defmodule Volt.Dev.Error do
           column: pos_integer() | nil,
           hint: String.t() | nil,
           frame: String.t() | nil,
-          frame_html: String.t() | nil
+          frame_html: String.t() | nil,
+          stack: String.t() | nil
         }
 
   @doc """
@@ -43,7 +44,21 @@ defmodule Volt.Dev.Error do
     {line, column} = position(diagnostic[:position])
     hint = if is_binary(diagnostic[:details]), do: diagnostic[:details]
 
-    [entry(message, opts, file: diagnostic[:file], line: line, column: column, hint: hint)]
+    stack =
+      case diagnostic[:stacktrace] do
+        [_ | _] = stacktrace -> Exception.format_stacktrace(stacktrace)
+        _none -> nil
+      end
+
+    [
+      entry(message, opts,
+        file: diagnostic[:file],
+        line: line,
+        column: column,
+        hint: hint,
+        stack: stack
+      )
+    ]
   end
 
   def entries(message, opts) when is_binary(message), do: [entry(message, opts, [])]
@@ -62,7 +77,8 @@ defmodule Volt.Dev.Error do
       column: column,
       hint: fields[:hint],
       frame: frame,
-      frame_html: frame_html
+      frame_html: frame_html,
+      stack: fields[:stack]
     }
   end
 

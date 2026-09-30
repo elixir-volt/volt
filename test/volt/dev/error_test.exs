@@ -54,6 +54,15 @@ defmodule Volt.Dev.ErrorTest do
              Error.entries([diagnostic], file: "app.ts")
   end
 
+  test "formats a diagnostic's stacktrace" do
+    stacktrace = [{MyApp.Page, :render, 1, [file: ~c"lib/my_app/page.ex", line: 12]}]
+
+    assert [%{stack: "    lib/my_app/page.ex:12: MyApp.Page.render/1\n"}] =
+             Error.entries(%{message: "boom", stacktrace: stacktrace})
+
+    assert [%{stack: nil}] = Error.entries(%{message: "boom", stacktrace: []})
+  end
+
   test "describes messages, exceptions, and other terms" do
     assert [
              %{message: "plain", file: "app.ts", line: nil, frame: nil},

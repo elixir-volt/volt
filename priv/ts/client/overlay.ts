@@ -9,6 +9,7 @@ export type VoltError = {
   hint?: string | null
   frame?: string | null
   frame_html?: string | null
+  stack?: string | null
 }
 
 type VoltErrorOverlayOptions = {
@@ -85,6 +86,12 @@ const styles = html`<style>
     color: #9b3dea;
     white-space: pre-wrap;
   }
+  pre.stack {
+    color: #8a7aa8;
+    background: none;
+    border: none;
+    padding: 0;
+  }
   footer {
     margin-top: 1.5em;
     font-size: 12px;
@@ -133,6 +140,7 @@ function errorTemplate(error: VoltError) {
         : null
     }
     ${error.hint ? html`<div class="hint">${error.hint}</div>` : null}
+    ${error.stack ? html`<pre class="stack">${error.stack}</pre>` : null}
   </section>`
 }
 
