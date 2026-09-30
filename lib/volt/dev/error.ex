@@ -11,8 +11,6 @@ defmodule Volt.Dev.Error do
   frame with syntax highlighting.
   """
 
-  @theme "github_dark"
-
   @type entry :: %{
           title: String.t(),
           message: String.t(),
@@ -106,14 +104,7 @@ defmodule Volt.Dev.Error do
       frame = %{first: first, line: line, column: column, width: width}
       texts = Enum.slice(lines, (first - 1)..(last - 1)//1)
 
-      html =
-        with [_ | _] = highlighted <- highlight(file, source, first..last//1) do
-          # Lumis leaves out a trailing empty line.
-          highlighted = highlighted ++ List.duplicate("", length(texts) - length(highlighted))
-          render(frame, highlighted, &html_gutter/1)
-        end
-
-      {render(frame, texts, & &1), html}
+      {render(frame, texts, & &1), highlighted_frame(file, source, frame, texts)}
     else
       _ -> {nil, nil}
     end
@@ -139,13 +130,25 @@ defmodule Volt.Dev.Error do
     |> Enum.join("\n")
   end
 
-  # The error line's marker and caret stand out; other gutters are dim.
-  defp html_gutter(gutter) do
-    color = if String.contains?(gutter, [">", "^"]), do: "#ff6b9a", else: "#6b5b8f"
-    ~s(<span style="color:#{color}">#{String.replace(gutter, ">", "&gt;")}</span>)
-  end
-
   if Code.ensure_loaded?(Lumis) do
+    @theme "github_dark"
+
+    defp highlighted_frame(file, source, frame, texts) do
+      last = frame.first + length(texts) - 1
+
+      with [_ | _] = highlighted <- highlight(file, source, frame.first..last//1) do
+        # Lumis leaves out a trailing empty line.
+        highlighted = highlighted ++ List.duplicate("", length(texts) - length(highlighted))
+        render(frame, highlighted, &html_gutter/1)
+      end
+    end
+
+    # The error line's marker and caret stand out; other gutters are dim.
+    defp html_gutter(gutter) do
+      color = if String.contains?(gutter, [">", "^"]), do: "#ff6b9a", else: "#6b5b8f"
+      ~s(<span style="color:#{color}">#{String.replace(gutter, ">", "&gt;")}</span>)
+    end
+
     # Highlights the whole file, so tokens that span lines keep their colors, and
     # keeps the lines in `range`. Nil when no Lumis parser covers the language.
     defp highlight(file, source, range) do
@@ -171,6 +174,6 @@ defmodule Volt.Dev.Error do
       end
     end
   else
-    defp highlight(_file, _source, _range), do: nil
+    defp highlighted_frame(_file, _source, _frame, _texts), do: nil
   end
 end
