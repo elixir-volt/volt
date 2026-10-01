@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Leave `@oxc-project/runtime` helper imports to `OXC.bundle/2`, which provides them. Since 0.19.1, builds whose transformed code used a helper, such as lowered class fields in Svelte islands, failed with `{:not_found, "@oxc-project/runtime/..."}`.
+- Resolve application sources from their configured package scopes and `node_modules` before the directories above them. Since 0.19.1, a `node_modules` higher up could supply a second copy of a framework runtime. Packages still resolve their own dependencies from the nearest `node_modules` first.
+
 ## 0.19.2 - 2026-09-30
 
 ### Fixed

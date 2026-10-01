@@ -167,6 +167,28 @@ defmodule Volt.Builder.ResolutionTest do
       refute js =~ "})(b)"
     end
 
+    test "leaves OXC runtime helpers to the bundler, which inlines them" do
+      File.mkdir_p!(Path.join(@fixture_dir, "src"))
+
+      File.write!(Path.join(@fixture_dir, "src/helper_app.js"), """
+      import _defineProperty from "@oxc-project/runtime/helpers/defineProperty"
+      class A { constructor() { _defineProperty(this, "x", 1) } }
+      globalThis.a = new A()
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/helper_app.js"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "function _defineProperty"
+      refute js =~ "@oxc-project/runtime/helpers"
+    end
+
     test "fails the build for a bare import of a package that is not installed" do
       File.mkdir_p!(Path.join(@fixture_dir, "src"))
 

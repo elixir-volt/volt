@@ -49,6 +49,11 @@ defmodule Volt.Builder.Resolver do
       NPM.Resolution.PackageResolver.node_builtin?(specifier) ->
         :skip
 
+      # OXC's transform imports helpers from `@oxc-project/runtime`, and `OXC.bundle/2`
+      # provides them itself, so they never come from `node_modules`.
+      oxc_runtime_helper?(specifier) ->
+        :skip
+
       absolute?(specifier) ->
         resolve_absolute(specifier)
 
@@ -62,6 +67,11 @@ defmodule Volt.Builder.Resolver do
         resolve_bare(specifier, importer, ctx)
     end
   end
+
+  defp oxc_runtime_helper?(specifier),
+    do:
+      specifier == "@oxc-project/runtime" or
+        String.starts_with?(specifier, "@oxc-project/runtime/")
 
   defp resolve_absolute(specifier) do
     if File.exists?(specifier) do
@@ -149,11 +159,16 @@ defmodule Volt.Builder.Resolver do
     global_dirs =
       if ctx.node_modules, do: [ctx.node_modules | ctx.resolve_dirs], else: ctx.resolve_dirs
 
+    ancestors = ancestor_node_modules(importer)
+    configured = scoped_package_dirs(importer, ctx.package_scopes) ++ global_dirs
+
+    # A package resolves its own dependencies Node's way, so nested versions win.
+    # Application sources keep the configured scopes and directories first, such as
+    # the framework runtimes Volt installs, and fall back to the directories above.
     dirs =
-      Enum.uniq(
-        ancestor_node_modules(importer) ++
-          scoped_package_dirs(importer, ctx.package_scopes) ++ global_dirs
-      )
+      if inside_node_modules?(importer),
+        do: Enum.uniq(ancestors ++ configured),
+        else: Enum.uniq(configured ++ ancestors)
 
     case Enum.find_value(dirs, fn dir ->
            {package_name, _subpath} = NPM.Resolution.PackageResolver.split_specifier(specifier)
@@ -169,10 +184,17 @@ defmodule Volt.Builder.Resolver do
     end
   end
 
-  # Bare imports resolve as Node does, nearest first: from `D/node_modules` for each
-  # directory `D` above the importer that is not itself a `node_modules`. That finds
-  # dependencies nested under their dependent, as npm installs conflicting versions,
-  # pnpm's sibling layout, and packages vendored beside `priv` sources.
+  defp inside_node_modules?(nil), do: false
+
+  defp inside_node_modules?(importer) do
+    {importer_path, _query} = Volt.URL.split_query(importer)
+    "node_modules" in Path.split(Path.expand(importer_path))
+  end
+
+  # The `node_modules` directories Node searches, nearest first: `D/node_modules` for
+  # each directory `D` above the importer that is not itself a `node_modules`. That
+  # finds dependencies nested under their dependent, as npm installs conflicting
+  # versions, pnpm's sibling layout, and packages vendored beside `priv` sources.
   defp ancestor_node_modules(nil), do: []
 
   defp ancestor_node_modules(importer) do
