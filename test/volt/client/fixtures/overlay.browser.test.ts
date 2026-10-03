@@ -1,37 +1,53 @@
 import { test, expect, beforeEach } from 'volt:test'
-import { renderErrorOverlay } from 'volt:client/overlay'
+import { clearErrorOverlay, renderErrorOverlay } from 'volt:client/overlay'
 
 beforeEach(() => {
   document.body.innerHTML = ''
 })
 
+function overlayText() {
+  return document.querySelector('volt-error-overlay')?.shadowRoot?.textContent ?? ''
+}
+
 test('renders build errors into the browser overlay', () => {
-  renderErrorOverlay('syntax exploded', { title: 'Compile failed' })
+  renderErrorOverlay([
+    { title: 'Compile failed', message: 'syntax exploded', file: 'app.ts', line: 3 }
+  ])
 
-  const overlay = document.getElementById('volt-error-overlay')
-
-  expect(overlay).toBeDefined()
-  expect(overlay?.textContent).toContain('[Volt] Compile failed:')
-  expect(overlay?.textContent).toContain('syntax exploded')
+  expect(overlayText()).toContain('Compile failed')
+  expect(overlayText()).toContain('syntax exploded')
+  expect(overlayText()).toContain('app.ts:3')
 })
 
-test('updates an existing browser overlay instead of appending duplicates', () => {
-  renderErrorOverlay('first failure')
-  renderErrorOverlay({ message: 'second failure' })
+test('replaces an existing browser overlay instead of appending duplicates', () => {
+  renderErrorOverlay([{ title: 'Build error', message: 'first failure' }])
+  renderErrorOverlay([{ title: 'Build error', message: 'second failure' }])
 
-  const overlays = document.querySelectorAll('#volt-error-overlay')
-
-  expect(overlays).toHaveLength(1)
-  expect(overlays[0]?.textContent).toContain('second failure')
+  expect(document.querySelectorAll('volt-error-overlay')).toHaveLength(1)
+  expect(overlayText()).toContain('second failure')
+  expect(overlayText()).not.toContain('first failure')
 })
 
-test('dismissible browser overlays remove themselves when clicked', () => {
-  renderErrorOverlay('dismiss me', { dismissible: true })
+test('counts errors with different titles under one heading', () => {
+  renderErrorOverlay([
+    { title: 'Build error', message: 'first failure' },
+    { title: 'Render error', message: 'second failure' }
+  ])
 
-  const overlay = document.getElementById('volt-error-overlay')
-  expect(overlay).toBeDefined()
+  expect(overlayText()).toContain('Errors · 2')
+})
 
-  overlay?.click()
+test('removes the browser overlay when errors clear or the backdrop is clicked', () => {
+  renderErrorOverlay([{ title: 'Build error', message: 'dismiss me' }])
 
-  expect(document.getElementById('volt-error-overlay')).toBeNull()
+  const backdrop = document
+    .querySelector('volt-error-overlay')
+    ?.shadowRoot?.querySelector('.backdrop')
+
+  backdrop?.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }))
+  expect(document.querySelector('volt-error-overlay')).toBeNull()
+
+  renderErrorOverlay([{ title: 'Build error', message: 'clear me' }])
+  clearErrorOverlay()
+  expect(document.querySelector('volt-error-overlay')).toBeNull()
 })

@@ -1,3 +1,5 @@
+import { pageReload } from './reload'
+
 export interface HotCallback {
   deps: string[]
   kind: 'self' | 'single' | 'multi'
@@ -65,7 +67,7 @@ export function createHotContext(ownerPath: string) {
     },
 
     invalidate() {
-      location.reload()
+      pageReload()
     },
 
     on(_event: string, _cb: (...args: unknown[]) => void) {

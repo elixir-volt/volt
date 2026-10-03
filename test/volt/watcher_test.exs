@@ -264,13 +264,13 @@ defmodule Volt.WatcherTest do
     assert {:noreply, completed} = Volt.Watcher.handle_info(:tailwind_rebuild, recovered)
     assert completed.pending_reloads == []
     assert_receive {:volt_hmr, :update, %{changes: [:style]}}
-    assert_receive {:volt_hmr, :update, %{changes: ["full"]}}
+    assert_receive {:volt_hmr, :update, %{changes: ["document"]}}
     repeated = %{completed | tailwind_full?: true, pending_reloads: [page]}
 
     assert {:noreply, %{pending_reloads: []}} =
              Volt.Watcher.handle_info(:tailwind_rebuild, repeated)
 
-    assert_receive {:volt_hmr, :update, %{changes: ["full"]}}
+    assert_receive {:volt_hmr, :update, %{changes: ["document"]}}
     refute_received {:volt_hmr, :update, %{changes: [:style]}}
   end
 
@@ -519,7 +519,7 @@ defmodule Volt.WatcherTest do
     GenServer.stop(pid)
   end
 
-  test "reload_dirs trigger full browser reloads for non-asset source files", %{
+  test "reload_dirs ask open pages to revalidate for non-asset source files", %{
     watch_dir: watch_dir
   } do
     Registry.register(Volt.HMR.Registry, :clients, nil)
@@ -540,7 +540,7 @@ defmodule Volt.WatcherTest do
 
     send_file_event(pid, page)
 
-    assert_receive {:volt_hmr, :update, %{path: path, changes: ["full"]}}
+    assert_receive {:volt_hmr, :update, %{path: path, changes: ["document"]}}
     assert path == Path.relative_to_cwd(page)
 
     GenServer.stop(pid)

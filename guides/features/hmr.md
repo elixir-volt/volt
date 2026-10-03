@@ -50,6 +50,9 @@ Volt.HMR.style_update("css/app.css")
 # Ask the browser to reload the current page
 Volt.HMR.full_reload("content/posts/hello.md")
 
+# Ask open pages to check whether their HTML changed, and reload if it did
+Volt.HMR.document_update("content/posts/hello.md")
+
 # Send a custom update payload, optionally with an HMR boundary
 Volt.HMR.update("src/counter.ts", [:hmr], boundary: "/assets/counter.ts")
 
@@ -66,7 +69,7 @@ Use this when an external package owns additional dependency graphs, such as pag
 
 ## Watching extra reload directories
 
-`Volt.Watcher` can watch directories outside the asset root and request a full browser reload when files there change:
+`Volt.Watcher` can watch directories of templates and content outside the asset root. When a file there changes, open pages check whether their HTML changed and reload only if it did:
 
 ```elixir
 Volt.Watcher.start_link(
@@ -87,6 +90,14 @@ mix volt.dev --reload-dir content --reload-dir layouts
 ```
 
 This is intentionally generic: Volt does not parse those files or assign site semantics to them.
+
+### Reloading only the pages that changed
+
+A template or content file may affect any page, or none, and Volt does not know which. Each HTML page the dev server adds its client to carries an entity tag of the HTML it was rendered with. On a change, the client requests its page again with `If-None-Match`; the server renders it, answers `304 Not Modified` when the HTML is the same, and the page stays as it is. Any other answer reloads the page.
+
+So editing one blog post reloads the tab showing that post and leaves the others alone, and saving a file without changing what a page renders reloads nothing. Pages whose HTML differs on every render, such as those embedding a CSRF token, reload on every change as before.
+
+A server that adds the dev client to its pages itself opts in by following `Volt.HMR.Document`.
 
 ## Ignoring watcher paths
 

@@ -8,6 +8,27 @@ defmodule Volt.Integration.TestPlug do
   def init(opts), do: opts
 
   @impl true
+  # Pages rendered from content files, sent through the dev server as an app's
+  # own pages are.
+  def call(%Conn{request_path: "/doc/" <> name} = conn, opts) do
+    content = File.read!(Path.join(opts[:root] <> "-content", name <> ".md"))
+
+    conn
+    |> Volt.DevServer.call(opts[:dev_server])
+    |> Conn.put_resp_content_type("text/html")
+    |> Conn.send_resp(200, """
+    <!DOCTYPE html>
+    <html><head><title>#{name}</title></head><body>
+      <div id="content">#{content}</div>
+      <script>
+        const loads = Number(sessionStorage.getItem('voltDocLoads') ?? '0') + 1
+        sessionStorage.setItem('voltDocLoads', String(loads))
+        document.body.dataset.loads = String(loads)
+      </script>
+    </body></html>
+    """)
+  end
+
   def call(conn, opts) do
     if String.ends_with?(conn.request_path, ".html") or conn.request_path == "/" do
       file =
@@ -411,6 +432,49 @@ defmodule Volt.Integration.HMRTest do
 
       {:ok, reloads} = eval_poll(frame, "window.__voltMultiDep.reloads")
       assert reloads == 1
+
+      GenServer.stop(watcher)
+    end
+
+    test "content changes reload only the pages whose HTML changed", %{frame: frame} do
+      # Content lives beside the asset root, as a site's pages and posts do.
+      content_dir = @fixture_dir <> "-content"
+      File.rm_rf!(content_dir)
+      File.mkdir_p!(content_dir)
+      on_exit(fn -> File.rm_rf!(content_dir) end)
+      File.write!(Path.join(content_dir, "first.md"), "first page")
+      File.write!(Path.join(content_dir, "second.md"), "second page")
+
+      {:ok, _} = Frame.goto(frame.guid, url: base_url("/doc/first"), timeout: 10_000)
+      assert {:ok, "1"} = eval_until(frame, "document.body.dataset.loads", "1")
+
+      {:ok, watcher} =
+        Volt.Watcher.start_link(
+          root: @fixture_dir,
+          reload_dirs: [content_dir],
+          name: String.to_atom("volt_integration_doc_#{System.unique_integer([:positive])}")
+        )
+
+      Process.sleep(150)
+
+      # Another page's content: this page revalidates and stays.
+      File.write!(Path.join(content_dir, "second.md"), "second page, edited")
+      Process.sleep(1000)
+      assert {:ok, "1"} = eval_poll(frame, "document.body.dataset.loads")
+
+      assert {:ok, "first page"} =
+               eval_poll(frame, "document.getElementById('content').textContent")
+
+      File.write!(Path.join(content_dir, "first.md"), "first page, edited")
+
+      assert {:ok, "first page, edited"} =
+               eval_until(
+                 frame,
+                 "document.getElementById('content')?.textContent",
+                 "first page, edited"
+               )
+
+      assert {:ok, "2"} = eval_poll(frame, "document.body.dataset.loads")
 
       GenServer.stop(watcher)
     end

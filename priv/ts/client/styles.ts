@@ -1,3 +1,5 @@
+import { pageReload } from './reload'
+
 export function updateStyle(id: string, css: string) {
   let style = document.querySelector<HTMLStyleElement>(`style[data-volt-id="${id}"]`)
 
@@ -14,20 +16,40 @@ export function removeStyle(id: string) {
   document.querySelector<HTMLStyleElement>(`style[data-volt-id="${id}"]`)?.remove()
 }
 
-export async function updateStyles(path: string) {
-  const links = document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
-  let updated = false
+const outdatedLinks = new WeakSet<HTMLLinkElement>()
 
-  for (const link of links) {
-    const href = link.getAttribute('href')
+// Changing `href` in place leaves the page unstyled until the new stylesheet
+// arrives. A second tag keeps the old rules applied until the new ones load.
+function refreshLink(link: HTMLLinkElement) {
+  return new Promise<void>((resolve) => {
+    const url = new URL(link.href)
+    url.searchParams.set('t', Date.now().toString())
 
-    if (href && (href.includes(path) || path.endsWith('.css'))) {
-      const url = new URL(link.href)
-      url.searchParams.set('t', Date.now().toString())
-      link.href = url.toString()
-      updated = true
+    const next = link.cloneNode() as HTMLLinkElement
+    next.href = url.toString()
+
+    const removeOutdated = () => {
+      link.remove()
+      resolve()
     }
-  }
+
+    next.addEventListener('load', removeOutdated)
+    next.addEventListener('error', removeOutdated)
+    outdatedLinks.add(link)
+    link.after(next)
+  })
+}
+
+export async function updateStyles(path: string) {
+  const links = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')].filter(
+    (link) => {
+      const href = link.getAttribute('href')
+      return !outdatedLinks.has(link) && href && (href.includes(path) || path.endsWith('.css'))
+    }
+  )
+
+  await Promise.all(links.map(refreshLink))
+  let updated = links.length > 0
 
   const styles = document.querySelectorAll<HTMLStyleElement>('style[data-volt-id]')
 
@@ -43,6 +65,6 @@ export async function updateStyles(path: string) {
   }
 
   if (!updated) {
-    location.reload()
+    pageReload()
   }
 }

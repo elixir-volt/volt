@@ -265,19 +265,42 @@ defmodule Volt.DevServer.RequestsTest do
 
     test "loads the HMR client in pages the app renders" do
       page = "<html><head><title>x</title></head><body></body></html>"
-      client = ~s(<script type="module" src="/@volt/client.js"></script>)
+      etag = Volt.HMR.Document.etag(page)
+
+      client =
+        ~s(<script type="module" src="/@volt/client.js" data-volt-etag="#{Plug.HTML.html_escape(etag)}"></script>)
 
       conn =
         call_dev_server("/page") |> put_resp_content_type("text/html") |> send_resp(200, page)
 
       assert conn.resp_body == "<html><head><title>x</title>#{client}</head><body></body></html>"
+      assert get_resp_header(conn, "etag") == [etag]
 
-      loaded = "<html><head>#{client}</head></html>"
+      loaded =
+        ~s(<html><head><script type="module" src="/@volt/client.js"></script></head></html>)
+
+      # A page that already loads the client gets the entity tag on its own tag.
+      loaded_etag = Volt.HMR.Document.etag(loaded)
 
       conn =
         call_dev_server("/page") |> put_resp_content_type("text/html") |> send_resp(200, loaded)
 
-      assert conn.resp_body == loaded
+      assert conn.resp_body ==
+               String.replace(
+                 loaded,
+                 ~s(client.js"),
+                 ~s(client.js" data-volt-etag="#{Plug.HTML.html_escape(loaded_etag)}")
+               )
+
+      assert get_resp_header(conn, "etag") == [loaded_etag]
+
+      conn =
+        call_dev_server("/page")
+        |> put_req_header("if-none-match", loaded_etag)
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, loaded)
+
+      assert conn.status == 304
 
       conn =
         call_dev_server("/api")
@@ -285,6 +308,38 @@ defmodule Volt.DevServer.RequestsTest do
         |> send_resp(200, "{}")
 
       assert conn.resp_body == "{}"
+    end
+
+    test "answers 304 when a page revalidates HTML that has not changed" do
+      page = "<html><head></head><body>same</body></html>"
+      etag = Volt.HMR.Document.etag(page)
+
+      send_page = fn html, etag ->
+        call_dev_server("/page")
+        |> put_req_header("if-none-match", etag)
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, html)
+      end
+
+      conn = send_page.(page, etag)
+      assert conn.status == 304
+      assert conn.resp_body == ""
+
+      conn = send_page.("<html><head></head><body>changed</body></html>", etag)
+      assert conn.status == 200
+      assert conn.resp_body =~ "changed"
+      assert get_resp_header(conn, "etag") != [etag]
+    end
+
+    test "error pages get the HMR client without an entity tag" do
+      conn =
+        call_dev_server("/page")
+        |> put_resp_content_type("text/html")
+        |> send_resp(500, "<html><head></head><body>boom</body></html>")
+
+      assert conn.status == 500
+      assert conn.resp_body =~ ~s(<script type="module" src="/@volt/client.js"></script>)
+      assert get_resp_header(conn, "etag") == []
     end
 
     test "serves static assets with correct MIME type" do

@@ -26,15 +26,35 @@ test('removes style tags by Volt style id', () => {
   expect(document.head.querySelector('style[data-volt-id="/assets/remove.css?import"]')).toBeNull()
 })
 
-test('refreshes matching stylesheet links for CSS updates', async () => {
+test('replaces matching stylesheet links once the refreshed stylesheet settles', async () => {
   const link = document.createElement('link')
   link.rel = 'stylesheet'
-  link.href = 'https://example.test/assets/site.css'
+  link.href = new URL('./assets/site.css', location.href).href
   link.dataset.testStyle = 'true'
   document.head.appendChild(link)
 
   await updateStyles('/assets/site.css')
 
-  expect(link.href).toContain('/assets/site.css')
-  expect(link.href).toContain('t=')
+  const links = document.head.querySelectorAll<HTMLLinkElement>('link[data-test-style]')
+
+  expect(links).toHaveLength(1)
+  expect(links[0]).not.toBe(link)
+  expect(links[0]?.href).toContain('/assets/site.css')
+  expect(links[0]?.href).toContain('t=')
+})
+
+test('keeps the current stylesheet applied until the refreshed one settles', () => {
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = new URL('./assets/pending.css', location.href).href
+  link.dataset.testStyle = 'true'
+  document.head.appendChild(link)
+
+  void updateStyles('/assets/pending.css')
+
+  const links = document.head.querySelectorAll<HTMLLinkElement>('link[data-test-style]')
+
+  expect(links).toHaveLength(2)
+  expect(links[0]).toBe(link)
+  expect(links[1]?.href).toContain('t=')
 })
