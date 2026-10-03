@@ -61,6 +61,18 @@ defmodule Volt.JS.VendorTest do
       assert Map.has_key?(vendor_map, "fake-lib")
     end
 
+    test "logs only when packages are bundled, not when the cache is fresh" do
+      opts = [root: Path.join(@fixture_dir, "src"), node_modules: @node_modules]
+
+      assert ExUnit.CaptureLog.capture_log(fn ->
+               Volt.JS.Vendor.prebundle(opts ++ [force: true])
+             end) =~
+               "Pre-bundled"
+
+      refute ExUnit.CaptureLog.capture_log(fn -> Volt.JS.Vendor.prebundle(opts) end) =~
+               "Pre-bundled"
+    end
+
     test "caches bundled files on disk" do
       Volt.JS.Vendor.prebundle(
         root: Path.join(@fixture_dir, "src"),

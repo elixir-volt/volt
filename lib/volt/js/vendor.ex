@@ -196,7 +196,11 @@ defmodule Volt.JS.Vendor do
     if not force and Enum.all?(specifiers, &cache_fresh?(&1, module_dirs, plugins, module_types)) do
       {:ok, vendor_map}
     else
-      safe_bundle_vendors(specifiers, module_dirs, plugins, module_types, vendor_map)
+      with {:ok, bundled} = ok <-
+             safe_bundle_vendors(specifiers, module_dirs, plugins, module_types, vendor_map) do
+        Logger.debug("[Volt] Pre-bundled #{map_size(bundled)} vendor package(s)")
+        ok
+      end
     end
   end
 

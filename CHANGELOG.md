@@ -26,6 +26,7 @@
 - Stop the dev server reloading pages in a loop when a watched file is rewritten with identical content, as Phoenix LiveView does for colocated hooks on every code reload. The watcher now compares file contents before rebuilding.
 - Load a single instance of each pre-bundled dependency in development. Pre-bundles imported their siblings and shared chunks without the `?v=` hash that application modules use, so browsers loaded packages such as Vue twice and component libraries built on them failed to render.
 - Report why a development session is unavailable. A second watcher with different options, such as a `Mix.Tasks.Volt.Dev` entry in the endpoint's `:watchers` next to `plug Volt.DevServer`, answered every request with a bare 503; the response and the log now name the conflict and how to resolve it.
+- Log `Pre-bundled N vendor package(s)` only when packages are bundled. Phoenix initializes plugs on every request in development, so it was logged per request.
 - Skip `tsconfig.json` path mappings that only point at declaration files. A types-only mapping such as `"topbar": ["./types/topbar.d.ts"]` became a bundler alias and bundled the `.d.ts` file in place of the package.
 
 ## 0.19.4 - 2026-10-03

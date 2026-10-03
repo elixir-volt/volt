@@ -930,20 +930,13 @@ defmodule Volt.DevServer do
   # ── Vendor pre-bundling ───────────────────────────────────────────
 
   defp prebundle_vendor(root, node_modules, plugins, resolve_dirs, module_types) do
-    case Volt.JS.Vendor.prebundle(
-           root: root,
-           node_modules: node_modules,
-           plugins: plugins,
-           resolve_dirs: resolve_dirs,
-           module_types: module_types
-         ) do
-      {:ok, vendor_map} when map_size(vendor_map) > 0 ->
-        count = map_size(vendor_map)
-        Logger.debug("[Volt] Pre-bundled #{count} vendor package(s)")
-
-      _ ->
-        :ok
-    end
+    Volt.JS.Vendor.prebundle(
+      root: root,
+      node_modules: node_modules,
+      plugins: plugins,
+      resolve_dirs: resolve_dirs,
+      module_types: module_types
+    )
   end
 
   defp serve_vendor(specifier, config, browser_hash) do
