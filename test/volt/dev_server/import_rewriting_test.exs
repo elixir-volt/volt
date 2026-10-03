@@ -61,6 +61,17 @@ defmodule Volt.DevServer.ImportRewritingTest do
       refute conn.resp_body =~ ~r/require\(['"]\.\/cjs-dep/
     end
 
+    test "serves .cjs and .cts files as ES modules" do
+      File.write!(Path.join(@fixture_dir, "src/dep.cjs"), "module.exports = { answer: 42 }")
+      File.write!(Path.join(@fixture_dir, "src/typed.cts"), "const n: number = 7; export = { n }")
+
+      for path <- ["/assets/dep.cjs", "/assets/typed.cts"] do
+        conn = call_dev_server(path)
+        assert conn.status == 200
+        assert conn.resp_body =~ "export default"
+      end
+    end
+
     test "leaves ES modules untouched" do
       File.write!(Path.join(@fixture_dir, "src/esm.js"), "export const module = { exports: 1 }")
 

@@ -8,7 +8,6 @@ defmodule Volt.JS.CommonJS do
   `import topbar from "../vendor/topbar"`.
   """
 
-  @extensions ~w(.js .cjs)
   @esm_declarations [
     :import_declaration,
     :export_named_declaration,
@@ -16,16 +15,28 @@ defmodule Volt.JS.CommonJS do
     :export_all_declaration
   ]
 
-  @doc "Return whether `source` is a CommonJS/UMD module rather than an ES module."
+  @doc """
+  Return whether the module at `path` is CommonJS/UMD rather than an ES module.
+
+  `.cjs` and `.cts` files are CommonJS by extension. A `.js` file is CommonJS
+  when it has no `import` or `export` declarations and uses `module.exports`,
+  `exports`, or `require`.
+  """
   @spec commonjs?(String.t(), String.t()) :: boolean()
   def commonjs?(source, path) do
-    if Path.extname(path) in @extensions do
-      case OXC.parse(source, Path.basename(path)) do
-        {:ok, ast} -> not esm?(ast) and uses_commonjs?(ast)
-        {:error, _} -> false
-      end
-    else
-      false
+    ext = Path.extname(path)
+
+    cond do
+      ext in Volt.JS.Extensions.cjs() -> true
+      ext == ".js" -> commonjs_source?(source, Path.basename(path))
+      true -> false
+    end
+  end
+
+  defp commonjs_source?(source, filename) do
+    case OXC.parse(source, filename) do
+      {:ok, ast} -> not esm?(ast) and uses_commonjs?(ast)
+      {:error, _} -> false
     end
   end
 
