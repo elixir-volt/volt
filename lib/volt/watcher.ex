@@ -17,8 +17,9 @@ defmodule Volt.Watcher do
     * `:root` — asset source directory (required, e.g. `"assets"`)
     * `:watch_dirs` — additional directories to watch for Tailwind scanning
       (e.g. `["lib/"]` for `.ex`/`.heex` templates)
-    * `:reload_dirs` — additional directories whose changes trigger a full
-      browser reload without being compiled by Volt
+    * `:reload_dirs` — additional directories of templates and content that
+      Volt does not compile. A change asks open pages to revalidate their
+      HTML and reload if it changed; see `Volt.HMR.Document`
     * `:watch_ignored` — paths or glob patterns excluded from watcher events
       (default: common VCS, dependency, test-output, cache, and build directories)
     * `:tailwind` — enable Tailwind CSS rebuilds (default: `false`)
@@ -572,7 +573,7 @@ defmodule Volt.Watcher do
 
   defp handle_reload_change(path, state) do
     path = Path.relative_to_cwd(path)
-    HMR.full_reload(path, session: state.session)
+    HMR.document_update(path, session: state.session)
   end
 
   defp handle_asset_change(path, state) do

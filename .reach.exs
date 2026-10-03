@@ -96,6 +96,7 @@ logic = [
   "Volt.CSS.Modules",
   "Volt.Env",
   "Volt.Format",
+  "Volt.HMR.Document",
   "Volt.HTMLEntry",
   "Volt.JS.AST",
   "Volt.JS.Check",

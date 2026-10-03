@@ -24,6 +24,7 @@
 - Volt's client types declare `import.meta.env`, so TypeScript projects no longer need their own `ImportMeta` declaration for `MODE`, `DEV`, `PROD` and exposed variables. `mix igniter.install volt` adds `env.d.ts` to configurations that list declaration files explicitly.
 
 - Stylesheet updates no longer flash unstyled content. The dev client adds a `<link>` for the updated stylesheet and removes the previous one once the new one has loaded, instead of changing `href` in place.
+- Changes in `reload_dirs` reload only the pages whose HTML changed. Pages carry an entity tag of their rendered HTML; on a change the dev client revalidates with `If-None-Match` and reloads unless the server answers `304 Not Modified`. Editing one post no longer reloads every open tab, and a save that does not change a page's output reloads nothing. `Volt.HMR.document_update/2` sends the same request from other packages, and `Volt.HMR.Document` describes how a server that injects the client itself takes part.
 - The dev client reloads the page once when several updates ask for a reload at the same time, such as a template that is also a Tailwind source.
 
 ### Fixed

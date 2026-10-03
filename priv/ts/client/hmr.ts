@@ -6,7 +6,7 @@ import {
   type HotCallback
 } from './hot'
 import { clearErrorOverlay, renderErrorOverlay, type VoltError } from './overlay'
-import { pageReload } from './reload'
+import { pageReload, revalidateDocument } from './reload'
 import { removeStyle, updateStyle, updateStyles } from './styles'
 
 export { createHotContext, removeStyle, updateStyle }
@@ -121,6 +121,11 @@ async function handleUpdate(payload: {
 
   if (changes.length === 1 && changes[0] === 'style') {
     await updateStyles(path)
+    return
+  }
+
+  if (changes.length === 1 && changes[0] === 'document') {
+    await revalidateDocument()
     return
   }
 

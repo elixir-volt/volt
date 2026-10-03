@@ -40,6 +40,16 @@ defmodule Volt.HMR do
   @spec full_reload(String.t()) :: :ok
   def full_reload(path, opts \\ []), do: update(path, [:full], opts)
 
+  @doc """
+  Ask open pages to check whether their server-rendered HTML changed.
+
+  Use this for templates and content, which may affect any page or none. Pages
+  that carry an entity tag reload only when their HTML changed; see
+  `Volt.HMR.Document`. Other pages reload.
+  """
+  @spec document_update(String.t()) :: :ok
+  def document_update(path, opts \\ []), do: update(path, [:document], opts)
+
   @doc "Broadcast a style-only update for a changed stylesheet path."
   @spec style_update(String.t()) :: :ok
   def style_update(path, opts \\ []), do: update(path, [:style], opts)
