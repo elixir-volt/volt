@@ -8,13 +8,15 @@ defmodule Volt.HMR.Document do
   and reloads only when the server answers with something other than
   `304 Not Modified`.
 
-  `Volt.DevServer` does this for the HTML responses it adds the dev client to.
-  A server that adds the client itself takes part by:
+  `Volt.DevServer` does this for every successful HTML response that passes
+  through it, whether it adds the dev client or the page already loads it with
+  `<script type="module" src="/@volt/client.js">`. A server that sends HTML
+  without going through `Volt.DevServer` takes part by:
 
-    1. computing `etag/1` of the rendered HTML, before adding the client;
+    1. computing `etag/1` of the rendered HTML;
     2. answering `304` with an empty body when `fresh?/2` is true;
     3. otherwise sending the tag in the `etag` response header and in the
-       `#{"data-volt-etag"}` attribute of the client `<script>`.
+       `data-volt-etag` attribute of the client `<script>`.
 
   Pages without the attribute reload on every document update.
   """

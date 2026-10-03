@@ -279,10 +279,28 @@ defmodule Volt.DevServer.RequestsTest do
       loaded =
         ~s(<html><head><script type="module" src="/@volt/client.js"></script></head></html>)
 
+      # A page that already loads the client gets the entity tag on its own tag.
+      loaded_etag = Volt.HMR.Document.etag(loaded)
+
       conn =
         call_dev_server("/page") |> put_resp_content_type("text/html") |> send_resp(200, loaded)
 
-      assert conn.resp_body == loaded
+      assert conn.resp_body ==
+               String.replace(
+                 loaded,
+                 ~s(client.js"),
+                 ~s(client.js" data-volt-etag="#{Plug.HTML.html_escape(loaded_etag)}")
+               )
+
+      assert get_resp_header(conn, "etag") == [loaded_etag]
+
+      conn =
+        call_dev_server("/page")
+        |> put_req_header("if-none-match", loaded_etag)
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, loaded)
+
+      assert conn.status == 304
 
       conn =
         call_dev_server("/api")

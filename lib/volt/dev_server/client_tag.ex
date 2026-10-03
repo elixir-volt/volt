@@ -9,20 +9,13 @@ defmodule Volt.DevServer.ClientTag do
   alias Volt.HMR.Document
 
   @client "/@volt/client.js"
+  @src ~s(src="#{@client}")
 
   @spec register(Conn.t()) :: Conn.t()
   def register(conn), do: Conn.register_before_send(conn, &inject/1)
 
   defp inject(%Conn{resp_body: body} = conn) when not is_nil(body) do
-    if html?(conn) do
-      html = IO.iodata_to_binary(body)
-
-      if String.contains?(html, @client),
-        do: conn,
-        else: inject_client(conn, html)
-    else
-      conn
-    end
+    if html?(conn), do: inject_client(conn, IO.iodata_to_binary(body)), else: conn
   end
 
   defp inject(conn), do: conn
@@ -36,18 +29,26 @@ defmodule Volt.DevServer.ClientTag do
       %{conn | status: 304, resp_body: ""}
     else
       conn = Conn.put_resp_header(conn, "etag", etag)
-      %{conn | resp_body: insert(html, tag(etag))}
+      %{conn | resp_body: put_client(html, etag)}
     end
   end
 
-  defp inject_client(conn, html), do: %{conn | resp_body: insert(html, tag(nil))}
+  defp inject_client(conn, html), do: %{conn | resp_body: put_client(html, nil)}
 
-  defp tag(nil), do: ~s(<script type="module" src="#{@client}"></script>)
-
-  defp tag(etag) do
-    value = Plug.HTML.html_escape(etag)
-    ~s(<script type="module" src="#{@client}" #{Document.attribute()}="#{value}"></script>)
+  # A page may already load the client, as pages rendered by a site generator
+  # do. Its tag gets the entity tag; otherwise the client is added to the head.
+  defp put_client(html, etag) do
+    if String.contains?(html, @client) do
+      String.replace(html, @src, @src <> attribute(etag), global: false)
+    else
+      insert(html, ~s(<script type="module" #{@src}#{attribute(etag)}></script>))
+    end
   end
+
+  defp attribute(nil), do: ""
+
+  defp attribute(etag),
+    do: ~s( #{Document.attribute()}="#{etag |> Plug.HTML.html_escape() |> IO.iodata_to_binary()}")
 
   defp html?(conn) do
     conn
