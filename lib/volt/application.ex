@@ -12,13 +12,15 @@ defmodule Volt.Application do
     Volt.HMR.ModuleGraph.create_table()
     Volt.HMR.Errors.create_table()
 
+    # Watchers release their Tailwind contexts when they terminate, so the
+    # Tailwind processes start before them and stop after them.
     children = [
       {Registry, keys: :duplicate, name: Volt.HMR.Registry},
-      {Registry, keys: :unique, name: Volt.Dev.WatcherRegistry},
-      {DynamicSupervisor, strategy: :one_for_one, name: Volt.Dev.WatcherSupervisor},
       {Registry, keys: :unique, name: Volt.Tailwind.Registry},
       {DynamicSupervisor, strategy: :one_for_one, name: Volt.Tailwind.WorkerSupervisor},
-      Volt.Tailwind.Runtime
+      Volt.Tailwind.Runtime,
+      {Registry, keys: :unique, name: Volt.Dev.WatcherRegistry},
+      {DynamicSupervisor, strategy: :one_for_one, name: Volt.Dev.WatcherSupervisor}
     ]
 
     opts = [strategy: :one_for_one, name: Volt.Supervisor]
