@@ -170,6 +170,7 @@ defmodule Mix.Tasks.Volt.InstallTest do
 
       assert config["files"] == [
                "assets/app.ts",
+               "deps/volt/priv/types/client/env.d.ts",
                "deps/volt/priv/types/client/hmr.d.ts",
                "deps/volt/priv/types/client/preload.d.ts",
                "deps/volt/priv/types/client/styles.d.ts"

@@ -21,6 +21,7 @@
 - The dev server converts local CommonJS and UMD files, such as Phoenix's vendored `topbar.js`, to ES modules, so `import topbar from "../vendor/topbar"` works in development as it does in production builds.
 - Relative `watch_ignored` patterns also resolve from the project directory, so `_build/**` matches a watched directory inside `_build`.
 
+- Volt's client types declare `import.meta.env`, so TypeScript projects no longer need their own `ImportMeta` declaration for `MODE`, `DEV`, `PROD` and exposed variables. `mix igniter.install volt` adds `env.d.ts` to configurations that list declaration files explicitly.
 
 ### Fixed
 

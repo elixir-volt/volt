@@ -102,6 +102,7 @@ if Code.ensure_loaded?(Igniter) do
            files when is_list(files) <- Map.get(config, "files", []),
            true <- Enum.all?(files, &is_binary/1) do
         types = [
+          "#{deps}/volt/priv/types/client/env.d.ts",
           "#{deps}/volt/priv/types/client/hmr.d.ts",
           "#{deps}/volt/priv/types/client/preload.d.ts",
           "#{deps}/volt/priv/types/client/styles.d.ts"
