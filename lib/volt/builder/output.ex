@@ -556,7 +556,6 @@ defmodule Volt.Builder.Output do
       process_chunks(
         chunk_bundles,
         graph,
-        js_map,
         module_labels,
         css_results,
         ctx,
@@ -588,7 +587,6 @@ defmodule Volt.Builder.Output do
   defp process_chunks(
          chunk_bundles,
          graph,
-         js_map,
          module_labels,
          css_results,
          ctx,
@@ -599,9 +597,7 @@ defmodule Volt.Builder.Output do
 
     Map.new(chunk_bundles, fn {chunk_id, {code, sourcemap}} ->
       chunk = graph.chunks[chunk_id]
-      chunk_js = select_chunk_files(chunk.modules, js_map, module_labels)
       chunk_import_map = chunk_import_map(chunk, graph, module_labels, dep_map)
-      code = Rewriter.inject_external_preamble(code, chunk_js, ctx)
       code = Rewriter.rewrite_chunk_imports(code, chunk_import_map, chunk_url_map)
       code = Rewriter.rewrite_dynamic_preloads(code, preload_map)
 

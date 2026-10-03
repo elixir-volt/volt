@@ -2,6 +2,35 @@ defmodule Volt.Builder.CodeSplittingTest do
   use Volt.TestSupport.BuilderCase
 
   describe "build/1 code splitting" do
+    test "IIFE chunks read external globals once, inside the function scope" do
+      File.write!(Path.join(@fixture_dir, "src/global_lazy.js"), """
+      import { Presence } from 'phoenix'
+      export const run = () => console.log(Presence)
+      """)
+
+      File.write!(Path.join(@fixture_dir, "src/global_entry.js"), """
+      import { Socket } from 'phoenix'
+      console.log(new Socket('/socket'))
+      import('./global_lazy.js').then((m) => m.run())
+      """)
+
+      {:ok, _result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/global_entry.js"),
+          outdir: @outdir,
+          hash: false,
+          minify: false,
+          sourcemap: false,
+          external: ["phoenix"]
+        )
+
+      for file <- Path.wildcard(Path.join(@outdir, "global_entry*.js")) do
+        js = File.read!(file)
+        assert [_once] = Regex.scan(~r/= Phoenix;/, js)
+        refute String.starts_with?(js, "const ")
+      end
+    end
+
     test "multi-entry ESM builds share common chunks" do
       File.write!(
         Path.join(@fixture_dir, "src/shared.ts"),
