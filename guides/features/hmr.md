@@ -141,9 +141,11 @@ Each open page has its own websocket process, which lives as long as the page do
 
 - nothing, when its HTML is the same;
 - a reload, when scripts or stylesheets differ or preserved elements were added or removed;
-- otherwise the new HTML to patch, with the preserved elements whose attributes the server changed.
+- otherwise the new HTML to patch, with what the server changed outside the body's contents: attributes of `<html>` and `<body>`, metadata and links in `<head>`, and the attributes of preserved elements.
 
-Because both sides of the comparison are server renders, it sees what the server changed and nothing that scripts did to the page since. For each preserved element it names, the client sets the new attributes and dispatches a cancelable `volt:element-update` event on it. The element's owner re-renders it and calls `preventDefault()`; if nothing handles the event, the page reloads.
+Because both sides of the comparison are server renders, it sees what the server changed and nothing that scripts did to the page since. An attribute a script set on `<html>`, such as a theme, is in neither render and stays. The page starts from the HTML it was served, which the dev server keeps until the page connects, so opening a page costs no extra render.
+
+For each preserved element it names, the client sets the new attributes and dispatches a cancelable `volt:element-update` event on it. The element's owner re-renders it and calls `preventDefault()`; if nothing handles the event, the page reloads.
 
 ```javascript
 island.addEventListener("volt:element-update", (event) => {
@@ -152,7 +154,7 @@ island.addEventListener("volt:element-update", (event) => {
 })
 ```
 
-Only the contents of `<body>` and the title are patched. Attributes on `<html>` and `<body>`, and the rest of `<head>`, stay as they were until the next reload.
+Without `:document`, only the contents of `<body>` and the title are patched. Attributes on `<html>` and `<body>`, and the rest of `<head>`, stay as they were until the next reload.
 
 ## Ignoring watcher paths
 

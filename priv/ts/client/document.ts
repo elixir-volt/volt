@@ -6,8 +6,17 @@ const MORPH = 'data-volt-morph'
 
 export type OwnedChange = { index: number; attributes: Record<string, string> }
 
+export type AttributeChanges = { set: Record<string, string>; remove: string[] }
+export type HeadChanges = { remove: string[]; add: string[] }
+
 /** A page render pushed by the server, which already compared it with the previous one. */
-export type PushedDocument = { html: string; etag: string; owned: OwnedChange[] }
+export type PushedDocument = {
+  html: string
+  etag: string
+  owned: OwnedChange[]
+  root: Record<string, AttributeChanges>
+  head: HeadChanges
+}
 
 /** Where this page is and which HTML it was served, for the server to keep track of it. */
 export function pageIdentity() {
@@ -19,7 +28,7 @@ export function pageIdentity() {
  * Apply a render the server pushed. The server compared it with the HTML it
  * last rendered for this page, so it knows which owned elements it changed.
  */
-export function applyDocument({ html, etag, owned }: PushedDocument) {
+export function applyDocument({ html, etag, owned, root, head }: PushedDocument) {
   const preserve = document.querySelector(`script[${ETAG}]`)?.getAttribute(MORPH)
   if (preserve === null || preserve === undefined) return pageReload()
 
@@ -28,7 +37,38 @@ export function applyDocument({ html, etag, owned }: PushedDocument) {
   if (!morphDocument(next, preserve, changed)) return pageReload()
   if (!updateOwned(preserve, owned)) return pageReload()
 
+  updateRoot(root)
+  updateHead(head)
   finishUpdate(etag)
+}
+
+// Only what the server changed is applied, so attributes that scripts set on
+// these elements, such as a theme, stay.
+function updateRoot(root: Record<string, AttributeChanges>) {
+  for (const [tag, { set, remove }] of Object.entries(root)) {
+    const element = tag === 'html' ? document.documentElement : document.body
+    for (const name of remove) element.removeAttribute(name)
+    for (const [name, value] of Object.entries(set)) element.setAttribute(name, value)
+  }
+}
+
+function updateHead({ remove, add }: HeadChanges) {
+  const live = [...document.head.children]
+
+  for (const html of remove) {
+    const gone = parseHeadElement(html)
+    const index = live.findIndex((element) => gone !== null && element.isEqualNode(gone))
+    if (index !== -1) live.splice(index, 1)[0]?.remove()
+  }
+
+  for (const html of add) {
+    const element = parseHeadElement(html)
+    if (element) document.head.append(element)
+  }
+}
+
+function parseHeadElement(html: string) {
+  return new DOMParser().parseFromString(`<head>${html}</head>`, 'text/html').head.firstElementChild
 }
 
 // The owner of an element re-renders it from its new attributes and says so by

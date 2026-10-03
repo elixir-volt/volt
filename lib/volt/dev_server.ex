@@ -358,10 +358,19 @@ defmodule Volt.DevServer do
             serve(conn, relative, config)
 
           :no_match ->
-            Volt.DevServer.ClientTag.register(conn, config.morph)
+            Volt.DevServer.ClientTag.register(conn, config.morph,
+              keep_for: document_session(config)
+            )
         end
     end
   end
+
+  # Served HTML is kept only when a page's websocket process will compare renders.
+  defp document_session(%{document: document, morph: morph, session: session})
+       when not is_nil(document) and morph != false,
+       do: session
+
+  defp document_session(_config), do: nil
 
   defp serve_virtual(conn, id, config) do
     case Volt.PluginRunner.load(config.plugins, id) do

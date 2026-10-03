@@ -69,15 +69,13 @@ defmodule Volt.HMR.Socket do
     end
   end
 
-  # The page says where it is and which HTML it was served. The render kept for
-  # it must be that HTML; if the sources changed in between, the page falls back
+  # The page says where it is and which HTML it was served. That HTML was kept
+  # when it was sent. If it is gone, the page is rendered again, and the render
+  # is used only if it is the HTML the page has; otherwise the page falls back
   # to revalidating itself.
   defp open_page(%__MODULE__{document: document} = state, %{"path" => path, "etag" => etag})
-       when not is_nil(document) and is_binary(path) do
-    case render(document, path) do
-      {:ok, html} -> %{state | path: path, html: if(Document.etag(html) == etag, do: html)}
-      _error -> %{state | path: path, html: nil}
-    end
+       when not is_nil(document) and is_binary(path) and is_binary(etag) do
+    %{state | path: path, html: served_html(state, path, etag)}
   end
 
   defp open_page(state, _payload), do: state
@@ -114,13 +112,24 @@ defmodule Volt.HMR.Socket do
     push(%Volt.HMR.Message{type: :update, payload: payload}, %{state | html: nil})
   end
 
-  defp update_document({:patch, owned}, next, payload, state) do
+  defp update_document({:patch, patch}, next, payload, state) do
     etag = Document.etag(next)
 
     # The page gets the HTML a request for it would be answered with.
     tagged = Volt.DevServer.ClientTag.tag(next, etag, state.morph)
-    payload = Map.merge(payload, %{html: tagged, etag: etag, owned: owned})
+    payload = payload |> Map.merge(patch) |> Map.merge(%{html: tagged, etag: etag})
     push(%Volt.HMR.Message{type: :update, payload: payload}, %{state | html: next})
+  end
+
+  defp served_html(state, path, etag) do
+    with :error <- Volt.HMR.Documents.fetch(state.session, etag),
+         {:ok, html} <- render(state.document, path),
+         ^etag <- Document.etag(html) do
+      html
+    else
+      {:ok, html} -> html
+      _other -> nil
+    end
   end
 
   defp render({module, function, args}, path), do: apply(module, function, [path | args])

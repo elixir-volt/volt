@@ -56,29 +56,87 @@ defmodule Volt.HMR.Document do
   """
   @type owned_change :: %{index: non_neg_integer(), attributes: %{String.t() => String.t()}}
 
+  @typedoc "Attributes the server set or changed on an element, and those it removed."
+  @type attribute_changes :: %{set: %{String.t() => String.t()}, remove: [String.t()]}
+
+  @typedoc """
+  What the server changed outside the body's contents, which are patched from
+  the new HTML itself:
+
+    * `:owned` — preserved elements whose attributes changed
+    * `:root` — attribute changes on `"html"` and `"body"`, for those that have any
+    * `:head` — head elements, as HTML, that are gone and that are new. Scripts,
+      stylesheets and the title are not among them.
+  """
+  @type patch :: %{
+          owned: [owned_change()],
+          root: %{String.t() => attribute_changes()},
+          head: %{remove: [String.t()], add: [String.t()]}
+        }
+
   @doc """
   Decide how a page gets from one server render to the next.
 
   Both arguments are HTML the server rendered, so the comparison sees only what
-  the server changed, never what scripts did to the page since.
+  the server changed, never what scripts did to the page since. An attribute a
+  script set on `<html>` is in neither render and is left alone.
 
   Returns `:reload` when patching cannot apply the change: the scripts the page
   runs or its stylesheets differ, or elements matching `preserve` were added or
-  removed. Otherwise returns `{:patch, owned}`, where `owned` lists the
-  preserved elements whose attributes changed. Their owner, such as a mounted
-  component, is told and re-renders; the rest of the page is patched.
+  removed. Otherwise returns `{:patch, patch}`.
   """
-  @spec changes(String.t(), String.t(), String.t() | nil) :: :reload | {:patch, [owned_change()]}
+  @spec changes(String.t(), String.t(), String.t() | nil) :: :reload | {:patch, patch()}
   def changes(previous, next, preserve) do
     previous = Floki.parse_document!(previous)
     next = Floki.parse_document!(next)
 
-    cond do
-      scripts(previous) != scripts(next) -> :reload
-      stylesheets(previous) != stylesheets(next) -> :reload
-      true -> owned_changes(preserved(previous, preserve), preserved(next, preserve))
+    with true <- scripts(previous) == scripts(next),
+         true <- stylesheets(previous) == stylesheets(next),
+         {:ok, owned} <- owned_changes(preserved(previous, preserve), preserved(next, preserve)) do
+      {:patch,
+       %{
+         owned: owned,
+         root: root_changes(previous, next),
+         head: head_changes(head_elements(previous), head_elements(next))
+       }}
+    else
+      _cannot_patch -> :reload
     end
   end
+
+  defp root_changes(previous, next) do
+    for tag <- ["html", "body"],
+        changes = attribute_changes(root_attributes(previous, tag), root_attributes(next, tag)),
+        changes != %{set: %{}, remove: []},
+        into: %{},
+        do: {tag, changes}
+  end
+
+  defp root_attributes(document, tag) do
+    case Floki.find(document, tag) do
+      [{^tag, attributes, _children} | _] -> Map.new(attributes)
+      [] -> %{}
+    end
+  end
+
+  defp attribute_changes(previous, next) do
+    %{
+      set: Map.reject(next, fn {name, value} -> Map.get(previous, name) == value end),
+      remove: Map.keys(previous) -- Map.keys(next)
+    }
+  end
+
+  # Head elements that can be replaced without side effects: metadata and links
+  # other than stylesheets.
+  defp head_elements(document) do
+    for {"head", _attributes, children} <- Floki.find(document, "head"),
+        {tag, attributes, _children} = element <- children,
+        tag not in ["script", "style", "title"],
+        not (tag == "link" and attribute(attributes, "rel") == "stylesheet"),
+        do: Floki.raw_html(element)
+  end
+
+  defp head_changes(previous, next), do: %{remove: previous -- next, add: next -- previous}
 
   # Scripts the browser runs. Data blocks such as JSON are content and are patched.
   defp scripts(document) do
@@ -110,9 +168,9 @@ defmodule Volt.HMR.Document do
             before != now,
             do: %{index: index, attributes: now}
 
-      {:patch, owned}
+      {:ok, owned}
     else
-      :reload
+      :error
     end
   end
 

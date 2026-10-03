@@ -92,6 +92,26 @@ defmodule Volt.HMR.SocketTest do
       refute Map.has_key?(payload, "html")
     end
 
+    test "starts from the HTML it was served without rendering again" do
+      {:ok, calls} = Agent.start_link(fn -> 0 end)
+
+      document = fn "/post" ->
+        Agent.update(calls, &(&1 + 1))
+        {:ok, page("first", "{}")}
+      end
+
+      served = page("first", "{}")
+      etag = Volt.HMR.Document.etag(served)
+      Volt.HMR.Documents.put(:default, etag, served)
+      on_exit(fn -> Volt.HMR.Documents.clear_session(:default) end)
+
+      {:ok, state} = Volt.HMR.Socket.init(document: document, morph: true)
+      opened = open_page(state, "/post", etag)
+
+      assert opened.html == served
+      assert Agent.get(calls, & &1) == 0
+    end
+
     test "is not kept track of unless pages are patched in place", %{renders: renders} do
       document = fn "/post" -> {:ok, Agent.get(renders, & &1)} end
       {:ok, state} = Volt.HMR.Socket.init(document: document)

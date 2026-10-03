@@ -10,14 +10,15 @@ defmodule Volt.HMR.DocumentTest do
   describe "changes/3" do
     test "patches changes to content" do
       assert Document.changes(page("<p>one</p>"), page("<p class=\"x\">two</p>"), nil) ==
-               {:patch, []}
+               {:patch, %{owned: [], root: %{}, head: %{remove: [], add: []}}}
     end
 
     test "patches data blocks, which the browser does not run" do
       before = page(~s(<script type="application/json">{"a":1}</script>))
       now = page(~s(<script type="application/json">{"a":2}</script>))
 
-      assert Document.changes(before, now, nil) == {:patch, []}
+      assert Document.changes(before, now, nil) ==
+               {:patch, %{owned: [], root: %{}, head: %{remove: [], add: []}}}
     end
 
     test "reloads when the scripts the page runs differ" do
@@ -57,8 +58,37 @@ defmodule Volt.HMR.DocumentTest do
           ~s(<div data-island="a" data-props="1"></div><div data-island="b" data-props="2"></div>)
         )
 
-      assert Document.changes(before, now, "[data-island]") ==
-               {:patch, [%{index: 1, attributes: %{"data-island" => "b", "data-props" => "2"}}]}
+      assert {:patch, %{owned: owned}} = Document.changes(before, now, "[data-island]")
+      assert owned == [%{index: 1, attributes: %{"data-island" => "b", "data-props" => "2"}}]
+    end
+
+    test "names the attributes the server changed on html and body" do
+      before =
+        ~s(<html lang="en" data-a="1"><head></head><body class="old"><p>x</p></body></html>)
+
+      now =
+        ~s(<html lang="ru"><head></head><body class="old" data-route="/x"><p>x</p></body></html>)
+
+      assert {:patch, %{root: root}} = Document.changes(before, now, nil)
+
+      assert root == %{
+               "html" => %{set: %{"lang" => "ru"}, remove: ["data-a"]},
+               "body" => %{set: %{"data-route" => "/x"}, remove: []}
+             }
+    end
+
+    test "names the head elements that are gone and that are new" do
+      before =
+        page("", ~s(<meta name="description" content="old"><link rel="icon" href="/i.png">))
+
+      now = page("", ~s(<meta name="description" content="new"><link rel="icon" href="/i.png">))
+
+      assert {:patch, %{head: head}} = Document.changes(before, now, nil)
+
+      assert head == %{
+               remove: [~s(<meta name="description" content="old"/>)],
+               add: [~s(<meta name="description" content="new"/>)]
+             }
     end
 
     test "reloads when owned elements are added or removed" do

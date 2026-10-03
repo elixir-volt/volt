@@ -152,6 +152,7 @@ infrastructure = [
   "Volt.Dev.ConsoleForwarder.Payload",
   "Volt.ETS",
   "Volt.HMR.Boundary",
+  "Volt.HMR.Documents",
   "Volt.HMR.Errors",
   "Volt.HMR.GlobGraph",
   "Volt.HMR.ImportGraph",

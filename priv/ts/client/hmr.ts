@@ -132,7 +132,13 @@ async function handleUpdate(payload: {
     const pushed = payload as Partial<PushedDocument>
 
     if (typeof pushed.html === 'string' && typeof pushed.etag === 'string') {
-      applyDocument({ html: pushed.html, etag: pushed.etag, owned: pushed.owned ?? [] })
+      applyDocument({
+        html: pushed.html,
+        etag: pushed.etag,
+        owned: pushed.owned ?? [],
+        root: pushed.root ?? {},
+        head: pushed.head ?? { remove: [], add: [] }
+      })
     } else {
       await revalidateDocument()
     }

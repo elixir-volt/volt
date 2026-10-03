@@ -16,7 +16,53 @@ defmodule Volt.Integration.TestPlug do
   def call(%Conn{request_path: "/morph/" <> name} = conn, opts),
     do: document(conn, name, opts[:root], opts[:morph_dev_server])
 
+  # A page the server can render outside a request, so the page's websocket
+  # process compares renders and pushes what changed.
+  def call(%Conn{request_path: "/push/" <> _name = path} = conn, opts) do
+    {:ok, html} = render(path, opts[:root])
+
+    conn
+    |> Volt.DevServer.call(opts[:push_dev_server])
+    |> Conn.put_resp_content_type("text/html")
+    |> Conn.send_resp(200, html)
+  end
+
+  # Every page shares one websocket endpoint, served by the dev server that can
+  # render documents; it only knows the `/push/` pages.
+  def call(%Conn{request_path: "/@volt/ws"} = conn, opts),
+    do: Volt.DevServer.call(conn, opts[:push_dev_server])
+
   def call(conn, opts), do: asset(conn, opts)
+
+  def render("/push/" <> name, root) do
+    [text, props, lang, description] =
+      Path.join(root <> "-content", name <> ".md") |> File.read!() |> String.split("|")
+
+    {:ok,
+     """
+     <!DOCTYPE html>
+     <html lang="#{lang}"><head><title>#{name}</title>
+     <meta name="description" content="#{description}">
+     </head><body>
+       <div id="content">#{text}</div>
+       <div id="owned" data-owned data-props="#{props}"></div>
+       <script>
+         const loads = Number(sessionStorage.getItem('voltPushLoads') ?? '0') + 1
+         sessionStorage.setItem('voltPushLoads', String(loads))
+         document.body.dataset.loads = String(loads)
+         document.documentElement.dataset.theme = 'dark'
+         const owned = document.getElementById('owned')
+         owned.textContent = 'props:' + owned.dataset.props
+         owned.addEventListener('volt:element-update', (event) => {
+           event.preventDefault()
+           owned.textContent = 'props:' + owned.dataset.props
+         })
+       </script>
+     </body></html>
+     """}
+  end
+
+  def render(_path, _root), do: :error
 
   defp document(conn, name, root, dev_server) do
     content = File.read!(Path.join(root <> "-content", name <> ".md"))
@@ -148,7 +194,20 @@ defmodule Volt.Integration.HMRTest do
     dev_server_opts = Volt.DevServer.init(root: @fixture_dir, prefix: "/assets")
     morph_opts = Volt.DevServer.init(root: @fixture_dir, prefix: "/assets", morph: true)
 
-    plug_opts = %{root: @fixture_dir, dev_server: dev_server_opts, morph_dev_server: morph_opts}
+    push_opts =
+      Volt.DevServer.init(
+        root: @fixture_dir,
+        prefix: "/assets",
+        morph: [preserve: "[data-owned]"],
+        document: {Volt.Integration.TestPlug, :render, [@fixture_dir]}
+      )
+
+    plug_opts = %{
+      root: @fixture_dir,
+      dev_server: dev_server_opts,
+      morph_dev_server: morph_opts,
+      push_dev_server: push_opts
+    }
 
     {:ok, server} =
       Bandit.start_link(
@@ -533,6 +592,58 @@ defmodule Volt.Integration.HMRTest do
                )
 
       assert {:ok, "kept"} = eval_poll(frame, "window.voltKept")
+
+      GenServer.stop(watcher)
+    end
+
+    test "the server pushes what it changed to a page it keeps a render of", %{frame: frame} do
+      content_dir = @fixture_dir <> "-content"
+      File.rm_rf!(content_dir)
+      File.mkdir_p!(content_dir)
+      on_exit(fn -> File.rm_rf!(content_dir) end)
+      File.write!(Path.join(content_dir, "page.md"), "first|1|en|old description")
+
+      {:ok, _} = Frame.goto(frame.guid, url: base_url("/push/page"), timeout: 10_000)
+      assert {:ok, "1"} = eval_until(frame, "document.body.dataset.loads", "1")
+      {:ok, _} = eval_poll(frame, "(window.voltKept = 'kept')")
+
+      # The page requests nothing more: what changed arrives over the websocket.
+      {:ok, _} =
+        eval_poll(
+          frame,
+          "(window.voltFetches = 0, window.fetch = ((f) => (...a) => (window.voltFetches++, f(...a)))(window.fetch), 0)"
+        )
+
+      {:ok, watcher} =
+        Volt.Watcher.start_link(
+          root: @fixture_dir,
+          reload_dirs: [content_dir],
+          name: String.to_atom("volt_integration_push_#{System.unique_integer([:positive])}")
+        )
+
+      Process.sleep(150)
+      File.write!(Path.join(content_dir, "page.md"), "second|2|ru|new description")
+
+      assert {:ok, "second"} =
+               eval_until(frame, "document.getElementById('content')?.textContent", "second")
+
+      # The owner of the element re-rendered it from the props the server changed.
+      assert {:ok, "props:2"} =
+               eval_until(frame, "document.getElementById('owned')?.textContent", "props:2")
+
+      # Attributes the server changed are applied; one a script set stays.
+      assert {:ok, "ru"} = eval_poll(frame, "document.documentElement.lang")
+      assert {:ok, "dark"} = eval_poll(frame, "document.documentElement.dataset.theme")
+
+      assert {:ok, "new description"} =
+               eval_poll(frame, "document.querySelector('meta[name=description]').content")
+
+      assert {:ok, 1} =
+               eval_poll(frame, "document.querySelectorAll('meta[name=description]').length")
+
+      assert {:ok, "kept"} = eval_poll(frame, "window.voltKept")
+      assert {:ok, "1"} = eval_poll(frame, "document.body.dataset.loads")
+      assert {:ok, 0} = eval_poll(frame, "window.voltFetches")
 
       GenServer.stop(watcher)
     end
