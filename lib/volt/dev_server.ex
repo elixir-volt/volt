@@ -162,8 +162,8 @@ defmodule Volt.DevServer do
          %Volt.Dev.Session.Tables{} = tables <- Volt.Dev.tables(session) do
       call_generation(conn, config, tables)
     else
-      {:error, _reason} ->
-        conn |> Conn.send_resp(503, "Development session is unavailable") |> Conn.halt()
+      {:error, reason} ->
+        session_unavailable(conn, reason)
     end
   end
 
@@ -172,8 +172,8 @@ defmodule Volt.DevServer do
       %Volt.Dev.Session.Tables{} = tables ->
         call_generation(conn, config, tables)
 
-      {:error, _} ->
-        conn |> Conn.send_resp(503, "Development session is unavailable") |> Conn.halt()
+      {:error, reason} ->
+        session_unavailable(conn, reason)
     end
   end
 
@@ -185,6 +185,20 @@ defmodule Volt.DevServer do
     Volt.Dev.ensure_watcher(config.watcher_opts)
     do_call(conn, config)
   end
+
+  defp session_unavailable(conn, reason) do
+    message = "Development session is unavailable: #{session_error(reason)}"
+    Logger.error("[Volt] " <> message)
+    conn |> Conn.send_resp(503, message) |> Conn.halt()
+  end
+
+  defp session_error(:session_configuration_conflict) do
+    "a Volt watcher is already running for this asset root with different options. " <>
+      "`plug Volt.DevServer` starts its own watcher, so remove any " <>
+      "`Mix.Tasks.Volt.Dev` entry from the endpoint's `:watchers` in config/dev.exs."
+  end
+
+  defp session_error(reason), do: inspect(reason)
 
   defp call_generation(conn, config, tables) do
     do_call(conn, %{config | tables: tables})

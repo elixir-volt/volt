@@ -75,6 +75,28 @@ defmodule Volt.DevServer.BasicTest do
       assert opts.watcher_opts[:tailwind_key] == {:profile, :default, Path.expand(css)}
     end
 
+    @tag :tmp_dir
+    test "explains a conflicting watcher instead of answering a bare 503", %{tmp_dir: root} do
+      assets = Path.join(root, "assets")
+      File.mkdir_p!(assets)
+      File.write!(Path.join(assets, "app.ts"), "export const x = 1")
+
+      config = Volt.DevServer.init(root: assets, watch: true)
+      on_exit(fn -> Volt.Dev.stop(config.session) end)
+
+      conflicting = Keyword.put(config.watcher_opts, :watch_dirs, [root])
+      assert {:ok, _watcher} = Volt.Dev.start(conflicting)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          conn = Plug.Test.conn(:get, "/assets/app.ts") |> Volt.DevServer.call(config)
+          assert conn.status == 503
+          assert conn.resp_body =~ "Mix.Tasks.Volt.Dev"
+        end)
+
+      assert log =~ "a Volt watcher is already running"
+    end
+
     test "passes through non-asset requests for downstream HTML plugs" do
       opts = Volt.DevServer.init(root: Path.join(@fixture_dir, "src"), prefix: "/assets")
 
