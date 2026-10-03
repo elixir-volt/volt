@@ -50,7 +50,7 @@ defmodule Volt.Pipeline do
         Volt.MIME.css?(content_type) ->
           compile_css(compile_path, source, opts)
 
-        ext in Volt.JS.Extensions.js() ->
+        ext in Volt.JS.Extensions.bundleable() ->
           compile_js(compile_path, source, opts)
 
         Volt.CSS.Modules.css_module?(base_path) ->

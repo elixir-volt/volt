@@ -68,6 +68,10 @@ defmodule Volt.MixProject do
   defp aliases do
     [
       lint: [
+        # `mix format` loads Volt.Formatter from the existing build and only
+        # compiles when the module is missing, so a cached build would format
+        # with stale plugin code.
+        "compile",
         "format --check-formatted",
         "volt.js.check --type-aware --type-check",
         "credo --strict",

@@ -46,8 +46,10 @@ defmodule Volt.Builder do
 
           chunks: %{"vendor" => ["vue", "vue-router"], "ui" => ["assets/src/components"]}
     * `:write_manifest` — write `manifest.json` after building (default: `true`)
-    * `:external` — specifiers to exclude from the bundle and access as globals.
-      Accepts a list (global name auto-derived) or a map of `specifier => global_name`:
+    * `:external` — specifiers to exclude from the bundle. With `format: :iife`
+      they are read from global variables; with `:esm` and `:cjs` the imports
+      stay in the output. Accepts a list (global name auto-derived) or a map of
+      `specifier => global_name`, whose names apply to `:iife` only:
 
           external: ["vue", "phoenix"]
           external: %{"vue" => "Vue", "phoenix" => "Phoenix"}
@@ -121,11 +123,10 @@ defmodule Volt.Builder do
         rewrite_nonlocal_labels(compiled, collected.specifier_labels, collected.path_labels)
 
       output_ctx = %Volt.Builder.OutputContext{
-        plugins: ctx.plugins,
-        external_set: ctx.external,
-        external_globals: ctx.external_globals,
-        workers: collected.workers,
-        worker_results: worker_results
+        output_externals(ctx, build_ctx)
+        | plugins: ctx.plugins,
+          workers: collected.workers,
+          worker_results: worker_results
       }
 
       out = %Volt.Builder.BuildContext{
@@ -246,11 +247,10 @@ defmodule Volt.Builder do
       compiled = rewrite_nonlocal_labels(compiled, specifier_labels, path_labels)
 
       output_ctx = %Volt.Builder.OutputContext{
-        plugins: ctx.plugins,
-        external_set: ctx.external,
-        external_globals: ctx.external_globals,
-        workers: workers,
-        worker_results: %{}
+        output_externals(ctx, build_ctx)
+        | plugins: ctx.plugins,
+          workers: workers,
+          worker_results: %{}
       }
 
       out = %Volt.Builder.BuildContext{
@@ -309,11 +309,10 @@ defmodule Volt.Builder do
       compiled = %{compiled | artifacts: compiled.artifacts ++ worker_artifacts}
 
       output_ctx = %Volt.Builder.OutputContext{
-        plugins: ctx.plugins,
-        external_set: ctx.external,
-        external_globals: ctx.external_globals,
-        workers: workers,
-        worker_results: worker_results
+        output_externals(ctx, build_ctx)
+        | plugins: ctx.plugins,
+          workers: workers,
+          worker_results: worker_results
       }
 
       out = %Volt.Builder.BuildContext{
@@ -913,6 +912,19 @@ defmodule Volt.Builder do
       {Path.expand(source_root), Path.expand(package_dir)}
     end)
     |> Enum.sort_by(fn {source_root, _package_dir} -> -byte_size(source_root) end)
+  end
+
+  # IIFE bundles read externals from global variables. ES module and CommonJS
+  # output keeps them as imports for the host to resolve, as Rollup does.
+  defp output_externals(ctx, build_ctx) do
+    if Keyword.get(build_ctx.bundle_opts, :format, :iife) == :iife do
+      %Volt.Builder.OutputContext{
+        external_set: ctx.external,
+        external_globals: ctx.external_globals
+      }
+    else
+      %Volt.Builder.OutputContext{external_imports: ctx.external}
+    end
   end
 
   defp normalize_external(externals) when is_map(externals) do

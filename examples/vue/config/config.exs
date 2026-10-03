@@ -32,10 +32,6 @@ config :volt,
     ]
   ]
 
-config :volt, :format,
-  semi: false,
-  single_quote: true
-
 config :volt, :lint,
   plugins: ["typescript", "vue"],
   tsgolint: System.find_executable("tsgolint"),

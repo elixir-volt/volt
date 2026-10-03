@@ -9,7 +9,7 @@ defmodule Mix.Tasks.Volt.Js.Check do
       mix volt.js.check
       mix volt.js.check --type-aware --type-check
 
-  Reads format options from `config :volt, :format` (falls back to `.oxfmtrc.json`).
+  Reads format options from the `:volt` key of `.formatter.exs` (falls back to `.oxfmtrc.json`).
   Lint settings come from `config :volt, :lint`.
   File discovery uses `config :volt, sources:` and `ignore:`.
 

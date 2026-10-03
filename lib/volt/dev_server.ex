@@ -162,8 +162,8 @@ defmodule Volt.DevServer do
          %Volt.Dev.Session.Tables{} = tables <- Volt.Dev.tables(session) do
       call_generation(conn, config, tables)
     else
-      {:error, _reason} ->
-        conn |> Conn.send_resp(503, "Development session is unavailable") |> Conn.halt()
+      {:error, reason} ->
+        session_unavailable(conn, reason)
     end
   end
 
@@ -172,8 +172,8 @@ defmodule Volt.DevServer do
       %Volt.Dev.Session.Tables{} = tables ->
         call_generation(conn, config, tables)
 
-      {:error, _} ->
-        conn |> Conn.send_resp(503, "Development session is unavailable") |> Conn.halt()
+      {:error, reason} ->
+        session_unavailable(conn, reason)
     end
   end
 
@@ -185,6 +185,20 @@ defmodule Volt.DevServer do
     Volt.Dev.ensure_watcher(config.watcher_opts)
     do_call(conn, config)
   end
+
+  defp session_unavailable(conn, reason) do
+    message = "Development session is unavailable: #{session_error(reason)}"
+    Logger.error("[Volt] " <> message)
+    conn |> Conn.send_resp(503, message) |> Conn.halt()
+  end
+
+  defp session_error(:session_configuration_conflict) do
+    "a Volt watcher is already running for this asset root with different options. " <>
+      "`plug Volt.DevServer` starts its own watcher, so remove any " <>
+      "`Mix.Tasks.Volt.Dev` entry from the endpoint's `:watchers` in config/dev.exs."
+  end
+
+  defp session_error(reason), do: inspect(reason)
 
   defp call_generation(conn, config, tables) do
     do_call(conn, %{config | tables: tables})
@@ -472,53 +486,78 @@ defmodule Volt.DevServer do
     file_path = Volt.Plugin.EmbeddedModule.parent_path(module_id)
     source = File.read!(file_path)
 
-    case Volt.Pipeline.compile(module_id, source, pipeline_opts(config, module_id)) do
-      {:ok, result} ->
-        Volt.HMR.clear_error(file_path, session: config.session)
-        Volt.HMR.GlobGraph.update_from_source(file_path, source, config.tables || config.session)
+    with {:ok, module_source, cacheable?} <- module_source(file_path, source, config),
+         {:ok, result} <-
+           Volt.Pipeline.compile(module_id, module_source, pipeline_opts(config, module_id)) do
+      Volt.HMR.clear_error(file_path, session: config.session)
+      Volt.HMR.GlobGraph.update_from_source(file_path, source, config.tables || config.session)
 
-        Volt.HMR.ImportGraph.update_from_compiled(
-          file_path,
-          result.code,
-          config.tables || config.session
-        )
+      Volt.HMR.ImportGraph.update_from_compiled(
+        file_path,
+        result.code,
+        config.tables || config.session
+      )
 
-        Volt.HMR.StyleDependencies.update_from_compile(
-          file_path,
-          source,
-          result,
-          config.tables || config.session
-        )
+      Volt.HMR.StyleDependencies.update_from_compile(
+        file_path,
+        source,
+        result,
+        config.tables || config.session
+      )
 
-        result = rewrite_dev_css_urls(result, file_path, config)
-        mod_url = Volt.URL.join(config.prefix, relative)
-        code = code_for_request(result, mod_url, content_type, css_import?)
-        graph_url = if css_import?, do: URL.append_query(mod_url, "import"), else: mod_url
+      result = rewrite_dev_css_urls(result, file_path, config)
+      mod_url = Volt.URL.join(config.prefix, relative)
+      code = code_for_request(result, mod_url, content_type, css_import?)
+      graph_url = if css_import?, do: URL.append_query(mod_url, "import"), else: mod_url
 
-        update_module_graph(
-          graph_url,
-          graph_url,
-          file_path,
-          code,
-          source,
-          content_type,
-          config.tables || config.session
-        )
+      update_module_graph(
+        graph_url,
+        graph_url,
+        file_path,
+        code,
+        source,
+        content_type,
+        config.tables || config.session
+      )
 
-        entry = %Volt.DevServer.CacheEntry{
-          code: code,
-          sourcemap: result.sourcemap,
-          css: result.css,
-          hashes: result.hashes,
-          content_type: content_type
-        }
+      entry = %Volt.DevServer.CacheEntry{
+        code: code,
+        sourcemap: result.sourcemap,
+        css: result.css,
+        hashes: result.hashes,
+        content_type: content_type
+      }
 
-        Volt.Cache.put(cache_key, mtime, entry, config.tables || config.session)
-        send_compiled(conn, code, result.sourcemap, content_type)
+      if cacheable?,
+        do: Volt.Cache.put(cache_key, mtime, entry, config.tables || config.session)
 
+      send_compiled(conn, code, result.sourcemap, content_type)
+    else
       {:error, errors} ->
         send_compile_error(conn, file_path, errors, config)
     end
+  end
+
+  # CommonJS/UMD files are converted to ES modules, with the modules they
+  # require bundled in. Those are not tracked for invalidation, so a module
+  # that requires others is rebuilt on every request instead of cached.
+  defp module_source(file_path, source, config) do
+    if Volt.JS.CommonJS.commonjs?(source, file_path) do
+      opts = [
+        modules: Enum.reject([config.node_modules | config.resolve_dirs], &is_nil/1),
+        module_types: config.module_types
+      ]
+
+      with {:ok, code} <- Volt.JS.CommonJS.to_esm(file_path, opts) do
+        {:ok, code, not requires_modules?(source, file_path)}
+      end
+    else
+      {:ok, source, true}
+    end
+  end
+
+  defp requires_modules?(source, file_path) do
+    not match?({:ok, []}, OXC.select(source, Path.basename(file_path), :require_calls))
   end
 
   defp pipeline_opts(config, importer) do
@@ -888,29 +927,38 @@ defmodule Volt.DevServer do
   # ── Vendor pre-bundling ───────────────────────────────────────────
 
   defp prebundle_vendor(root, node_modules, plugins, resolve_dirs, module_types) do
-    case Volt.JS.Vendor.prebundle(
-           root: root,
-           node_modules: node_modules,
-           plugins: plugins,
-           resolve_dirs: resolve_dirs,
-           module_types: module_types
-         ) do
-      {:ok, vendor_map} when map_size(vendor_map) > 0 ->
-        count = map_size(vendor_map)
-        Logger.debug("[Volt] Pre-bundled #{count} vendor package(s)")
-
-      _ ->
-        :ok
-    end
+    Volt.JS.Vendor.prebundle(
+      root: root,
+      node_modules: node_modules,
+      plugins: plugins,
+      resolve_dirs: resolve_dirs,
+      module_types: module_types
+    )
   end
 
   defp serve_vendor(specifier, config, browser_hash) do
     vendor_opts = vendor_opts(config)
 
     if Volt.JS.Vendor.current_browser_hash?(browser_hash, vendor_opts) do
-      read_or_bundle_vendor(specifier, config, vendor_opts)
+      with {:ok, code} <- read_or_bundle_vendor(specifier, config, vendor_opts) do
+        {:ok, version_vendor_imports(code, Volt.JS.Vendor.browser_hash(vendor_opts))}
+      end
     else
       {:error, :outdated}
+    end
+  end
+
+  # Pre-bundles import their siblings and shared chunks relatively. Application
+  # modules import the same files with the browser hash, and a browser treats
+  # URLs that differ only in their query as separate module instances.
+  defp version_vendor_imports(code, browser_hash) do
+    case OXC.rewrite_specifiers(code, "vendor.js", fn specifier ->
+           if NPM.Resolution.PackageResolver.relative?(specifier),
+             do: {:rewrite, URL.append_query(specifier, "v=#{browser_hash}")},
+             else: :keep
+         end) do
+      {:ok, rewritten} -> rewritten
+      {:error, _} -> code
     end
   end
 

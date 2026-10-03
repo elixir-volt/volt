@@ -34,6 +34,19 @@ Multiple prefixes are also supported:
 config :volt, env_prefix: ["VOLT_", "PUBLIC_"]
 ```
 
+## TypeScript
+
+Volt's client types declare `import.meta.env` with `MODE`, `DEV`, `PROD`, and any other key as `string | boolean | undefined`. `mix igniter.install volt` adds them to `tsconfig.json`; to add them by hand, include `deps/volt/priv/types/client/**/*.d.ts`.
+
+Declare your own variables to get exact types and completion:
+
+```ts
+// assets/env.d.ts
+interface ImportMetaEnv {
+  readonly VOLT_API_URL: string
+}
+```
+
 ## File Loading Order
 
 Files are loaded in order, with later files overriding earlier ones:

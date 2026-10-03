@@ -136,6 +136,20 @@ config :volt, external: ~w(phoenix phoenix_html phoenix_live_view)
 
 Or per-build: `mix volt.build --external phoenix --external phoenix_html`
 
+How an external is referenced depends on the output format, as in Rollup:
+
+| Format | Output for `import { Socket } from "phoenix"` |
+| --- | --- |
+| `:iife` (default) | `const { Socket } = Phoenix;` — read from a global the page provides |
+| `:esm` | `import { Socket } from "phoenix";` — resolved by the browser, for example through an import map |
+| `:cjs` | `require("phoenix")` |
+
+For IIFE output the global name is derived from the specifier (`phoenix_html` becomes `PhoenixHtml`). Pass a map to name the globals yourself; the names are ignored for `:esm` and `:cjs`:
+
+```elixir
+config :volt, external: %{"phoenix" => "Phoenix", "vue" => "Vue"}
+```
+
 ## Module Preloading
 
 For code-split builds, the production manifest records static imports, dynamic imports, chunk-local CSS, and emitted assets. Use `Volt.Preload.tags/2` in your layout to preload the entry and its static chunk dependencies:

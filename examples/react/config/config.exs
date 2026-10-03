@@ -33,10 +33,6 @@ config :volt,
   ],
   import_source: "react"
 
-config :volt, :format,
-  semi: false,
-  single_quote: true
-
 config :volt, :lint,
   plugins: ["typescript", "react"],
   tsgolint: System.find_executable("tsgolint"),

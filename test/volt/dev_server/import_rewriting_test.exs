@@ -26,6 +26,61 @@ defmodule Volt.DevServer.ImportRewritingTest do
     refute conn.resp_body =~ Path.join(root, "value.ts")
   end
 
+  describe "CommonJS interop" do
+    test "serves a local UMD module as an ES module with a default export" do
+      File.mkdir_p!(Path.join(@fixture_dir, "src/vendor"))
+
+      File.write!(Path.join(@fixture_dir, "src/vendor/topbar.js"), """
+      (function (window, document) {
+        var topbar = { show: function () {} };
+        if (typeof module === "object" && typeof module.exports === "object") {
+          module.exports = topbar;
+        } else {
+          this.topbar = topbar;
+        }
+      }.call(this, window, document));
+      """)
+
+      conn = call_dev_server("/assets/vendor/topbar.js")
+      assert conn.status == 200
+      assert conn.resp_body =~ "export default"
+    end
+
+    test "bundles modules required by a local CommonJS module" do
+      File.write!(Path.join(@fixture_dir, "src/cjs-dep.js"), "module.exports = { answer: 42 }")
+
+      File.write!(
+        Path.join(@fixture_dir, "src/cjs-entry.js"),
+        "exports.answer = require('./cjs-dep').answer"
+      )
+
+      conn = call_dev_server("/assets/cjs-entry.js")
+      assert conn.status == 200
+      assert conn.resp_body =~ "export default"
+      assert conn.resp_body =~ "answer: 42"
+      refute conn.resp_body =~ ~r/require\(['"]\.\/cjs-dep/
+    end
+
+    test "serves .cjs and .cts files as ES modules" do
+      File.write!(Path.join(@fixture_dir, "src/dep.cjs"), "module.exports = { answer: 42 }")
+      File.write!(Path.join(@fixture_dir, "src/typed.cts"), "const n: number = 7; export = { n }")
+
+      for path <- ["/assets/dep.cjs", "/assets/typed.cts"] do
+        conn = call_dev_server(path)
+        assert conn.status == 200
+        assert conn.resp_body =~ "export default"
+      end
+    end
+
+    test "leaves ES modules untouched" do
+      File.write!(Path.join(@fixture_dir, "src/esm.js"), "export const module = { exports: 1 }")
+
+      conn = call_dev_server("/assets/esm.js")
+      assert conn.status == 200
+      refute conn.resp_body =~ "__commonJS"
+    end
+  end
+
   describe "import rewriting" do
     test "rewrites relative imports to absolute paths" do
       File.write!(Path.join(@fixture_dir, "src/utils.ts"), "export const y = 1")

@@ -3,15 +3,20 @@ defmodule Volt.Test.Shared do
 
   alias Volt.Test.Config
 
+  @doc """
+  Add source lines to collected tests.
+
+  Lines are read from the source and matched to tests by position. Tests keep
+  no line when the source declares a different number of tests than the runtime
+  collected, for example when they are registered in a loop.
+  """
   def add_source_lines(path, tests) do
     with {:ok, source} <- File.read(path),
-         {:ok, lines} <- Volt.Test.Lines.test_lines(source, Path.basename(path)) do
-      {:ok,
-       tests
-       |> Enum.zip(lines)
-       |> Enum.map(fn {test, line} -> %{test | line: line} end)}
+         {:ok, lines} <- Volt.Test.Lines.test_lines(source, Path.basename(path)),
+         true <- length(lines) == length(tests) do
+      {:ok, Enum.zip_with(tests, lines, fn test, line -> %{test | line: line} end)}
     else
-      {:error, _} -> {:ok, tests}
+      _ -> {:ok, tests}
     end
   end
 

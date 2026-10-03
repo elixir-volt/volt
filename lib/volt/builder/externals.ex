@@ -1,5 +1,5 @@
 defmodule Volt.Builder.Externals do
-  @moduledoc "Rewrite external imports into global variable access for production builds."
+  @moduledoc "Rewrite external imports into global variable access for IIFE production builds."
 
   @doc """
   Rewrite external import declarations into direct global access.

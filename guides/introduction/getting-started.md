@@ -9,8 +9,8 @@ mix igniter.install volt
 The installer:
 - Adds `{:volt, "~> 0.19"}` to `mix.exs`
 - Configures build settings in `config/config.exs`
-- Adds format and lint config to `config/config.exs`
-- Adds `Volt.Formatter` plugin to `.formatter.exs`
+- Adds lint config to `config/config.exs`
+- Adds the `Volt.Formatter` plugin and formatter options to `.formatter.exs`
 - Adds the `Volt.DevServer` plug to your endpoint
 - Configures Volt's automatic development watcher
 - Updates `assets.build` and `assets.deploy` aliases
@@ -107,7 +107,8 @@ Add `Volt.Formatter` to `.formatter.exs`:
     "{mix,.formatter}.exs",
     "{config,lib,test}/**/*.{ex,exs}",
     "assets/**/*.{js,ts,jsx,tsx}"
-  ]
+  ],
+  volt: [semi: false, single_quote: true]
 ]
 ```
 

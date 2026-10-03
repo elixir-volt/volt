@@ -20,7 +20,11 @@ defmodule Volt.Builder.Output do
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
     entry_label = entry |> Path.basename() |> Naming.file_path()
     entry_name = Path.rootname(entry_label)
-    bundle_opts = Keyword.put(bundle_opts, :entry, entry_label)
+
+    bundle_opts =
+      bundle_opts
+      |> Keyword.put(:entry, entry_label)
+      |> put_external_imports(Rewriter.preserved_external_imports(js_files, ctx))
 
     case bundle_js_files(js_files, bundle_opts) do
       {:ok, bundle_result} ->
@@ -90,7 +94,11 @@ defmodule Volt.Builder.Output do
 
     js_files = Rewriter.rewrite_external_imports(js_files, ctx)
     entry_label = entry |> Path.basename() |> Naming.file_path()
-    bundle_opts = Keyword.put(bundle_opts, :entry, entry_label)
+
+    bundle_opts =
+      bundle_opts
+      |> Keyword.put(:entry, entry_label)
+      |> put_external_imports(Rewriter.preserved_external_imports(js_files, ctx))
 
     case bundle_js_files(js_files, bundle_opts) do
       {:ok, bundle_result} ->
@@ -176,7 +184,11 @@ defmodule Volt.Builder.Output do
         sourcemap: Keyword.get(bundle_opts, :sourcemap, false),
         treeshake: Keyword.get(bundle_opts, :treeshake, false),
         define: Keyword.get(bundle_opts, :define, %{}),
-        external: Keyword.get(bundle_opts, :external, []),
+        external:
+          Enum.uniq(
+            Keyword.get(bundle_opts, :external, []) ++
+              Rewriter.preserved_external_imports(js_files, ctx)
+          ),
         module_types: Keyword.get(bundle_opts, :module_types, %{}),
         output: [
           entry_file_names: shared_entry_file_names(build_ctx.hash),
@@ -544,7 +556,6 @@ defmodule Volt.Builder.Output do
       process_chunks(
         chunk_bundles,
         graph,
-        js_map,
         module_labels,
         css_results,
         ctx,
@@ -576,7 +587,6 @@ defmodule Volt.Builder.Output do
   defp process_chunks(
          chunk_bundles,
          graph,
-         js_map,
          module_labels,
          css_results,
          ctx,
@@ -587,9 +597,7 @@ defmodule Volt.Builder.Output do
 
     Map.new(chunk_bundles, fn {chunk_id, {code, sourcemap}} ->
       chunk = graph.chunks[chunk_id]
-      chunk_js = select_chunk_files(chunk.modules, js_map, module_labels)
       chunk_import_map = chunk_import_map(chunk, graph, module_labels, dep_map)
-      code = Rewriter.inject_external_preamble(code, chunk_js, ctx)
       code = Rewriter.rewrite_chunk_imports(code, chunk_import_map, chunk_url_map)
       code = Rewriter.rewrite_dynamic_preloads(code, preload_map)
 
@@ -793,6 +801,7 @@ defmodule Volt.Builder.Output do
           bundle_opts
           |> Keyword.put(:entry, chunk_entry_label(chunk_js))
           |> put_external_imports(external)
+          |> put_external_imports(Rewriter.preserved_external_imports(chunk_js, ctx))
 
         case bundle_js_files(chunk_js, bundle_opts) do
           {:ok, result} ->

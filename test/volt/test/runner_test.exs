@@ -36,6 +36,50 @@ defmodule Volt.Test.RunnerTest do
             ]} = Runner.collect_file(path)
   end
 
+  test "collects every each-table case and the tests after it", %{tmp_dir: tmp_dir} do
+    path =
+      write!(tmp_dir, "each.test.ts", ~TS"""
+      import { test } from 'volt:test'
+
+      test.each([
+        [1],
+        [2],
+        [3]
+      ])('case %d', () => {})
+
+      test('after', () => {})
+      """)
+
+    assert {:ok, tests} = Runner.collect_file(path)
+
+    assert Enum.map(tests, &{&1.full_name, &1.line}) == [
+             {"case 1", 3},
+             {"case 2", 3},
+             {"case 3", 3},
+             {"after", 9}
+           ]
+  end
+
+  test "keeps tests registered in ways the source does not show", %{tmp_dir: tmp_dir} do
+    path =
+      write!(tmp_dir, "dynamic.test.ts", ~TS"""
+      import { test } from 'volt:test'
+
+      const cases = [1, 2]
+      test.each(cases)('case %d', () => {})
+
+      for (const name of ['x', 'y']) {
+        test('loop ' + name, () => {})
+      }
+
+      test('after', () => {})
+      """)
+
+    assert {:ok, tests} = Runner.collect_file(path)
+
+    assert Enum.map(tests, & &1.full_name) == ["case 1", "case 2", "loop x", "loop y", "after"]
+  end
+
   test "collects skip todo and tag metadata", %{tmp_dir: tmp_dir} do
     path =
       write!(tmp_dir, "modifiers.test.ts", ~TS"""

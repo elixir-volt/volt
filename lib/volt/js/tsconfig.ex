@@ -15,7 +15,9 @@ defmodule Volt.JS.TSConfig do
       %{"@" => "/absolute/path/to/src"}
 
   Glob suffixes (`/*`) are stripped from both keys and values.
-  Only the first path in each mapping array is used.
+  The first path in each mapping array that is not a declaration file is used;
+  mappings that only point at declaration files (`.d.ts`) describe types and
+  are left to normal module resolution.
   """
   @spec read_paths(String.t()) :: %{String.t() => String.t()}
   def read_paths(tsconfig_path) do
@@ -26,22 +28,27 @@ defmodule Volt.JS.TSConfig do
       tsconfig_dir = Path.dirname(tsconfig_path)
       base = Path.expand(base_url, tsconfig_dir)
 
-      Map.new(paths, fn {key, targets} ->
-        alias_key = key |> String.trim_trailing("/*") |> String.trim_trailing("*")
-        alias_key = String.trim_trailing(alias_key, "/")
-
-        target =
-          targets
-          |> List.first("")
-          |> String.trim_trailing("/*")
-          |> String.trim_trailing("*")
-          |> String.trim_trailing("/")
-
-        {alias_key, Path.expand(target, base)}
-      end)
+      for {key, targets} <- paths,
+          target = Enum.find(List.wrap(targets), &runtime_target?/1),
+          into: %{} do
+        {trim_glob(key), Path.expand(trim_glob(target), base)}
+      end
     else
       _ -> %{}
     end
+  end
+
+  defp runtime_target?(target) when is_binary(target) do
+    not String.ends_with?(target, [".d.ts", ".d.mts", ".d.cts"])
+  end
+
+  defp runtime_target?(_target), do: false
+
+  defp trim_glob(pattern) do
+    pattern
+    |> String.trim_trailing("/*")
+    |> String.trim_trailing("*")
+    |> String.trim_trailing("/")
   end
 
   @doc """

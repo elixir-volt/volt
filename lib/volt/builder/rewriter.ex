@@ -14,6 +14,28 @@ defmodule Volt.Builder.Rewriter do
     end
   end
 
+  @doc "Specifiers imported by `js_files` that stay as imports in the bundle output."
+  def preserved_external_imports(js_files, ctx) do
+    if MapSet.size(ctx.external_imports) == 0 do
+      []
+    else
+      js_files
+      |> Enum.flat_map(fn {_label, code} ->
+        case OXC.select(code, "module.js", :import_specifiers) do
+          {:ok, specifiers} -> specifiers
+          {:error, _} -> []
+        end
+      end)
+      |> Enum.uniq()
+      |> Enum.filter(&preserved_external?(&1, ctx.external_imports))
+    end
+  end
+
+  defp preserved_external?(specifier, externals) do
+    MapSet.member?(externals, specifier) or
+      Enum.any?(externals, &String.starts_with?(specifier, &1 <> "/"))
+  end
+
   def external_chunk_imports(js_files, chunk_import_map) do
     js_files
     |> Enum.flat_map(fn {_label, code} ->

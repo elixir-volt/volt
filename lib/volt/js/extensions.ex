@@ -9,12 +9,16 @@ defmodule Volt.JS.Extensions do
 
   def js, do: @js
   def cjs, do: @cjs
+
   def json, do: @json
   def node_resolvable, do: @js ++ @cjs ++ @json
   def node_resolvable_with_exact, do: ["" | node_resolvable()]
   def bundleable, do: @js ++ @cjs
   def formattable, do: @js
-  def compilable(plugins \\ []), do: plugin_exts(plugins, :compile) ++ @js ++ @css ++ @json
+
+  def compilable(plugins \\ []),
+    do: plugin_exts(plugins, :compile) ++ @js ++ @cjs ++ @css ++ @json
+
   def scannable(plugins \\ []), do: plugin_exts(plugins, :scan) ++ @js
   def resolvable(plugins \\ []), do: ["" | @js ++ @cjs ++ plugin_exts(plugins, :resolve) ++ @json]
   def resolvable_index, do: Enum.map(@js ++ @cjs, &("/index" <> &1))
