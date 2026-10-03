@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.4 - 2026-10-03
+
+### Compatibility
+
+- Require vize 0.16. Volt's use of vize is unchanged; 0.16 changes only `Vize.vapor_split/1`, which Volt doesn't call. PhoenixVapor needs vize 0.16 and Volt together.
+
 ## 0.19.3 - 2026-10-01
 
 ### Fixed
