@@ -6,6 +6,7 @@ import {
   type HotCallback
 } from './hot'
 import { clearErrorOverlay, renderErrorOverlay, type VoltError } from './overlay'
+import { pageReload } from './reload'
 import { removeStyle, updateStyle, updateStyles } from './styles'
 
 export { createHotContext, removeStyle, updateStyle }
@@ -33,7 +34,7 @@ function connect() {
   ws.onopen = () => {
     // The server may have restarted while we were away, so the page can be stale.
     if (connected) {
-      location.reload()
+      pageReload()
       return
     }
 
@@ -83,10 +84,10 @@ function connect() {
         showErrors(payload.errors as VoltError[])
         break
       case 'full-reload':
-        location.reload()
+        pageReload()
         break
       default:
-        location.reload()
+        pageReload()
         break
     }
   }
@@ -128,14 +129,14 @@ async function handleUpdate(payload: {
     return
   }
 
-  location.reload()
+  pageReload()
 }
 
 async function applyHMRUpdate(boundary: string, changedPath: string, timestamp: number) {
   const boundaryMatch = findHotModule(boundary)
 
   if (!boundaryMatch) {
-    location.reload()
+    pageReload()
     return
   }
 
@@ -170,7 +171,7 @@ async function applyHMRUpdate(boundary: string, changedPath: string, timestamp: 
     console.log(`[Volt] HMR update: ${changedUrl}`)
   } catch (err) {
     console.error(`[Volt] HMR update failed for ${changedUrl}`, err)
-    location.reload()
+    pageReload()
   }
 }
 
