@@ -71,34 +71,29 @@ defmodule Volt.Test.Lines do
     groups |> Enum.sort() |> Enum.flat_map(fn {_anchor, starts} -> starts end)
   end
 
-  defp test_callee?(%{type: :identifier, name: name}) when name in ["test", "it"], do: true
+  @test_names ["test", "it"]
+  @describe_names ["describe"]
 
-  defp test_callee?(%{type: :member_expression, object: object, property: %{name: property}})
-       when property in ["skip", "todo"] do
-    test_callee?(object)
+  defp test_callee?(callee), do: callee_named?(callee, @test_names)
+  defp describe_callee?(callee), do: callee_named?(callee, @describe_names)
+
+  # `test`, `test.skip`, `test.todo`, and the same for `it` and `describe`.
+  defp callee_named?(%{type: :identifier, name: name}, names), do: name in names
+
+  defp callee_named?(%{type: :member_expression, object: object, property: property}, names) do
+    property[:name] in ["skip", "todo"] and callee_named?(object, names)
   end
 
-  defp test_callee?(_), do: false
-
-  defp describe_callee?(%{type: :identifier, name: "describe"}), do: true
-
-  defp describe_callee?(%{type: :member_expression, object: object, property: %{name: property}})
-       when property in ["skip", "todo"] do
-    describe_callee?(object)
-  end
-
-  defp describe_callee?(_), do: false
+  defp callee_named?(_callee, _names), do: false
 
   # `test.each(cases)` and `describe.each(cases)`, whose result is then called
   # with the name and body.
   defp each_callee?(
-         %{
-           type: :call_expression,
-           callee: %{type: :member_expression, object: object, property: %{name: "each"}}
-         },
+         %{type: :call_expression, callee: %{type: :member_expression} = callee},
          base?
-       ),
-       do: base?.(object)
+       ) do
+    callee.property[:name] == "each" and base?.(callee.object)
+  end
 
   defp each_callee?(_callee, _base?), do: false
 

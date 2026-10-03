@@ -65,7 +65,7 @@ defmodule Volt.JS.VendorTest do
       opts = [root: Path.join(@fixture_dir, "src"), node_modules: @node_modules]
 
       assert ExUnit.CaptureLog.capture_log(fn ->
-               Volt.JS.Vendor.prebundle(opts ++ [force: true])
+               Volt.JS.Vendor.prebundle(Keyword.put(opts, :force, true))
              end) =~
                "Pre-bundled"
 

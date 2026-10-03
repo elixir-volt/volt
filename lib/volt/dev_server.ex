@@ -557,10 +557,7 @@ defmodule Volt.DevServer do
   end
 
   defp requires_modules?(source, file_path) do
-    case OXC.select(source, Path.basename(file_path), :require_calls) do
-      {:ok, []} -> false
-      _ -> true
-    end
+    not match?({:ok, []}, OXC.select(source, Path.basename(file_path), :require_calls))
   end
 
   defp pipeline_opts(config, importer) do

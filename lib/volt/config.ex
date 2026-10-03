@@ -139,8 +139,8 @@ defmodule Volt.Config do
         []
       end
 
-    Volt.JS.Format.reject_application_config!(flat_env[:format])
-    Volt.JS.Format.reject_application_config!(profile_env[:format])
+    reject_formatter_options!(flat_env[:format])
+    reject_formatter_options!(profile_env[:format])
 
     config =
       @defaults
@@ -153,6 +153,23 @@ defmodule Volt.Config do
     tsconfig_paths = Volt.JS.TSConfig.discover_paths()
     %{config | aliases: Map.merge(tsconfig_paths, config.aliases)}
   end
+
+  @doc false
+  def reject_formatter_options!(format) when is_list(format) do
+    raise ArgumentError, """
+    formatter options are no longer read from `config :volt, :format`, which now \
+    only holds the build output format (`:iife`, `:esm`, or `:cjs`).
+
+    Move them to the `:volt` key of .formatter.exs:
+
+        [
+          plugins: [Volt.Formatter],
+          volt: #{inspect(format)}
+        ]
+    """
+  end
+
+  def reject_formatter_options!(_format), do: :ok
 
   @doc """
   Read dev server config, merged with defaults.
