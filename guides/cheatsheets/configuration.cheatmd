@@ -248,6 +248,14 @@ config :volt, :server, watch_ignored: ["**/.generated/**"]
 
 GlobEx patterns excluded from watcher events. Patterns are relative to each watched root.
 
+### Morph
+
+```elixir
+config :volt, :server, morph: [preserve: "[data-island]"]
+```
+
+Patch changed pages in place instead of reloading them. `:preserve` selects elements owned by client code.
+
 ### Automatic Watcher
 
 ```elixir

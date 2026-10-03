@@ -1,6 +1,7 @@
 {
   "private": true,
   "dependencies": {
+    "idiomorph": "0.8.0",
     "lit-html": "3.3.3"
   }
 }

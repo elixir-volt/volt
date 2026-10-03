@@ -6,5 +6,6 @@ defmodule Volt.Config.Server do
             reload_dirs: [],
             watch_ignored: [],
             hmr_timeout: 60_000,
+            morph: false,
             watch: true
 end
