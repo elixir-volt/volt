@@ -9,6 +9,14 @@
       "tarball": "https://registry.npmjs.org/@types/trusted-types/-/trusted-types-2.0.7.tgz",
       "version": "2.0.7"
     },
+    "idiomorph": {
+      "dependencies": {},
+      "has_install_script": false,
+      "integrity": "sha512-R47JBL+6jHDQvcnbppIUtXXcxi5h6+wuCEEZXnRhUltsgzPFKzThL5PuHppP9ypJuy+7WawcY1TsSBD/iQbMhw==",
+      "optional_dependencies": {},
+      "tarball": "https://registry.npmjs.org/idiomorph/-/idiomorph-0.8.0.tgz",
+      "version": "0.8.0"
+    },
     "lit-html": {
       "dependencies": {
         "@types/trusted-types": "^2.0.2"

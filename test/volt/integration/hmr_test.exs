@@ -10,11 +10,19 @@ defmodule Volt.Integration.TestPlug do
   @impl true
   # Pages rendered from content files, sent through the dev server as an app's
   # own pages are.
-  def call(%Conn{request_path: "/doc/" <> name} = conn, opts) do
-    content = File.read!(Path.join(opts[:root] <> "-content", name <> ".md"))
+  def call(%Conn{request_path: "/doc/" <> name} = conn, opts),
+    do: document(conn, name, opts[:root], opts[:dev_server])
+
+  def call(%Conn{request_path: "/morph/" <> name} = conn, opts),
+    do: document(conn, name, opts[:root], opts[:morph_dev_server])
+
+  def call(conn, opts), do: asset(conn, opts)
+
+  defp document(conn, name, root, dev_server) do
+    content = File.read!(Path.join(root <> "-content", name <> ".md"))
 
     conn
-    |> Volt.DevServer.call(opts[:dev_server])
+    |> Volt.DevServer.call(dev_server)
     |> Conn.put_resp_content_type("text/html")
     |> Conn.send_resp(200, """
     <!DOCTYPE html>
@@ -29,7 +37,7 @@ defmodule Volt.Integration.TestPlug do
     """)
   end
 
-  def call(conn, opts) do
+  defp asset(conn, opts) do
     if String.ends_with?(conn.request_path, ".html") or conn.request_path == "/" do
       file =
         case conn.request_path do
@@ -138,7 +146,9 @@ defmodule Volt.Integration.HMRTest do
     """)
 
     dev_server_opts = Volt.DevServer.init(root: @fixture_dir, prefix: "/assets")
-    plug_opts = %{root: @fixture_dir, dev_server: dev_server_opts}
+    morph_opts = Volt.DevServer.init(root: @fixture_dir, prefix: "/assets", morph: true)
+
+    plug_opts = %{root: @fixture_dir, dev_server: dev_server_opts, morph_dev_server: morph_opts}
 
     {:ok, server} =
       Bandit.start_link(
@@ -475,6 +485,54 @@ defmodule Volt.Integration.HMRTest do
                )
 
       assert {:ok, "2"} = eval_poll(frame, "document.body.dataset.loads")
+
+      GenServer.stop(watcher)
+    end
+
+    test "pages that opt in are patched in place instead of reloaded", %{frame: frame} do
+      content_dir = @fixture_dir <> "-content"
+      File.rm_rf!(content_dir)
+      File.mkdir_p!(content_dir)
+      on_exit(fn -> File.rm_rf!(content_dir) end)
+      File.write!(Path.join(content_dir, "first.md"), "first page")
+
+      {:ok, _} = Frame.goto(frame.guid, url: base_url("/morph/first"), timeout: 10_000)
+      assert {:ok, "1"} = eval_until(frame, "document.body.dataset.loads", "1")
+
+      # State a reload would lose.
+      {:ok, _} = eval_poll(frame, "(window.voltKept = 'kept')")
+
+      {:ok, watcher} =
+        Volt.Watcher.start_link(
+          root: @fixture_dir,
+          reload_dirs: [content_dir],
+          name: String.to_atom("volt_integration_morph_#{System.unique_integer([:positive])}")
+        )
+
+      Process.sleep(150)
+      File.write!(Path.join(content_dir, "first.md"), "first page, edited")
+
+      assert {:ok, "first page, edited"} =
+               eval_until(
+                 frame,
+                 "document.getElementById('content')?.textContent",
+                 "first page, edited"
+               )
+
+      assert {:ok, "kept"} = eval_poll(frame, "window.voltKept")
+      assert {:ok, "1"} = eval_poll(frame, "document.body.dataset.loads")
+
+      # The patched page revalidates against its new HTML.
+      File.write!(Path.join(content_dir, "first.md"), "first page, edited twice")
+
+      assert {:ok, "first page, edited twice"} =
+               eval_until(
+                 frame,
+                 "document.getElementById('content')?.textContent",
+                 "first page, edited twice"
+               )
+
+      assert {:ok, "kept"} = eval_poll(frame, "window.voltKept")
 
       GenServer.stop(watcher)
     end

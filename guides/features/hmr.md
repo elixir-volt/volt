@@ -99,6 +99,36 @@ So editing one blog post reloads the tab showing that post and leaves the others
 
 A server that adds the dev client to its pages itself opts in by following `Volt.HMR.Document`.
 
+### Updating the page in place
+
+A page that did change reloads by default. With `:morph`, the dev client patches it instead: it takes the HTML it just received and changes only the parts of the page that differ, so scroll position, focus and JavaScript state survive an edit to text or classes.
+
+```elixir
+config :volt, :server, morph: true
+```
+
+Patching cannot re-run scripts or reload stylesheets, so the client reloads the page as before when:
+
+- the scripts the page runs differ (data blocks such as `<script type="application/json">` are patched);
+- the stylesheet links or `<style>` elements differ;
+- the server answers with an error.
+
+Elements that client code owns, such as the root of a mounted component, must be left alone. Name them with a selector:
+
+```elixir
+config :volt, :server, morph: [preserve: "[data-island]"]
+```
+
+The client never touches a preserved element or what is inside it. If the attributes the server renders for one change, or preserved elements are added or removed, the page reloads.
+
+After a patch the client dispatches `volt:document-updated` on `document`, for code that attaches behaviour to elements and needs to pick up new ones:
+
+```javascript
+document.addEventListener("volt:document-updated", () => enhance(document))
+```
+
+Only the contents of `<body>` and the title are patched. Attributes on `<html>` and `<body>`, and the rest of `<head>`, stay as they were until the next reload.
+
 ## Ignoring watcher paths
 
 Exclude generated or otherwise irrelevant files before Volt schedules compilation or HMR work:

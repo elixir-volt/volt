@@ -331,6 +331,22 @@ defmodule Volt.DevServer.RequestsTest do
       assert get_resp_header(conn, "etag") != [etag]
     end
 
+    test "marks pages for in-place updates when the server opts in" do
+      page = "<html><head></head><body></body></html>"
+
+      send_page = fn opts ->
+        call_dev_server("/page", opts)
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, page)
+      end
+
+      refute send_page.([]).resp_body =~ "data-volt-morph"
+      assert send_page.(morph: true).resp_body =~ ~s( data-volt-morph="")
+
+      assert send_page.(morph: [preserve: "[data-island]"]).resp_body =~
+               ~s( data-volt-morph="[data-island]")
+    end
+
     test "error pages get the HMR client without an entity tag" do
       conn =
         call_dev_server("/page")

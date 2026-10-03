@@ -6,7 +6,8 @@ import {
   type HotCallback
 } from './hot'
 import { clearErrorOverlay, renderErrorOverlay, type VoltError } from './overlay'
-import { pageReload, revalidateDocument } from './reload'
+import { revalidateDocument } from './document'
+import { pageReload } from './reload'
 import { removeStyle, updateStyle, updateStyles } from './styles'
 
 export { createHotContext, removeStyle, updateStyle }

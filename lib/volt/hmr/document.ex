@@ -27,6 +27,16 @@ defmodule Volt.HMR.Document do
   @spec attribute() :: String.t()
   def attribute, do: @attribute
 
+  @morph_attribute "data-volt-morph"
+
+  @doc """
+  The attribute of the client `<script>` that lets the client patch the page in
+  place instead of reloading it. Its value is a selector for elements that
+  client code owns, or empty.
+  """
+  @spec morph_attribute() :: String.t()
+  def morph_attribute, do: @morph_attribute
+
   @doc "Compute the entity tag of rendered HTML."
   @spec etag(iodata()) :: String.t()
   def etag(html) do

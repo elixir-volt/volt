@@ -123,6 +123,7 @@ defmodule Volt.DevServer do
       define:
         Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix),
       hmr_timeout: server_config.hmr_timeout,
+      morph: server_config.morph,
       stylesheet_url: tailwind_root && tailwind_root.dev_url,
       stylesheet_source: tailwind_root && tailwind_root.css,
       session_supervisor: Keyword.get(opts, :session_supervisor),
@@ -349,7 +350,7 @@ defmodule Volt.DevServer do
             serve(conn, relative, config)
 
           :no_match ->
-            Volt.DevServer.ClientTag.register(conn)
+            Volt.DevServer.ClientTag.register(conn, config.morph)
         end
     end
   end
