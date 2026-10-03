@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.0 - 2026-10-03
 
 ### Breaking changes
 
@@ -18,15 +18,13 @@
 
 ### Added
 
+- Changes in `reload_dirs` reload only the pages whose HTML changed. The watcher broadcasts a `document` update for them instead of a `full` one. Pages carry an entity tag of their rendered HTML; on a change the dev client revalidates with `If-None-Match` and reloads unless the server answers `304 Not Modified`. Editing one post no longer reloads every open tab, and a save that does not change a page's output reloads nothing. This covers every successful HTML response that passes through `Volt.DevServer`, including pages that already load the dev client, so site generators built on Volt need no change. `Volt.HMR.document_update/2` sends the same request from other packages, and `Volt.HMR.Document` describes the contract for servers that send HTML some other way.
+- `config :volt, :server, morph: true` patches a changed page in place instead of reloading it, so scroll position, focus and JavaScript state survive edits to text and classes. The client reloads as before when scripts or stylesheets differ. `morph: [preserve: selector]` names elements owned by client code, such as mounted components, which are left alone. The client dispatches `volt:document-updated` after a patch.
+- Stylesheet updates no longer flash unstyled content. The dev client adds a `<link>` for the updated stylesheet and removes the previous one once the new one has loaded, instead of changing `href` in place.
+- The dev client reloads the page once when several updates ask for a reload at the same time, such as a template that is also a Tailwind source.
 - The dev server converts local CommonJS and UMD files, such as Phoenix's vendored `topbar.js`, to ES modules, so `import topbar from "../vendor/topbar"` works in development as it does in production builds. `.cjs` and `.cts` files, which the dev server did not serve, are converted the same way.
 - Relative `watch_ignored` patterns also resolve from the project directory, so `_build/**` matches a watched directory inside `_build`.
-
 - Volt's client types declare `import.meta.env`, so TypeScript projects no longer need their own `ImportMeta` declaration for `MODE`, `DEV`, `PROD` and exposed variables. `mix igniter.install volt` adds `env.d.ts` to configurations that list declaration files explicitly.
-
-- Stylesheet updates no longer flash unstyled content. The dev client adds a `<link>` for the updated stylesheet and removes the previous one once the new one has loaded, instead of changing `href` in place.
-- `config :volt, :server, morph: true` patches a changed page in place instead of reloading it, so scroll position, focus and JavaScript state survive edits to text and classes. The client reloads as before when scripts or stylesheets differ. `morph: [preserve: selector]` names elements owned by client code, such as mounted components, which are left alone. The client dispatches `volt:document-updated` after a patch.
-- Changes in `reload_dirs` reload only the pages whose HTML changed. Pages carry an entity tag of their rendered HTML; on a change the dev client revalidates with `If-None-Match` and reloads unless the server answers `304 Not Modified`. Editing one post no longer reloads every open tab, and a save that does not change a page's output reloads nothing. This covers every successful HTML response that passes through `Volt.DevServer`, including pages that already load the dev client, so site generators built on Volt need no change. `Volt.HMR.document_update/2` sends the same request from other packages, and `Volt.HMR.Document` describes the contract for servers that send HTML some other way.
-- The dev client reloads the page once when several updates ask for a reload at the same time, such as a template that is also a Tailwind source.
 
 ### Fixed
 
