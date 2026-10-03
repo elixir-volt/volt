@@ -16,6 +16,10 @@
 - External modules stay as imports in `:esm` and `:cjs` output, as in Rollup, Rolldown, esbuild and Bun. With `format: :esm, external: ["phoenix"]`, `import { Socket } from "phoenix"` used to become `const { Socket } = Phoenix;`; it is now left for the browser or host to resolve, for example through an import map. `:cjs` output uses `require("phoenix")`. IIFE output, the default, still reads externals from globals. The global names in `external: %{"phoenix" => "Phoenix"}` apply to IIFE output only. ESM builds that relied on page globals need an import map or `format: :iife`.
 - `Volt.JS.Format.load_config/1` takes the `.formatter.exs` options instead of reading the application environment.
 
+### Compatibility
+
+- Require vize 0.17. Volt's use of vize is unchanged: 0.17 replaces `Vize.vapor_split/1` with `Vize.split_template/2`, which Volt doesn't call. Projects that depend on vize themselves need 0.17 alongside this release.
+
 ### Added
 
 - Changes in `reload_dirs` reload only the pages whose HTML changed. The watcher broadcasts a `document` update for them instead of a `full` one. Pages carry an entity tag of their rendered HTML; on a change the dev client revalidates with `If-None-Match` and reloads unless the server answers `304 Not Modified`. Editing one post no longer reloads every open tab, and a save that does not change a page's output reloads nothing. This covers every successful HTML response that passes through `Volt.DevServer`, including pages that already load the dev client, so site generators built on Volt need no change. `Volt.HMR.document_update/2` sends the same request from other packages, and `Volt.HMR.Document` describes the contract for servers that send HTML some other way.
