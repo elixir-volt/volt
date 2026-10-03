@@ -4,6 +4,101 @@ import { pageReload } from './reload'
 const ETAG = 'data-volt-etag'
 const MORPH = 'data-volt-morph'
 
+export type OwnedChange = { index: number; attributes: Record<string, string> }
+
+export type AttributeChanges = { set: Record<string, string>; remove: string[] }
+export type HeadChanges = { remove: string[]; add: string[] }
+
+/** A page render pushed by the server, which already compared it with the previous one. */
+export type PushedDocument = {
+  html: string
+  etag: string
+  owned: OwnedChange[]
+  root: Record<string, AttributeChanges>
+  head: HeadChanges
+}
+
+/** Where this page is and which HTML it was served, for the server to keep track of it. */
+export function pageIdentity() {
+  const etag = document.querySelector(`script[${ETAG}]`)?.getAttribute(ETAG)
+  return etag ? { path: location.pathname + location.search, etag } : null
+}
+
+/**
+ * Apply a render the server pushed. The server compared it with the HTML it
+ * last rendered for this page, so it knows which owned elements it changed.
+ */
+export function applyDocument({ html, etag, owned, root, head }: PushedDocument) {
+  const preserve = document.querySelector(`script[${ETAG}]`)?.getAttribute(MORPH)
+  if (preserve === null || preserve === undefined) return pageReload()
+
+  const next = new DOMParser().parseFromString(html, 'text/html')
+  const changed = new Set(owned.map((change) => change.index))
+  if (!morphDocument(next, preserve, changed)) return pageReload()
+  if (!updateOwned(preserve, owned)) return pageReload()
+
+  updateRoot(root)
+  updateHead(head)
+  finishUpdate(etag)
+}
+
+// Only what the server changed is applied, so attributes that scripts set on
+// these elements, such as a theme, stay.
+function updateRoot(root: Record<string, AttributeChanges>) {
+  for (const [tag, { set, remove }] of Object.entries(root)) {
+    const element = tag === 'html' ? document.documentElement : document.body
+    for (const name of remove) element.removeAttribute(name)
+    for (const [name, value] of Object.entries(set)) element.setAttribute(name, value)
+  }
+}
+
+function updateHead({ remove, add }: HeadChanges) {
+  const live = [...document.head.children]
+
+  for (const html of remove) {
+    const gone = parseHeadElement(html)
+    const index = live.findIndex((element) => gone !== null && element.isEqualNode(gone))
+    if (index !== -1) live.splice(index, 1)[0]?.remove()
+  }
+
+  for (const html of add) {
+    const element = parseHeadElement(html)
+    if (element) document.head.append(element)
+  }
+}
+
+function parseHeadElement(html: string) {
+  return new DOMParser().parseFromString(`<head>${html}</head>`, 'text/html').head.firstElementChild
+}
+
+// The owner of an element re-renders it from its new attributes and says so by
+// cancelling the event. Without an owner listening, only a reload applies them.
+function updateOwned(preserve: string, owned: OwnedChange[]) {
+  if (owned.length === 0) return true
+  const elements = [...document.querySelectorAll(preserve)]
+
+  return owned.every(({ index, attributes }) => {
+    const element = elements[index]
+    if (!element) return false
+
+    for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value)
+
+    const event = new CustomEvent('volt:element-update', {
+      bubbles: true,
+      cancelable: true,
+      detail: { attributes }
+    })
+
+    return !element.dispatchEvent(event)
+  })
+}
+
+function finishUpdate(etag: string) {
+  document.querySelector(`script[${ETAG}]`)?.setAttribute(ETAG, etag)
+  document.dispatchEvent(new CustomEvent('volt:document-updated'))
+  console.log('[Volt] Document updated')
+}
+
 let revalidation: Promise<void> | undefined
 
 // The server-rendered HTML may have changed. A page that carries the entity tag
@@ -43,9 +138,7 @@ async function updateDocument() {
   const next = new DOMParser().parseFromString(await response.text(), 'text/html')
   if (!morphDocument(next, preserve)) return pageReload()
 
-  document.querySelector(`script[${ETAG}]`)?.setAttribute(ETAG, nextEtag)
-  document.dispatchEvent(new CustomEvent('volt:document-updated'))
-  console.log('[Volt] Document updated')
+  finishUpdate(nextEtag)
 }
 
 /**
@@ -54,14 +147,15 @@ async function updateDocument() {
  * Returns false, changing nothing, when the difference cannot be applied by
  * patching: scripts do not run again, stylesheets are not reloaded, and
  * elements matching `preserve` are owned by client code such as a mounted
- * component.
+ * component. `changed` holds the positions of owned elements the server changed.
  */
-export function morphDocument(next: Document, preserve: string) {
+export function morphDocument(next: Document, preserve: string, changed = new Set<number>()) {
   if (!sameItems(scripts(document), scripts(next))) return false
   if (!sameItems(stylesheets(document), stylesheets(next))) return false
 
   const preserved = preserve ? [...document.querySelectorAll(preserve)] : []
-  if (!samePreserved(preserved, preserve ? [...next.querySelectorAll(preserve)] : [])) return false
+  const nextPreserved = preserve ? [...next.querySelectorAll(preserve)] : []
+  if (!samePreserved(preserved, nextPreserved, changed)) return false
 
   const owned = (node: Node) => preserve !== '' && node instanceof Element && node.matches(preserve)
 
@@ -114,13 +208,17 @@ function stylesheetUrl(href: string) {
 
 // Client code may add attributes to an element it owns, such as a mount marker,
 // so only the attributes the server rendered are compared.
-function samePreserved(current: Element[], next: Element[]) {
+// The elements in `changed` are ones the server knows it changed; their owners
+// are told separately.
+function samePreserved(current: Element[], next: Element[], changed: Set<number>) {
   return (
     current.length === next.length &&
-    next.every((element, index) =>
-      [...element.attributes].every(
-        (attribute) => current[index]?.getAttribute(attribute.name) === attribute.value
-      )
+    next.every(
+      (element, index) =>
+        changed.has(index) ||
+        [...element.attributes].every(
+          (attribute) => current[index]?.getAttribute(attribute.name) === attribute.value
+        )
     )
   )
 }

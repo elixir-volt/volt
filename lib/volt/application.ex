@@ -11,6 +11,7 @@ defmodule Volt.Application do
     Volt.HMR.StyleGraph.create_table()
     Volt.HMR.ModuleGraph.create_table()
     Volt.HMR.Errors.create_table()
+    Volt.HMR.Documents.create_table()
 
     # Watchers release their Tailwind contexts when they terminate, so the
     # Tailwind processes start before them and stop after them.
