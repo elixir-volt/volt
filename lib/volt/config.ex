@@ -130,19 +130,17 @@ defmodule Volt.Config do
 
   @spec build(atom() | nil, keyword()) :: map()
   def build(profile, overrides) do
-    flat_env =
-      Application.get_all_env(:volt)
-      |> Keyword.take(@build_keys)
-      |> Keyword.reject(fn {k, v} -> k == :format and not is_atom(v) end)
+    flat_env = Application.get_all_env(:volt) |> Keyword.take(@build_keys)
 
     profile_env =
       if profile do
-        Application.get_env(:volt, profile, [])
-        |> Keyword.take(@build_keys)
-        |> Keyword.reject(fn {k, v} -> k == :format and not is_atom(v) end)
+        Application.get_env(:volt, profile, []) |> Keyword.take(@build_keys)
       else
         []
       end
+
+    Volt.JS.Format.reject_application_config!(flat_env[:format])
+    Volt.JS.Format.reject_application_config!(profile_env[:format])
 
     config =
       @defaults

@@ -109,7 +109,11 @@ JS/TS formatting, linting, and testing run inside the BEAM. `mix format` handles
 
 ```elixir
 # .formatter.exs
-[plugins: [Volt.Formatter], inputs: ["assets/**/*.{js,ts,jsx,tsx}"]]
+[
+  plugins: [Volt.Formatter],
+  inputs: ["assets/**/*.{js,ts,jsx,tsx}"],
+  volt: [semi: false, single_quote: true]
+]
 ```
 
 ```bash

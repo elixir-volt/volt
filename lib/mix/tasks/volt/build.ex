@@ -23,7 +23,8 @@ defmodule Mix.Tasks.Volt.Build do
     * `--sourcemap false` — skip source map generation
     * `--sourcemap hidden` — write `.map` files but omit `sourceMappingURL` comment
     * `--resolve-dir` — additional directory for bare specifier resolution (repeatable)
-    * `--external` — specifier to exclude from bundle (repeatable)
+    * `--external` — specifier to exclude from bundle (repeatable); read from a global
+      in `iife` output and kept as an import in `esm` and `cjs` output
     * `--name` — output base name (default: derived from entry filename)
     * `--no-hash` — stable filenames (no content hash)
     * `--no-code-splitting` — disable chunk splitting

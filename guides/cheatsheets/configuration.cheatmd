@@ -121,7 +121,7 @@ Prefix or list of prefixes exposed through `import.meta.env`.
 config :volt, external: ~w(phoenix phoenix_html)
 ```
 
-Exclude packages from the bundle.
+Exclude packages from the bundle. IIFE output reads them from globals; `:esm` and `:cjs` keep the imports.
 
 ### Aliases
 
@@ -259,34 +259,36 @@ The dev-server Plug starts a supervised watcher on the first request. Set this t
 ## Formatting Options
 {: .col-2}
 
+Set under the `:volt` key of `.formatter.exs`.
+
 ### Semi
 
 ```elixir
-config :volt, :format, semi: false
+[volt: [semi: false]]
 ```
 
 ### Single Quote
 
 ```elixir
-config :volt, :format, single_quote: true
+[volt: [single_quote: true]]
 ```
 
 ### Print Width
 
 ```elixir
-config :volt, :format, print_width: 100
+[volt: [print_width: 100]]
 ```
 
 ### Trailing Comma
 
 ```elixir
-config :volt, :format, trailing_comma: :none
+[volt: [trailing_comma: :none]]
 ```
 
 ### Arrow Parens
 
 ```elixir
-config :volt, :format, arrow_parens: :always
+[volt: [arrow_parens: :always]]
 ```
 
 ## Lint Options

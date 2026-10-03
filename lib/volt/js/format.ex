@@ -26,17 +26,68 @@ defmodule Volt.JS.Format do
   @atom_values ~w(trailing_comma arrow_parens end_of_line quote_props object_wrap experimental_operator_position embedded_language_formatting)a
   @discovery_keys ~w(root sources ignore)a
 
-  def load_config do
-    opts = Application.get_env(:volt, :format)
+  @dot_formatter ".formatter.exs"
 
-    # The bundler reads the same key, where the value is an atom such as :esm.
-    # Only a keyword list carries formatter options.
-    if Keyword.keyword?(opts) do
-      Keyword.drop(opts, @discovery_keys)
-    else
-      load_json_config()
+  @doc """
+  Load oxfmt options.
+
+  Options come from the `:volt` key of `.formatter.exs`:
+
+      [
+        plugins: [Volt.Formatter],
+        volt: [semi: false, single_quote: true]
+      ]
+
+  Without that key, they come from `.oxfmtrc.json` or `.prettierrc.json`.
+  `formatter_opts` is the keyword list `.formatter.exs` evaluates to; `mix format`
+  passes it to `Volt.Formatter`, and the Mix tasks read the file themselves.
+  """
+  @spec load_config(keyword()) :: keyword()
+  def load_config(formatter_opts \\ formatter_opts()) do
+    reject_application_config!(Application.get_env(:volt, :format))
+
+    case Keyword.fetch(formatter_opts, :volt) do
+      {:ok, opts} -> Keyword.drop(opts, @discovery_keys)
+      :error -> load_json_config()
     end
   end
+
+  @doc "Read the options in the project's `.formatter.exs`, or `[]` without one."
+  @spec formatter_opts() :: keyword()
+  def formatter_opts do
+    if File.regular?(@dot_formatter) do
+      {opts, _binding} = Code.eval_file(@dot_formatter)
+      opts
+    else
+      []
+    end
+  end
+
+  @doc """
+  File-discovery options (`:root`, `:sources`, `:ignore`) for `mix volt.js.format`
+  and `mix volt.js.check`, from the `:volt` key of `.formatter.exs`.
+  """
+  @spec discovery_config(keyword()) :: keyword()
+  def discovery_config(formatter_opts \\ formatter_opts()) do
+    formatter_opts |> Keyword.get(:volt, []) |> Keyword.take(@discovery_keys)
+  end
+
+  @doc false
+  def reject_application_config!(format) when is_list(format) do
+    raise ArgumentError, """
+    formatter options are no longer read from `config :volt, :format`, which now \
+    only holds the build output format (`:iife`, `:esm`, or `:cjs`).
+
+    Move them to the `:volt` key of .formatter.exs:
+
+        [
+          plugins: [Volt.Formatter],
+          volt: #{inspect(format)}
+        ]
+    """
+  end
+
+  def reject_application_config!(_format), do: :ok
 
   def load_json_config do
     case find_json_config() do

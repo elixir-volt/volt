@@ -411,6 +411,60 @@ defmodule Volt.WatcherTest do
     GenServer.stop(pid)
   end
 
+  test "resolves relative watcher ignore globs from the project directory", %{
+    watch_dir: watch_dir
+  } do
+    generated_dir = Path.join(File.cwd!(), "tmp/volt-watcher-generated")
+    entry = Path.join(generated_dir, "index.js")
+    File.mkdir_p!(generated_dir)
+    on_exit(fn -> File.rm_rf!(generated_dir) end)
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: watch_dir,
+        watch_dirs: [generated_dir],
+        watch_ignored: ["tmp/volt-watcher-generated/**"],
+        name: :test_watcher_project_relative_ignore
+      )
+
+    state = send_file_event(pid, entry)
+
+    refute Map.has_key?(state.pending, entry)
+    GenServer.stop(pid)
+  end
+
+  test "does not reload when a generated file is rewritten with identical content", %{
+    watch_dir: watch_dir
+  } do
+    Registry.register(Volt.HMR.Registry, :clients, nil)
+
+    generated_dir = Path.join(watch_dir, "generated")
+    root = Path.join(watch_dir, "assets")
+    index = Path.join(generated_dir, "index.js")
+    File.mkdir_p!(generated_dir)
+    File.mkdir_p!(root)
+    File.write!(index, "export const hooks = {};")
+
+    {:ok, pid} =
+      Volt.Watcher.start_link(
+        root: root,
+        watch_dirs: [generated_dir],
+        name: :test_watcher_identical_rewrite
+      )
+
+    send(pid, {:file_event, self(), {index, [:modified]}})
+    refute_receive {:volt_hmr, :update, _}, 300
+
+    File.write!(index, "export const hooks = {changed: true};")
+    send(pid, {:file_event, self(), {index, [:modified]}})
+    assert_receive {:volt_hmr, :update, %{changes: [:full]}}, 2000
+
+    send(pid, {:file_event, self(), {index, [:modified]}})
+    refute_receive {:volt_hmr, :update, _}, 300
+
+    GenServer.stop(pid)
+  end
+
   test "ignores dependency directories by default", %{watch_dir: watch_dir} do
     entry = Path.join([watch_dir, "node_modules", "example", "index.ts"])
 

@@ -25,18 +25,35 @@ mix volt.js.format
 
 ### Configuration
 
+Formatter options live under the `:volt` key of `.formatter.exs`, next to the plugin:
+
 ```elixir
-config :volt, :format,
-  print_width: 100,
-  semi: false,
-  single_quote: true,
-  trailing_comma: :none,
-  arrow_parens: :always
+[
+  plugins: [Volt.Formatter],
+  inputs: ["{config,lib,test}/**/*.{ex,exs}", "assets/**/*.{js,ts,jsx,tsx}"],
+  volt: [
+    print_width: 100,
+    semi: false,
+    single_quote: true,
+    trailing_comma: :none,
+    arrow_parens: :always
+  ]
+]
 ```
 
-All [oxfmt options](https://hexdocs.pm/oxc/OXC.Format.html) are supported. Falls back to `.oxfmtrc.json` if no Elixir config is set.
+All [oxfmt options](https://hexdocs.pm/oxc/OXC.Format.html) are supported. Without a `:volt` key, options come from `.oxfmtrc.json` or `.prettierrc.json`. `mix format`, `mix volt.js.format`, and `mix volt.js.check` all read the same options.
 
-`:root`, `:sources`, and `:ignore` may also be set under `config :volt, :format` to override the build source set for formatting only.
+`mix format` formats the files matched by `:inputs`. `mix volt.js.format` and `mix volt.js.check` use the build source set; `:root`, `:sources`, and `:ignore` under the `:volt` key override it for formatting only:
+
+```elixir
+[
+  volt: [semi: false, sources: ["priv/ts/**/*.ts"], ignore: ["vendor/**"]]
+]
+```
+
+> #### Upgrading {: .info}
+>
+> Formatter options used to live in `config :volt, :format`. That key now only holds the build output format (`:iife`, `:esm`, or `:cjs`), and a keyword list there raises with instructions to move it.
 
 ## Linting
 

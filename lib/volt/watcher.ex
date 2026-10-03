@@ -63,7 +63,8 @@ defmodule Volt.Watcher do
     tailwind_dirs: [],
     reload_dirs: [],
     explicit_ignored: [],
-    watch_ignored: []
+    watch_ignored: [],
+    source_digests: %{}
   ]
 
   def start_link(opts) do
@@ -163,6 +164,8 @@ defmodule Volt.Watcher do
         Volt.Watcher.Ignore.compile_explicit(Keyword.get(opts, :watch_ignored, []), all_dirs),
       watch_ignored: watch_ignored
     }
+
+    state = %{state | source_digests: initial_source_digests(all_dirs -- [root], state)}
 
     if config[:tailwind], do: initial_tailwind_build(state)
 
@@ -321,8 +324,17 @@ defmodule Volt.Watcher do
 
   def handle_info({:rebuild, path}, state) do
     state = %{state | pending: Map.delete(state.pending, path)}
-    handle_js_change(path, state)
-    {:noreply, state}
+    digest = source_digest(path)
+
+    # Generators such as Phoenix colocated hooks rewrite files with identical
+    # content on every code reload; rebuilding for those would reload the page,
+    # which triggers the next rewrite.
+    if Map.fetch(state.source_digests, path) == {:ok, digest} do
+      {:noreply, state}
+    else
+      handle_js_change(path, state)
+      {:noreply, %{state | source_digests: Map.put(state.source_digests, path, digest)}}
+    end
   end
 
   def handle_info(:tailwind_rebuild, state) do
@@ -370,6 +382,43 @@ defmodule Volt.Watcher do
         else: state.watch_ignored
 
     Enum.any?(patterns, &GlobEx.match?(&1, path))
+  end
+
+  defp source_digest(path) do
+    case File.read(path) do
+      {:ok, source} -> :crypto.hash(:sha256, source)
+      {:error, _reason} -> :missing
+    end
+  end
+
+  # Directories outside the asset root hold generated sources whose first
+  # rewrite would otherwise have no baseline to compare against.
+  defp initial_source_digests(dirs, state) do
+    extensions = Extensions.watchable_js(state.config[:plugins] || [])
+
+    for dir <- dirs,
+        path <- source_files(dir, extensions, state),
+        into: %{},
+        do: {path, source_digest(path)}
+  end
+
+  defp source_files(dir, extensions, state) do
+    case File.ls(dir) do
+      {:ok, names} ->
+        Enum.flat_map(names, fn name ->
+          path = Path.join(dir, name)
+
+          cond do
+            ignored_path?(path, state) -> []
+            File.dir?(path) -> source_files(path, extensions, state)
+            Path.extname(path) in extensions -> [path]
+            true -> []
+          end
+        end)
+
+      {:error, _reason} ->
+        []
+    end
   end
 
   defp schedule_rebuild(state, path) do

@@ -8,8 +8,9 @@ defmodule Mix.Tasks.Volt.Js.Format do
 
       mix volt.js.format
 
-  Reads options from `config :volt, :format`. Falls back to `.oxfmtrc.json`.
-  File discovery uses `config :volt, sources:` and `ignore:`.
+  Reads options from the `:volt` key of `.formatter.exs`. Falls back to `.oxfmtrc.json`.
+  File discovery uses `config :volt, sources:` and `ignore:`, which `:root`,
+  `:sources`, and `:ignore` under the same `:volt` key override.
   No Node.js required.
   """
 

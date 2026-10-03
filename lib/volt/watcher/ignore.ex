@@ -10,9 +10,13 @@ defmodule Volt.Watcher.Ignore do
   ]
 
   @spec compile([String.t()], [String.t()]) :: [GlobEx.t()]
-  def compile(patterns, roots), do: compile_patterns(@default_patterns ++ patterns, roots)
+  def compile(patterns, roots),
+    do: compile_patterns(@default_patterns, roots) ++ compile_explicit(patterns, roots)
 
-  def compile_explicit(patterns, roots), do: compile_patterns(patterns, roots)
+  # Configured patterns also resolve from the project directory, so that
+  # `_build/**` matches a watch root that itself lives inside `_build`.
+  def compile_explicit(patterns, roots),
+    do: compile_patterns(patterns, Enum.uniq(roots ++ [File.cwd!()]))
 
   defp compile_patterns(patterns, roots) do
     patterns

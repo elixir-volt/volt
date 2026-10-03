@@ -17,8 +17,8 @@ if Code.ensure_loaded?(Igniter) do
     2. Remove `config :esbuild` and `config :tailwind` blocks
     3. Update `assets.setup`, `assets.build`, and `assets.deploy` aliases
     4. Add Volt build config to `config/config.exs`
-    5. Add format and lint config to `config/config.exs`
-    6. Add `Volt.Formatter` plugin to `.formatter.exs`
+    5. Add lint config to `config/config.exs`
+    6. Add `Volt.Formatter` plugin and formatter options to `.formatter.exs`
     7. Add `Volt.DevServer` plug to your endpoint
     8. Configure the automatic Volt watcher in `config/dev.exs`
     9. Wire Volt client types into TypeScript configuration
@@ -44,6 +44,7 @@ if Code.ensure_loaded?(Igniter) do
     alias Igniter.Project.Config, as: ProjectConfig
     alias Igniter.Project.Deps, as: ProjectDeps
     alias Igniter.Project.Formatter, as: ProjectFormatter
+    alias Sourceror.Zipper
     alias Volt.Paths
     alias Igniter.Project.TaskAliases
 
@@ -66,9 +67,9 @@ if Code.ensure_loaded?(Igniter) do
       |> remove_old_watchers(app_name, endpoint)
       |> update_aliases()
       |> add_volt_config()
-      |> add_format_config()
       |> add_lint_config()
       |> add_formatter_plugin()
+      |> add_format_config()
       |> add_typescript_config()
       |> add_dev_config(app_name, endpoint)
       |> add_dev_server_plug()
@@ -235,19 +236,27 @@ if Code.ensure_loaded?(Igniter) do
           opts
         )
 
-      code =
-        format_kw
-        |> Enum.map(fn {key, value} -> [to_string(key), ": ", inspect(value)] end)
-        |> Enum.intersperse(",\n  ")
-        |> IO.iodata_to_binary()
+      # Runs after `add_formatter_plugin/1`, which creates `.formatter.exs`.
+      Igniter.update_elixir_file(igniter, ".formatter.exs", fn zipper ->
+        zipper
+        |> Zipper.down()
+        |> Zipper.rightmost()
+        |> CodeKeyword.put_in_keyword([:volt], format_kw, &{:ok, &1})
+        |> case do
+          {:ok, zipper} ->
+            {:ok, zipper}
 
-      ProjectConfig.configure(
-        igniter,
-        "config.exs",
-        :volt,
-        [:format],
-        {:code, Sourceror.parse_string!("[\n  #{code}\n]")}
-      )
+          _ ->
+            {:warning,
+             """
+             Could not add Volt formatter options to `.formatter.exs`.
+
+             Please add them manually, i.e
+
+                 volt: #{inspect(format_kw)}
+             """}
+        end
+      end)
     end
 
     defp add_lint_config(igniter) do

@@ -29,11 +29,7 @@ defmodule Volt.JS.DiscoveryTest do
   end
 
   test "discovers tool-specific source sets", %{tmp_dir: tmp_dir} do
-    Application.put_env(:volt, :format,
-      root: tmp_dir,
-      sources: ["format/**/*.ts"],
-      ignore: []
-    )
+    write_formatter!(tmp_dir, volt: [root: tmp_dir, sources: ["format/**/*.ts"], ignore: []])
 
     Application.put_env(:volt, :lint,
       root: tmp_dir,
@@ -41,11 +37,13 @@ defmodule Volt.JS.DiscoveryTest do
       ignore: []
     )
 
-    assert Discovery.format_files() == [Path.join(tmp_dir, "format/source.ts")]
-    assert Discovery.files(tool: :lint) == [Path.join(tmp_dir, "lint/source.ts")]
+    File.cd!(tmp_dir, fn ->
+      assert Discovery.format_files() == [Path.join(tmp_dir, "format/source.ts")]
+      assert Discovery.files(tool: :lint) == [Path.join(tmp_dir, "lint/source.ts")]
+    end)
   end
 
-  test "a bundle format on the same key holds no discovery options", %{tmp_dir: tmp_dir} do
+  test "formatting uses the build source set without .formatter.exs options", %{tmp_dir: tmp_dir} do
     Application.put_env(:volt, :format, :esm)
     Application.put_env(:volt, :root, tmp_dir)
     Application.put_env(:volt, :sources, ["format/**/*.ts"])
@@ -57,8 +55,14 @@ defmodule Volt.JS.DiscoveryTest do
       ignore: []
     )
 
-    assert Discovery.format_files() == [Path.join(tmp_dir, "format/source.ts")]
-    assert Discovery.files(tool: :lint) == [Path.join(tmp_dir, "lint/source.ts")]
+    File.cd!(tmp_dir, fn ->
+      assert Discovery.format_files() == [Path.join(tmp_dir, "format/source.ts")]
+      assert Discovery.files(tool: :lint) == [Path.join(tmp_dir, "lint/source.ts")]
+    end)
+  end
+
+  defp write_formatter!(dir, opts) do
+    File.write!(Path.join(dir, ".formatter.exs"), inspect(opts))
   end
 
   defp restore_env(key, :error), do: Application.delete_env(:volt, key)

@@ -176,6 +176,8 @@ Exclude packages the host page already provides:
 config :volt, external: ~w(phoenix phoenix_html phoenix_live_view)
 ```
 
+IIFE output reads externals from globals; `:esm` and `:cjs` output keeps them as imports. See [Production Builds](../deployment/production-builds.md#external-modules).
+
 ## Source Maps
 
 Production builds write `.map` files by default. Use `sourcemap: :hidden` to write maps without the URL comment (for Sentry, Datadog, etc.), or `sourcemap: false` to skip.

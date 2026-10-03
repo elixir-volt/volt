@@ -69,6 +69,23 @@ defmodule Volt.JS.TSConfigTest do
       paths = Volt.JS.TSConfig.read_paths(tsconfig_path())
       assert paths["~utils"] =~ "src/utils"
     end
+
+    test "skips mappings that only point at declaration files" do
+      write_tsconfig!(%{
+        "compilerOptions" => %{
+          "paths" => %{
+            "topbar" => ["./types/topbar.d.ts"],
+            "phoenix" => ["./types/phoenix.d.ts", "./vendor/phoenix.js"],
+            "@/*" => ["./src/*"]
+          }
+        }
+      })
+
+      paths = Volt.JS.TSConfig.read_paths(tsconfig_path())
+      refute Map.has_key?(paths, "topbar")
+      assert paths["phoenix"] =~ "vendor/phoenix.js"
+      assert paths["@"] =~ "src"
+    end
   end
 
   defp tsconfig_path, do: Path.join(@fixture_dir, "tsconfig.json")

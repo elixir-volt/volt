@@ -4,6 +4,7 @@ defmodule Volt.Builder.OutputContext do
   defstruct plugins: [],
             external_set: MapSet.new(),
             external_globals: %{},
+            external_imports: MapSet.new(),
             workers: %{},
             worker_results: %{}
 end

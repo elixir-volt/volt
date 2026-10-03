@@ -442,6 +442,70 @@ defmodule Volt.Builder.ResolutionTest do
       assert js =~ "ref("
     end
 
+    test "keeps external imports in ES module output" do
+      File.write!(Path.join(@fixture_dir, "src/external_app.js"), """
+      import { Socket } from 'phoenix'
+      import 'phoenix/side-effect'
+      console.log(new Socket('/socket'))
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/external_app.js"),
+          outdir: @outdir,
+          format: :esm,
+          minify: false,
+          sourcemap: false,
+          external: %{"phoenix" => "Phoenix"}
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ ~r/import \{ Socket \} from "phoenix"/
+      assert js =~ ~s(import "phoenix/side-effect")
+      refute js =~ "= Phoenix"
+    end
+
+    test "requires external imports in CommonJS output" do
+      File.write!(Path.join(@fixture_dir, "src/external_cjs_app.js"), """
+      import { Socket } from 'phoenix'
+      console.log(new Socket('/socket'))
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/external_cjs_app.js"),
+          outdir: @outdir,
+          format: :cjs,
+          minify: false,
+          sourcemap: false,
+          external: ["phoenix"]
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ ~s[require("phoenix")]
+      refute js =~ "= Phoenix"
+    end
+
+    test "reads external imports from globals in IIFE output" do
+      File.write!(Path.join(@fixture_dir, "src/external_iife_app.js"), """
+      import { Socket } from 'phoenix'
+      console.log(new Socket('/socket'))
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/external_iife_app.js"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          external: %{"phoenix" => "PhoenixGlobal"}
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "const { Socket } = PhoenixGlobal;"
+      refute js =~ ~s(from "phoenix")
+    end
+
     test "resolves .js imports to .ts files when .js does not exist" do
       File.write!(Path.join(@fixture_dir, "src/utils.ts"), """
       export const helper = 'ts-resolved'

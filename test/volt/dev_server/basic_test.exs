@@ -169,8 +169,15 @@ defmodule Volt.DevServer.BasicTest do
 
       assert vendor_conn.status == 200
 
-      assert [[_, chunk_path]] =
-               Regex.scan(~r{from "\./(chunks/[^"']+\.js)"}, vendor_conn.resp_body)
+      # Shared chunks carry the importer's browser hash, so a module reached from
+      # both application code and another pre-bundle stays a single instance.
+      [_, browser_hash] = String.split(vendor_url, "?v=")
+
+      assert [[_, chunk_path, ^browser_hash]] =
+               Regex.scan(
+                 ~r{from "\./(chunks/[^"'?]+\.js)\?v=([a-f0-9]+)"},
+                 vendor_conn.resp_body
+               )
 
       chunk_conn =
         call_dev_server("/@vendor/#{chunk_path}",

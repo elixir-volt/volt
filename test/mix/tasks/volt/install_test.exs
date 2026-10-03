@@ -110,6 +110,16 @@ defmodule Mix.Tasks.Volt.InstallTest do
 
       refute config_content =~ "config :esbuild"
       refute config_content =~ "config :tailwind"
+      refute config_content =~ "semi:"
+
+      {formatter_opts, _binding} =
+        igniter.rewrite.sources[".formatter.exs"]
+        |> Rewrite.Source.get(:content)
+        |> Code.eval_string()
+
+      assert Volt.Formatter in formatter_opts[:plugins]
+      assert formatter_opts[:volt][:semi] == false
+      assert formatter_opts[:volt][:trailing_comma] == :none
 
       dev_content =
         igniter.rewrite.sources["config/dev.exs"]

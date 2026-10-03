@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- Formatter options moved from `config :volt, :format` to the `:volt` key of `.formatter.exs`, where `mix format` plugins keep their options. `config :volt, :format` now only holds the build output format (`:iife`, `:esm`, or `:cjs`), so both can be set. A keyword list under `config :volt, :format` raises an `ArgumentError` with the options to move:
+
+      # .formatter.exs
+      [
+        plugins: [Volt.Formatter],
+        volt: [semi: false, single_quote: true]
+      ]
+
+  The formatting-only `:root`, `:sources`, and `:ignore` overrides for `mix volt.js.format` and `mix volt.js.check` move to the same key. `.oxfmtrc.json` and `.prettierrc.json` are still read when there is no `:volt` key. `mix igniter.install volt` writes the options to `.formatter.exs`.
+- External modules stay as imports in `:esm` and `:cjs` output, as in Rollup, Rolldown, esbuild and Bun. With `format: :esm, external: ["phoenix"]`, `import { Socket } from "phoenix"` used to become `const { Socket } = Phoenix;`; it is now left for the browser or host to resolve, for example through an import map. `:cjs` output uses `require("phoenix")`. IIFE output, the default, still reads externals from globals. The global names in `external: %{"phoenix" => "Phoenix"}` apply to IIFE output only. ESM builds that relied on page globals need an import map or `format: :iife`.
+- `Volt.JS.Format.load_config/1` takes the `.formatter.exs` options instead of reading the application environment.
+
+### Added
+
+- The dev server converts local CommonJS and UMD files, such as Phoenix's vendored `topbar.js`, to ES modules, so `import topbar from "../vendor/topbar"` works in development as it does in production builds.
+- Relative `watch_ignored` patterns also resolve from the project directory, so `_build/**` matches a watched directory inside `_build`.
+
+### Fixed
+
+- Stop the dev server reloading pages in a loop when a watched file is rewritten with identical content, as Phoenix LiveView does for colocated hooks on every code reload. The watcher now compares file contents before rebuilding.
+- Load a single instance of each pre-bundled dependency in development. Pre-bundles imported their siblings and shared chunks without the `?v=` hash that application modules use, so browsers loaded packages such as Vue twice and component libraries built on them failed to render.
+- Skip `tsconfig.json` path mappings that only point at declaration files. A types-only mapping such as `"topbar": ["./types/topbar.d.ts"]` became a bundler alias and bundled the `.d.ts` file in place of the package.
+
 ## 0.19.4 - 2026-10-03
 
 ### Compatibility
