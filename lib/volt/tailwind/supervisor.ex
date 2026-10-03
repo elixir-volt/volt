@@ -6,9 +6,15 @@ defmodule Volt.Tailwind.Supervisor do
 
   @doc "Release a compiler context without affecting other registered roots."
   def release(key) do
-    case Registry.lookup(@registry, key) do
-      [] -> :ok
-      [{pid, _}] -> DynamicSupervisor.terminate_child(@supervisor, pid)
+    # A watcher can terminate after these have stopped during application
+    # shutdown, when there is nothing left to release.
+    if Process.whereis(@registry) && Process.whereis(@supervisor) do
+      case Registry.lookup(@registry, key) do
+        [] -> :ok
+        [{pid, _}] -> DynamicSupervisor.terminate_child(@supervisor, pid)
+      end
+    else
+      :ok
     end
   end
 
