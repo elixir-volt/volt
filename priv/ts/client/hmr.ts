@@ -6,7 +6,7 @@ import {
   type HotCallback
 } from './hot'
 import { clearErrorOverlay, renderErrorOverlay, type VoltError } from './overlay'
-import { revalidateDocument } from './document'
+import { applyDocument, pageIdentity, revalidateDocument, type PushedDocument } from './document'
 import { pageReload } from './reload'
 import { removeStyle, updateStyle, updateStyles } from './styles'
 
@@ -41,6 +41,9 @@ function connect() {
 
     connected = true
     console.log('[Volt] HMR connected')
+
+    const identity = pageIdentity()
+    if (identity) ws?.send(JSON.stringify({ type: 'page', payload: identity }))
 
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
@@ -126,7 +129,14 @@ async function handleUpdate(payload: {
   }
 
   if (changes.length === 1 && changes[0] === 'document') {
-    await revalidateDocument()
+    const pushed = payload as Partial<PushedDocument>
+
+    if (typeof pushed.html === 'string' && typeof pushed.etag === 'string') {
+      applyDocument({ html: pushed.html, etag: pushed.etag, owned: pushed.owned ?? [] })
+    } else {
+      await revalidateDocument()
+    }
+
     return
   }
 

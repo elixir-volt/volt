@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `plug Volt.DevServer, document: {module, function, args}` lets the dev server render pages itself. With `:morph`, each open page's websocket process keeps the HTML the server last rendered for it, renders the page again when a template or content file changes, and compares the two renders. A page is then sent only what applies to it: nothing, a reload, or the new HTML to patch. Pages no longer request themselves to find out.
+- When the server changed the attributes of an element matched by `morph: [preserve: selector]`, such as the props of a mounted component, the client sets them and dispatches a cancelable `volt:element-update` event on the element instead of reloading. The page reloads only if nothing handles the event.
+
 ## 0.20.0 - 2026-10-03
 
 ### Breaking changes

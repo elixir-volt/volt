@@ -49,4 +49,77 @@ defmodule Volt.HMR.Document do
   @doc "Return whether the request already holds the HTML that `etag` identifies."
   @spec fresh?(Plug.Conn.t(), String.t()) :: boolean()
   def fresh?(conn, etag), do: etag in Plug.Conn.get_req_header(conn, "if-none-match")
+
+  @typedoc """
+  A preserved element whose server-rendered attributes changed: its position
+  among the elements matching the preserve selector, and its new attributes.
+  """
+  @type owned_change :: %{index: non_neg_integer(), attributes: %{String.t() => String.t()}}
+
+  @doc """
+  Decide how a page gets from one server render to the next.
+
+  Both arguments are HTML the server rendered, so the comparison sees only what
+  the server changed, never what scripts did to the page since.
+
+  Returns `:reload` when patching cannot apply the change: the scripts the page
+  runs or its stylesheets differ, or elements matching `preserve` were added or
+  removed. Otherwise returns `{:patch, owned}`, where `owned` lists the
+  preserved elements whose attributes changed. Their owner, such as a mounted
+  component, is told and re-renders; the rest of the page is patched.
+  """
+  @spec changes(String.t(), String.t(), String.t() | nil) :: :reload | {:patch, [owned_change()]}
+  def changes(previous, next, preserve) do
+    previous = Floki.parse_document!(previous)
+    next = Floki.parse_document!(next)
+
+    cond do
+      scripts(previous) != scripts(next) -> :reload
+      stylesheets(previous) != stylesheets(next) -> :reload
+      true -> owned_changes(preserved(previous, preserve), preserved(next, preserve))
+    end
+  end
+
+  # Scripts the browser runs. Data blocks such as JSON are content and are patched.
+  defp scripts(document) do
+    for {"script", attributes, children} <- Floki.find(document, "script"),
+        type = attribute(attributes, "type"),
+        type in ["", "module", "text/javascript"],
+        do: {type, attribute(attributes, "src"), Floki.raw_html(children)}
+  end
+
+  defp stylesheets(document) do
+    links =
+      for {"link", attributes, _children} <- Floki.find(document, "link[rel=stylesheet]"),
+          do: attribute(attributes, "href")
+
+    styles = for {"style", _attributes, children} <- Floki.find(document, "style"), do: children
+    {links, styles}
+  end
+
+  defp preserved(_document, preserve) when preserve in [nil, ""], do: []
+
+  defp preserved(document, preserve) do
+    for {_tag, attributes, _children} <- Floki.find(document, preserve), do: Map.new(attributes)
+  end
+
+  defp owned_changes(previous, next) do
+    if length(previous) == length(next) do
+      owned =
+        for {{before, now}, index} <- Enum.with_index(Enum.zip(previous, next)),
+            before != now,
+            do: %{index: index, attributes: now}
+
+      {:patch, owned}
+    else
+      :reload
+    end
+  end
+
+  defp attribute(attributes, name) do
+    case List.keyfind(attributes, name, 0) do
+      {^name, value} -> value
+      nil -> ""
+    end
+  end
 end

@@ -19,6 +19,11 @@ defmodule Volt.DevServer do
     * `:target` — JS downlevel target (e.g. `:es2020`)
     * `:import_source` — JSX import source (e.g. `"vue"`)
     * `:vapor` — use Vue Vapor mode (default: `false`)
+    * `:document` — a function, or `{module, function, args}`, called with a
+      page's path, followed by `args`, to render the HTML a request for it is
+      answered with. With
+      it and the server's `:morph` setting, Volt compares renders for each open
+      page itself; see the HMR guide.
     * `:watch` — start the supervised file watcher on the first request (default: `true`)
 
   ## Example
@@ -124,6 +129,7 @@ defmodule Volt.DevServer do
         Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix),
       hmr_timeout: server_config.hmr_timeout,
       morph: server_config.morph,
+      document: Keyword.get(opts, :document),
       stylesheet_url: tailwind_root && tailwind_root.dev_url,
       stylesheet_source: tailwind_root && tailwind_root.css,
       session_supervisor: Keyword.get(opts, :session_supervisor),
@@ -281,7 +287,9 @@ defmodule Volt.DevServer do
 
   defp do_call(%Conn{request_path: "/@volt/ws"} = conn, config) do
     conn
-    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [session: config.session],
+    |> WebSockAdapter.upgrade(
+      Volt.HMR.Socket,
+      [session: config.session, document: config.document, morph: config.morph],
       timeout: config.hmr_timeout
     )
     |> Conn.halt()

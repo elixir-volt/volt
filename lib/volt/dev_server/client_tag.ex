@@ -34,13 +34,21 @@ defmodule Volt.DevServer.ClientTag do
     if Document.fresh?(conn, etag) do
       %{conn | status: 304, resp_body: ""}
     else
-      attributes = attribute(Document.attribute(), etag) <> morph_attribute(morph)
       conn = Conn.put_resp_header(conn, "etag", etag)
-      %{conn | resp_body: put_client(html, attributes)}
+      %{conn | resp_body: tag(html, etag, morph)}
     end
   end
 
   defp inject_client(conn, html, _morph), do: %{conn | resp_body: put_client(html, "")}
+
+  @doc """
+  Add the dev client to a successful page, with the page's entity tag and the
+  server's `:morph` setting, as a response sent through the dev server has them.
+  """
+  @spec tag(String.t(), String.t(), boolean() | keyword()) :: String.t()
+  def tag(html, etag, morph) do
+    put_client(html, attribute(Document.attribute(), etag) <> morph_attribute(morph))
+  end
 
   # A page may already load the client, as pages rendered by a site generator
   # do. Its tag gets the attributes; otherwise the client is added to the head.
