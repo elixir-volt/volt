@@ -19,7 +19,7 @@ defmodule Volt.JS.Vendor do
 
   defp cache_dir do
     build_path = System.get_env("MIX_BUILD_PATH") || "_build"
-    Path.join(build_path, "volt/vendor")
+    Volt.Paths.expand(Path.join(build_path, "volt/vendor"))
   end
 
   defp context_dir(module_dirs, plugins, module_types) do
@@ -537,7 +537,7 @@ defmodule Volt.JS.Vendor do
   end
 
   defp project_root([module_dir | _]), do: Path.dirname(module_dir)
-  defp project_root([]), do: File.cwd!()
+  defp project_root([]), do: Volt.Paths.root()
 
   defp ensure_cache_dir(module_dirs, plugins, module_types) do
     File.mkdir_p!(context_dir(module_dirs, plugins, module_types))
@@ -653,12 +653,12 @@ defmodule Volt.JS.Vendor do
     |> Enum.flat_map(&lockfiles_in/1)
   end
 
-  defp lockfile_roots([]), do: [File.cwd!()]
+  defp lockfile_roots([]), do: [Volt.Paths.root()]
 
   defp lockfile_roots(module_dirs) do
     module_dirs
     |> Enum.map(&Path.dirname/1)
-    |> Kernel.++([File.cwd!()])
+    |> Kernel.++([Volt.Paths.root()])
     |> Enum.uniq()
   end
 

@@ -4,6 +4,7 @@ defmodule Volt.Application do
 
   @impl true
   def start(_type, _args) do
+    Volt.Paths.capture_root()
     Volt.Cache.create_table()
     Volt.Dev.Assets.create_table()
     Volt.HMR.ImportGraph.create_table()

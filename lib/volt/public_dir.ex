@@ -16,7 +16,7 @@ defmodule Volt.PublicDir do
   @spec resolve(String.t() | false | nil) :: String.t() | nil
   def resolve(false), do: nil
   def resolve(nil), do: nil
-  def resolve(path), do: Path.expand(path)
+  def resolve(path), do: Volt.Paths.expand(path)
 
   @doc """
   Copies all files from `public_dir` into `static_root`.

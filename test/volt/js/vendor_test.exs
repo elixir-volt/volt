@@ -73,6 +73,33 @@ defmodule Volt.JS.VendorTest do
                "Pre-bundled"
     end
 
+    @tag :tmp_dir
+    test "writes the cache under the project root while the working directory is elsewhere",
+         %{tmp_dir: elsewhere} do
+      # Mix changes the VM's working directory while it compiles a dependency,
+      # as Phoenix's code reloader does during a request.
+      {:ok, vendor_map} =
+        File.cd!(elsewhere, fn ->
+          Volt.JS.Vendor.prebundle(
+            root: Path.join(@fixture_dir, "src"),
+            node_modules: @node_modules,
+            force: true
+          )
+        end)
+
+      assert File.ls!(elsewhere) == []
+
+      for {_specifier, path} <- vendor_map do
+        assert String.starts_with?(path, Volt.Paths.expand("_build"))
+        assert File.regular?(path)
+      end
+
+      assert {:ok, _code} =
+               File.cd!(elsewhere, fn ->
+                 Volt.JS.Vendor.read("fake-lib", node_modules: @node_modules)
+               end)
+    end
+
     test "caches bundled files on disk" do
       Volt.JS.Vendor.prebundle(
         root: Path.join(@fixture_dir, "src"),
