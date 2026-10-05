@@ -12,6 +12,46 @@ defmodule Volt.Plugin.VueTest do
     assert result.code =~ "export default { render }"
   end
 
+  describe "embedded_modules/3" do
+    defp script_modules(source) do
+      "Example.vue"
+      |> Volt.Plugin.Vue.embedded_modules(source, [])
+      |> Volt.Plugin.EmbeddedModule.normalize_all()
+      |> Enum.filter(&(&1.type == :script))
+      |> Enum.map(&{&1.extension, String.trim(&1.source)})
+    end
+
+    test "leaves out script blocks that are not JavaScript" do
+      source = """
+      <script setup lang="ts">
+      const n: number = 1
+      </script>
+
+      <script lang="elixir">
+      def total(%{items: items}), do: length(items)
+      </script>
+
+      <template><p>{{ n }}</p></template>
+      """
+
+      assert script_modules(source) == [{".ts", "const n: number = 1"}]
+    end
+
+    test "names script blocks by their JavaScript dialect" do
+      for {lang, extension} <- [
+            {"", ".js"},
+            {~s( lang="js"), ".js"},
+            {~s( lang="jsx"), ".jsx"},
+            {~s( lang="ts"), ".ts"},
+            {~s( lang="tsx"), ".tsx"}
+          ] do
+        source = "<script#{lang}>export default {}</script><template><p /></template>"
+
+        assert script_modules(source) == [{extension, "export default {}"}]
+      end
+    end
+  end
+
   test "script-bearing scoped components receive their CSS scope on the default export" do
     for script <- [
           "<script setup>defineProps(['label'])</script>",

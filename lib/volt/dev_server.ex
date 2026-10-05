@@ -37,7 +37,7 @@ defmodule Volt.DevServer do
   require Logger
 
   alias Plug.Conn
-  alias Volt.{Config, URL}
+  alias Volt.{Config, Paths, URL}
 
   @support_modules {:volt, "ts"}
   @runtime_rewrites %{"../hmr" => "/@volt/client.js"}
@@ -52,7 +52,7 @@ defmodule Volt.DevServer do
     server_config = Config.server(profile, build_opts)
 
     root = Keyword.get(opts, :root) || to_string(config.root)
-    expanded_root = Path.expand(root)
+    expanded_root = Paths.expand(root)
 
     node_modules = NPM.Resolution.PackageResolver.find_node_modules(expanded_root)
     plugins = config.plugins
@@ -63,7 +63,19 @@ defmodule Volt.DevServer do
       if Volt.Config.Tailwind.enabled?(tailwind_config),
         do: Volt.Config.Tailwind.new(tailwind_config)
 
-    prebundle_vendor(expanded_root, node_modules, plugins, config.resolve_dirs, module_types)
+    # A watcher says when sources change, so the scan can wait for that.
+    watched? = server_config.watch or not is_nil(Keyword.get(opts, :session_supervisor))
+
+    prebundle_vendor(
+      [
+        root: expanded_root,
+        node_modules: node_modules,
+        plugins: plugins,
+        resolve_dirs: config.resolve_dirs,
+        module_types: module_types
+      ],
+      watched?
+    )
 
     session =
       if server_config.watch do
@@ -80,7 +92,7 @@ defmodule Volt.DevServer do
       if server_config.watch and is_nil(Keyword.get(opts, :session_supervisor)) do
         watch_dirs =
           if tailwind_root && server_config.watch_dirs == [] do
-            [Volt.Paths.lib()]
+            [Paths.lib()]
           else
             server_config.watch_dirs
           end
@@ -108,7 +120,11 @@ defmodule Volt.DevServer do
           resolve_dirs: config.resolve_dirs,
           module_types: module_types,
           define:
-            Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix)
+            Volt.Env.define(
+              mode: "development",
+              root: Paths.root(),
+              env_prefix: config.env_prefix
+            )
         ]
       end
 
@@ -126,7 +142,11 @@ defmodule Volt.DevServer do
       resolve_dirs: config.resolve_dirs,
       module_types: module_types,
       define:
-        Volt.Env.define(mode: "development", root: File.cwd!(), env_prefix: config.env_prefix),
+        Volt.Env.define(
+          mode: "development",
+          root: Paths.root(),
+          env_prefix: config.env_prefix
+        ),
       hmr_timeout: server_config.hmr_timeout,
       morph: server_config.morph,
       document: Keyword.get(opts, :document),
@@ -944,15 +964,10 @@ defmodule Volt.DevServer do
 
   # ── Vendor pre-bundling ───────────────────────────────────────────
 
-  defp prebundle_vendor(root, node_modules, plugins, resolve_dirs, module_types) do
-    Volt.JS.Vendor.prebundle(
-      root: root,
-      node_modules: node_modules,
-      plugins: plugins,
-      resolve_dirs: resolve_dirs,
-      module_types: module_types
-    )
-  end
+  defp prebundle_vendor(opts, true),
+    do: Volt.Dev.Prebundled.ensure(opts, fn -> Volt.JS.Vendor.prebundle(opts) end)
+
+  defp prebundle_vendor(opts, false), do: Volt.JS.Vendor.prebundle(opts)
 
   defp serve_vendor(specifier, config, browser_hash) do
     vendor_opts = vendor_opts(config)
@@ -1009,7 +1024,7 @@ defmodule Volt.DevServer do
   # any script in this response could run.
   defp send_compile_error(conn, path, errors, config) do
     Volt.HMR.error(path, errors, session: config.session)
-    message = "[Volt] Could not compile #{Path.relative_to_cwd(path)}"
+    message = "[Volt] Could not compile #{Path.relative_to(path, Paths.root())}"
 
     conn
     |> Conn.put_resp_content_type(Volt.MIME.javascript())

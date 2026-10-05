@@ -165,9 +165,12 @@ defmodule Volt.Plugin.Vue do
   defp scripts(source) do
     case Vize.parse_sfc(source) do
       {:ok, descriptor} ->
-        [descriptor.script, descriptor.script_setup]
-        |> Enum.reject(&is_nil/1)
-        |> Enum.map(fn block -> {script_extension(block[:lang]), block.content} end)
+        # A block in another language, such as `<script lang="elixir">`, belongs
+        # to other tooling and is not a JavaScript module.
+        for block <- [descriptor.script, descriptor.script_setup],
+            block != nil,
+            extension = script_extension(block[:lang]),
+            do: {extension, block.content}
 
       {:error, _} ->
         []
@@ -198,9 +201,11 @@ defmodule Volt.Plugin.Vue do
     end
   end
 
+  defp script_extension(lang) when lang in [nil, "js"], do: ".js"
+  defp script_extension("jsx"), do: ".jsx"
   defp script_extension("ts"), do: ".ts"
   defp script_extension("tsx"), do: ".tsx"
-  defp script_extension(_lang), do: ".js"
+  defp script_extension(_lang), do: nil
 
   defp style_extension(lang) when lang in [nil, "css"], do: ".css"
   defp style_extension(lang), do: ".#{lang}"

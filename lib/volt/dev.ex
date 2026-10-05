@@ -35,7 +35,7 @@ defmodule Volt.Dev do
   @doc "Start or reuse a managed watcher, rejecting conflicting configuration."
   def start(opts) do
     session = session_identity(opts)
-    root = opts |> Keyword.fetch!(:root) |> Path.expand()
+    root = opts |> Keyword.fetch!(:root) |> Volt.Paths.expand()
     key = {:session, session}
     opts = normalize_options(Keyword.put(opts, :session, session), root)
 
@@ -78,7 +78,8 @@ defmodule Volt.Dev do
   def session_identity(opts) do
     case Keyword.get(opts, :session, :default) do
       :default ->
-        {:managed, Keyword.get(opts, :id, :default), Path.expand(Keyword.fetch!(opts, :root))}
+        {:managed, Keyword.get(opts, :id, :default),
+         Volt.Paths.expand(Keyword.fetch!(opts, :root))}
 
       session ->
         session
@@ -139,8 +140,8 @@ defmodule Volt.Dev do
     |> Keyword.delete(:id)
     |> Keyword.put(:root, root)
     |> Keyword.put_new(:session, :default)
-    |> Keyword.update(:watch_dirs, [], &Enum.map(&1, fn path -> Path.expand(path) end))
-    |> Keyword.update(:reload_dirs, [], &Enum.map(&1, fn path -> Path.expand(path) end))
+    |> Keyword.update(:watch_dirs, [], &Enum.map(&1, fn path -> Volt.Paths.expand(path) end))
+    |> Keyword.update(:reload_dirs, [], &Enum.map(&1, fn path -> Volt.Paths.expand(path) end))
   end
 
   defp verify_configuration(supervisor, pid, opts) do

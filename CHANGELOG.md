@@ -2,11 +2,23 @@
 
 ## Unreleased
 
+### Compatibility
+
+- Require vize 0.17.1, which fixes three Vapor compiler bugs. Two can affect components compiled with `vapor: true`: static attribute values were decoded twice in Vapor templates, and default slot content beside a named `<template #name>` was dropped. Volt's use of vize is unchanged.
+
 ### Added
 
 - `plug Volt.DevServer, document: {module, function, args}` lets the dev server render pages itself. With `:morph`, each open page's websocket process keeps the HTML the server last rendered for it, renders the page again when a template or content file changes, and compares the two renders. A page is then sent only what applies to it: nothing, a reload, or the new HTML to patch. Pages no longer request themselves to find out.
 - With `:document`, the attributes the server changed on `<html>` and `<body>` and the metadata and links it changed in `<head>` are applied too. Attributes that scripts set on those elements, such as a theme, are left alone, because the comparison only sees what the server rendered.
 - When the server changed the attributes of an element matched by `morph: [preserve: selector]`, such as the props of a mounted component, the client sets them and dispatches a cancelable `volt:element-update` event on the element instead of reloading. The page reloads only if nothing handles the event.
+
+### Fixed
+
+- Leave Vue `<script>` blocks in other languages, such as `<script lang="elixir">`, out of the script modules that `mix volt.js.check` lints and type-checks. Every block was treated as JavaScript, so such a block was reported as TypeScript syntax errors. `lang="jsx"` blocks are now checked as JSX ([#57](https://github.com/elixir-volt/volt/issues/57)).
+- Serve the `@oxc-project/runtime` helpers that the dev server's own output imports. With a `:target` below ES2022, a class with fields compiles to an import of such a helper, which `/@vendor/` answered with 404 unless the npm package was installed, so the importing module and everything importing it failed to load with no error shown. The helpers now come from the bundler, as in production builds ([#58](https://github.com/elixir-volt/volt/issues/58)).
+- Type-check the scripts of `.vue` and `.svelte` files with the project's `tsconfig.json`. `mix volt.js.check --type-aware --type-check` checked them in a project of their own with default options, so imports through `paths` aliases and of other components failed with TS2307 even with a `declare module "*.vue"` declaration ([#60](https://github.com/elixir-volt/volt/issues/60)).
+- Stop the dev server scanning sources and pre-bundling packages on every request. Phoenix initializes plugs per request in development, and one import that resolves to no package, such as one the page provides, made every request bundle all packages again, with concurrent requests replacing cache files others were reading. Pre-bundling now runs once and again after a source file changes, requests take turns, and unresolvable imports no longer count as stale ([#59](https://github.com/elixir-volt/volt/issues/59)).
+- Resolve the dev server's paths from the directory Volt started in, not the current working directory. `Phoenix.CodeReloader` changes the VM's working directory while it compiles a reloadable path dependency, so a vendor request served at the same time wrote its cache into the dependency's `_build`, or failed with `could not write to file`. The vendor cache, asset root, watched directories and Tailwind input are affected ([#56](https://github.com/elixir-volt/volt/issues/56)).
 
 ## 0.20.0 - 2026-10-03
 

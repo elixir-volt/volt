@@ -29,7 +29,7 @@ defmodule Volt.Config.Tailwind do
     name = overrides[:name] || config[:name] || entry_name(css)
 
     %__MODULE__{
-      css: if(css, do: Path.expand(css)),
+      css: if(css, do: Volt.Paths.expand(css)),
       name: name,
       sources: overrides[:sources] || config[:sources] || [],
       dev_url: overrides[:dev_url] || config[:dev_url] || default_dev_url(name)

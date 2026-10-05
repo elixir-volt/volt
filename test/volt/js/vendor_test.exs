@@ -73,6 +73,73 @@ defmodule Volt.JS.VendorTest do
                "Pre-bundled"
     end
 
+    @tag :tmp_dir
+    test "writes the cache under the project root while the working directory is elsewhere",
+         %{tmp_dir: elsewhere} do
+      # Mix changes the VM's working directory while it compiles a dependency,
+      # as Phoenix's code reloader does during a request.
+      {:ok, vendor_map} =
+        File.cd!(elsewhere, fn ->
+          Volt.JS.Vendor.prebundle(
+            root: Path.join(@fixture_dir, "src"),
+            node_modules: @node_modules,
+            force: true
+          )
+        end)
+
+      assert File.ls!(elsewhere) == []
+
+      for {_specifier, path} <- vendor_map do
+        assert String.starts_with?(path, Volt.Paths.expand("_build"))
+        assert File.regular?(path)
+      end
+
+      assert {:ok, _code} =
+               File.cd!(elsewhere, fn ->
+                 Volt.JS.Vendor.read("fake-lib", node_modules: @node_modules)
+               end)
+    end
+
+    test "an import that resolves to no package does not bundle the others again" do
+      File.write!(
+        Path.join(@fixture_dir, "src/provided.ts"),
+        "import { value } from 'fake-lib'\nimport host from 'provided-by-the-page'\nconsole.log(value, host)"
+      )
+
+      on_exit(fn -> File.rm(Path.join(@fixture_dir, "src/provided.ts")) end)
+      opts = [root: Path.join(@fixture_dir, "src"), node_modules: @node_modules]
+
+      {:ok, vendor_map} = Volt.JS.Vendor.prebundle(Keyword.put(opts, :force, true))
+      assert Map.has_key?(vendor_map, "fake-lib")
+      refute Map.has_key?(vendor_map, "provided-by-the-page")
+
+      refute ExUnit.CaptureLog.capture_log(fn -> Volt.JS.Vendor.prebundle(opts) end) =~
+               "Pre-bundled"
+    end
+
+    test "is not repeated on every request until the sources are said to have changed" do
+      opts = [root: Path.join(@fixture_dir, "src"), node_modules: @node_modules]
+
+      prebundle = fn ->
+        Volt.Dev.Prebundled.ensure(opts, fn -> Volt.JS.Vendor.prebundle(opts) end)
+      end
+
+      Volt.Dev.Prebundled.forget()
+      on_exit(&Volt.Dev.Prebundled.forget/0)
+
+      :ok = prebundle.()
+      [cached] = Path.wildcard("_build/volt/vendor/*/fake-lib.js")
+      File.rm!(cached)
+
+      # Asked again, as on every request: nothing is scanned or bundled.
+      :ok = prebundle.()
+      refute File.exists?(cached)
+
+      Volt.Dev.Prebundled.forget()
+      :ok = prebundle.()
+      assert File.exists?(cached)
+    end
+
     test "caches bundled files on disk" do
       Volt.JS.Vendor.prebundle(
         root: Path.join(@fixture_dir, "src"),

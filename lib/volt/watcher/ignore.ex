@@ -16,7 +16,7 @@ defmodule Volt.Watcher.Ignore do
   # Configured patterns also resolve from the project directory, so that
   # `_build/**` matches a watch root that itself lives inside `_build`.
   def compile_explicit(patterns, roots),
-    do: compile_patterns(patterns, Enum.uniq([File.cwd!() | roots]))
+    do: compile_patterns(patterns, Enum.uniq([Volt.Paths.root() | roots]))
 
   defp compile_patterns(patterns, roots) do
     patterns
