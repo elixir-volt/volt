@@ -102,6 +102,7 @@ logic = [
   "Volt.JS.Check",
   "Volt.JS.CommonJS",
   "Volt.JS.Lint.Config",
+  "Volt.JS.Lint.TSConfigOverlay",
   "Volt.JS.Extensions",
   "Volt.JS.Format",
   "Volt.JS.Discovery",

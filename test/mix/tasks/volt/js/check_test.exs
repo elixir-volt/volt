@@ -208,6 +208,64 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
              "svelteValue"
   end
 
+  @tsgolint Path.expand("node_modules/.bin/tsgolint")
+
+  # Runs the real tsgolint, which CI and `npm ci` install.
+  @tag skip: not File.exists?(@tsgolint)
+  test "component scripts are type-checked with the project's tsconfig" do
+    write = fn path, content ->
+      path = Path.join(@tmp_dir, path)
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path, content)
+    end
+
+    write.("tsconfig.json", """
+    {
+      "compilerOptions": {
+        "strict": true,
+        "noEmit": true,
+        "moduleResolution": "Bundler",
+        "paths": { "@/*": ["./assets/js/*"] }
+      },
+      "include": ["assets/js/**/*.ts", "lib/**/*.ts"]
+    }
+    """)
+
+    write.("assets/js/ui/variants.ts", "export const button = (n: number) => n\n")
+    write.("assets/js/ui/Button.vue", "<template><button /></template>\n")
+
+    write.("assets/js/vue.d.ts", """
+    declare module "*.vue" {
+      const component: unknown
+      export default component
+    }
+    """)
+
+    write.("lib/app_web/Tally.vue", """
+    <script setup lang="ts">
+    import Button from "@/ui/Button.vue"
+    import { button } from "@/ui/variants"
+    const probe: (n: number) => void = (n: string) => n
+    console.log(Button, button, probe)
+    </script>
+    <template><p /></template>
+    """)
+
+    Application.put_env(:volt, :sources, ["lib/**/*.vue"])
+    Application.put_env(:volt, :lint, tsgolint: @tsgolint, rules: %{})
+
+    output =
+      capture_io(:stderr, fn ->
+        catch_exit(Mix.Tasks.Volt.Js.Check.run(["--type-aware", "--type-check"]))
+      end)
+
+    # The script is type-checked, and with the project's options: the path
+    # alias and the `*.vue` declaration resolve.
+    assert output =~ "TS2322"
+    refute output =~ "TS2307"
+    refute output =~ "Cannot find module"
+  end
+
   test "type-aware overrides batch by effective rules and use original SFC paths" do
     files = Enum.map(["app.ts", "Component.vue", "Widget.svelte"], &Path.join(@tmp_dir, &1))
     [app, vue, svelte] = files
