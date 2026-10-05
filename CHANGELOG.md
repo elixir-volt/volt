@@ -2,8 +2,6 @@
 
 ## Unreleased
 
-## Unreleased
-
 ### Compatibility
 
 - Require vize 0.17.1, which fixes three Vapor compiler bugs. Two can affect components compiled with `vapor: true`: static attribute values were decoded twice in Vapor templates, and default slot content beside a named `<template #name>` was dropped. Volt's use of vize is unchanged.
