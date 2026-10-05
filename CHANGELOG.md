@@ -5,6 +5,7 @@
 ### Fixed
 
 - Leave Vue `<script>` blocks in other languages, such as `<script lang="elixir">`, out of the script modules that `mix volt.js.check` lints and type-checks. Every block was treated as JavaScript, so such a block was reported as TypeScript syntax errors. `lang="jsx"` blocks are now checked as JSX ([#57](https://github.com/elixir-volt/volt/issues/57)).
+- Serve the `@oxc-project/runtime` helpers that the dev server's own output imports. With a `:target` below ES2022, a class with fields compiles to an import of such a helper, which `/@vendor/` answered with 404 unless the npm package was installed, so the importing module and everything importing it failed to load with no error shown. The helpers now come from the bundler, as in production builds ([#58](https://github.com/elixir-volt/volt/issues/58)).
 
 ## 0.20.0 - 2026-10-03
 

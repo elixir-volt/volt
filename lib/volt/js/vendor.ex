@@ -381,7 +381,18 @@ defmodule Volt.JS.Vendor do
         )
 
       nil ->
-        package_prebundle_entry(specifier, module_dirs)
+        if Volt.JS.Specifier.oxc_runtime_helper?(specifier) do
+          # The bundler supplies these helpers, so the entry only has to name
+          # one; the package does not need to be installed.
+          synthetic_prebundle_entry(
+            specifier,
+            "helper.js",
+            ~s(export { default } from #{Jason.encode!(specifier)};\n),
+            context_dir(module_dirs, plugins, module_types)
+          )
+        else
+          package_prebundle_entry(specifier, module_dirs)
+        end
     end
   end
 
