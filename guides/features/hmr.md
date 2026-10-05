@@ -127,7 +127,34 @@ After a patch the client dispatches `volt:document-updated` on `document`, for c
 document.addEventListener("volt:document-updated", () => enhance(document))
 ```
 
-Only the contents of `<body>` and the title are patched. Attributes on `<html>` and `<body>`, and the rest of `<head>`, stay as they were until the next reload.
+### Letting the server compare renders
+
+By default a page finds out what changed by requesting itself again. A server that can render a page outside a request can hand that to Volt instead:
+
+```elixir
+plug Volt.DevServer, document: {MySite, :render_document, []}
+```
+
+The function is called with the page's path, followed by the listed arguments, and returns `{:ok, html}`, the HTML a request for that path is answered with, or `:error`.
+
+Each open page has its own websocket process, which lives as long as the page does. With `:document` and `:morph` set, that process keeps the HTML the server last rendered for its page. When a template or content file changes it renders the page again and compares the two renders, so each page is sent only what applies to it:
+
+- nothing, when its HTML is the same;
+- a reload, when scripts or stylesheets differ or preserved elements were added or removed;
+- otherwise the new HTML to patch, with what the server changed outside the body's contents: attributes of `<html>` and `<body>`, metadata and links in `<head>`, and the attributes of preserved elements.
+
+Because both sides of the comparison are server renders, it sees what the server changed and nothing that scripts did to the page since. An attribute a script set on `<html>`, such as a theme, is in neither render and stays. The page starts from the HTML it was served, which the dev server keeps until the page connects, so opening a page costs no extra render.
+
+For each preserved element it names, the client sets the new attributes and dispatches a cancelable `volt:element-update` event on it. The element's owner re-renders it and calls `preventDefault()`; if nothing handles the event, the page reloads.
+
+```javascript
+island.addEventListener("volt:element-update", (event) => {
+  event.preventDefault()
+  rerender(JSON.parse(island.dataset.props))
+})
+```
+
+Without `:document`, only the contents of `<body>` and the title are patched. Attributes on `<html>` and `<body>`, and the rest of `<head>`, stay as they were until the next reload.
 
 ## Ignoring watcher paths
 

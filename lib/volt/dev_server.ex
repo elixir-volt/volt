@@ -19,6 +19,11 @@ defmodule Volt.DevServer do
     * `:target` — JS downlevel target (e.g. `:es2020`)
     * `:import_source` — JSX import source (e.g. `"vue"`)
     * `:vapor` — use Vue Vapor mode (default: `false`)
+    * `:document` — a function, or `{module, function, args}`, called with a
+      page's path, followed by `args`, to render the HTML a request for it is
+      answered with. With
+      it and the server's `:morph` setting, Volt compares renders for each open
+      page itself; see the HMR guide.
     * `:watch` — start the supervised file watcher on the first request (default: `true`)
 
   ## Example
@@ -144,6 +149,7 @@ defmodule Volt.DevServer do
         ),
       hmr_timeout: server_config.hmr_timeout,
       morph: server_config.morph,
+      document: Keyword.get(opts, :document),
       stylesheet_url: tailwind_root && tailwind_root.dev_url,
       stylesheet_source: tailwind_root && tailwind_root.css,
       session_supervisor: Keyword.get(opts, :session_supervisor),
@@ -301,7 +307,9 @@ defmodule Volt.DevServer do
 
   defp do_call(%Conn{request_path: "/@volt/ws"} = conn, config) do
     conn
-    |> WebSockAdapter.upgrade(Volt.HMR.Socket, [session: config.session],
+    |> WebSockAdapter.upgrade(
+      Volt.HMR.Socket,
+      [session: config.session, document: config.document, morph: config.morph],
       timeout: config.hmr_timeout
     )
     |> Conn.halt()
@@ -370,10 +378,19 @@ defmodule Volt.DevServer do
             serve(conn, relative, config)
 
           :no_match ->
-            Volt.DevServer.ClientTag.register(conn, config.morph)
+            Volt.DevServer.ClientTag.register(conn, config.morph,
+              keep_for: document_session(config)
+            )
         end
     end
   end
+
+  # Served HTML is kept only when a page's websocket process will compare renders.
+  defp document_session(%{document: document, morph: morph, session: session})
+       when not is_nil(document) and morph != false,
+       do: session
+
+  defp document_session(_config), do: nil
 
   defp serve_virtual(conn, id, config) do
     case Volt.PluginRunner.load(config.plugins, id) do

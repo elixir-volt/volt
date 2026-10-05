@@ -16,6 +16,7 @@ defmodule Volt.DevServer.Config do
             define: %{},
             hmr_timeout: 60_000,
             morph: false,
+            document: nil,
             session: :default,
             tables: nil,
             stylesheet_url: nil,

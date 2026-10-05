@@ -15,32 +15,46 @@ defmodule Volt.DevServer.ClientTag do
   Add the dev client to the HTML this connection sends.
 
   `morph` is the server's `:morph` setting: `false`, `true`, or
-  `[preserve: selector]`.
+  `[preserve: selector]`. With `keep_for: session`, the HTML of a successful
+  page is kept for the websocket process of the page to start from.
   """
-  @spec register(Conn.t(), boolean() | keyword()) :: Conn.t()
-  def register(conn, morph \\ false), do: Conn.register_before_send(conn, &inject(&1, morph))
-
-  defp inject(%Conn{resp_body: body} = conn, morph) when not is_nil(body) do
-    if html?(conn), do: inject_client(conn, IO.iodata_to_binary(body), morph), else: conn
+  @spec register(Conn.t(), boolean() | keyword(), keyword()) :: Conn.t()
+  def register(conn, morph \\ false, opts \\ []) do
+    Conn.register_before_send(conn, &inject(&1, morph, Keyword.get(opts, :keep_for)))
   end
 
-  defp inject(conn, _morph), do: conn
+  defp inject(%Conn{resp_body: body} = conn, morph, session) when not is_nil(body) do
+    if html?(conn),
+      do: inject_client(conn, IO.iodata_to_binary(body), morph, session),
+      else: conn
+  end
+
+  defp inject(conn, _morph, _session), do: conn
 
   # Successful pages carry an entity tag so the client can revalidate them
   # instead of reloading; see `Volt.HMR.Document`.
-  defp inject_client(%Conn{status: 200} = conn, html, morph) do
+  defp inject_client(%Conn{status: 200} = conn, html, morph, session) do
     etag = Document.etag(html)
 
     if Document.fresh?(conn, etag) do
       %{conn | status: 304, resp_body: ""}
     else
-      attributes = attribute(Document.attribute(), etag) <> morph_attribute(morph)
+      if session, do: Volt.HMR.Documents.put(session, etag, html)
       conn = Conn.put_resp_header(conn, "etag", etag)
-      %{conn | resp_body: put_client(html, attributes)}
+      %{conn | resp_body: tag(html, etag, morph)}
     end
   end
 
-  defp inject_client(conn, html, _morph), do: %{conn | resp_body: put_client(html, "")}
+  defp inject_client(conn, html, _morph, _session), do: %{conn | resp_body: put_client(html, "")}
+
+  @doc """
+  Add the dev client to a successful page, with the page's entity tag and the
+  server's `:morph` setting, as a response sent through the dev server has them.
+  """
+  @spec tag(String.t(), String.t(), boolean() | keyword()) :: String.t()
+  def tag(html, etag, morph) do
+    put_client(html, attribute(Document.attribute(), etag) <> morph_attribute(morph))
+  end
 
   # A page may already load the client, as pages rendered by a site generator
   # do. Its tag gets the attributes; otherwise the client is added to the head.
