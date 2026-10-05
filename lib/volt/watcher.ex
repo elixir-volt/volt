@@ -37,6 +37,7 @@ defmodule Volt.Watcher do
   alias Volt.HMR
   alias Volt.HMR.StyleGraph
   alias Volt.JS.Extensions
+  alias Volt.Paths
 
   @dialyzer {:nowarn_function, detect_changes: 2}
 
@@ -85,9 +86,9 @@ defmodule Volt.Watcher do
         owner when is_pid(owner) -> Process.monitor(owner)
       end
 
-    root = Keyword.fetch!(opts, :root) |> Path.expand()
-    watch_dirs = Keyword.get(opts, :watch_dirs, []) |> Enum.map(&Path.expand/1)
-    reload_dirs = Keyword.get(opts, :reload_dirs, []) |> Enum.map(&Path.expand/1)
+    root = Keyword.fetch!(opts, :root) |> Paths.expand()
+    watch_dirs = Keyword.get(opts, :watch_dirs, []) |> Enum.map(&Paths.expand/1)
+    reload_dirs = Keyword.get(opts, :reload_dirs, []) |> Enum.map(&Paths.expand/1)
     tailwind_outdir = Keyword.get(opts, :tailwind_outdir) |> maybe_expand()
     tailwind_name = Keyword.get(opts, :tailwind_name, "app")
     tailwind_url = Keyword.get(opts, :tailwind_url, "/assets/css/#{tailwind_name}.css")
@@ -121,7 +122,7 @@ defmodule Volt.Watcher do
 
     source_dirs =
       if config[:tailwind] do
-        Enum.map(configured_tailwind_sources || [], &Path.expand(&1.base))
+        Enum.map(configured_tailwind_sources || [], &Paths.expand(&1.base))
       else
         []
       end
@@ -264,7 +265,7 @@ defmodule Volt.Watcher do
     end
   end
 
-  defp read_tailwind_css(nil), do: {:ok, {nil, File.cwd!()}}
+  defp read_tailwind_css(nil), do: {:ok, {nil, Paths.root()}}
 
   defp read_tailwind_css(path) do
     case File.read(path) do
@@ -296,6 +297,8 @@ defmodule Volt.Watcher do
           {:noreply, state}
 
         ext in Extensions.watchable_js(state.config[:plugins] || []) ->
+          # The change may add an import of a package that is not bundled yet.
+          Volt.Dev.Prebundled.forget()
           state = schedule_rebuild(state, path)
           state = maybe_schedule_tailwind(state, path)
           {:noreply, state}
@@ -572,7 +575,7 @@ defmodule Volt.Watcher do
   end
 
   defp handle_reload_change(path, state) do
-    path = Path.relative_to_cwd(path)
+    path = Path.relative_to(path, Paths.root())
     HMR.document_update(path, session: state.session)
   end
 
@@ -791,5 +794,5 @@ defmodule Volt.Watcher do
   end
 
   defp maybe_expand(nil), do: nil
-  defp maybe_expand(path), do: Path.expand(path)
+  defp maybe_expand(path), do: Paths.expand(path)
 end

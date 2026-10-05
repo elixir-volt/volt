@@ -16,6 +16,19 @@ defmodule Volt.JS.Specifier do
 
   def split_query(specifier), do: Volt.URL.split_query(specifier)
 
+  @oxc_runtime "@oxc-project/runtime"
+
+  @doc """
+  Return whether a specifier names a helper from `@oxc-project/runtime`.
+
+  OXC's transform imports these when it lowers syntax for a target, such as
+  class fields below ES2022. `OXC.bundle/2` provides them itself, so they are
+  never resolved from `node_modules`.
+  """
+  @spec oxc_runtime_helper?(String.t()) :: boolean()
+  def oxc_runtime_helper?(specifier),
+    do: specifier == @oxc_runtime or String.starts_with?(specifier, @oxc_runtime <> "/")
+
   defp split_on_query(specifier) do
     case String.split(specifier, "?", parts: 2) do
       [path, query] -> {path, query}

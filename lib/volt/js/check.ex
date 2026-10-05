@@ -76,7 +76,10 @@ defmodule Volt.JS.Check do
       [
         type_aware: true,
         type_check: opts[:type_check] == true,
-        source_overrides: Map.merge(source_overrides, Keyword.get(config, :source_overrides, %{}))
+        source_overrides:
+          source_overrides
+          |> Map.merge(Volt.JS.Lint.TSConfigOverlay.overrides(Map.keys(source_overrides)))
+          |> Map.merge(Keyword.get(config, :source_overrides, %{}))
       ] ++ type_aware_options(config)
 
     files

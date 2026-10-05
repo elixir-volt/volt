@@ -19,7 +19,7 @@ defmodule Volt.JS.Vendor do
 
   defp cache_dir do
     build_path = System.get_env("MIX_BUILD_PATH") || "_build"
-    Path.join(build_path, "volt/vendor")
+    Volt.Paths.expand(Path.join(build_path, "volt/vendor"))
   end
 
   defp context_dir(module_dirs, plugins, module_types) do
@@ -191,6 +191,12 @@ defmodule Volt.JS.Vendor do
   defp prebundle_vendors([], _module_dirs, _force, _plugins, _module_types), do: {:ok, %{}}
 
   defp prebundle_vendors(specifiers, module_dirs, force, plugins, module_types) do
+    # A bare import that resolves to no package, such as one a plugin or the
+    # host page provides, is never written to the cache. Counting it as stale
+    # would bundle every package again on each call.
+    specifiers =
+      Enum.filter(specifiers, &match?({:ok, _, _}, bundle_entry_for(&1, module_dirs, plugins)))
+
     vendor_map = Map.new(specifiers, &{&1, cache_path(&1, module_dirs, plugins, module_types)})
 
     if not force and Enum.all?(specifiers, &cache_fresh?(&1, module_dirs, plugins, module_types)) do
@@ -381,7 +387,18 @@ defmodule Volt.JS.Vendor do
         )
 
       nil ->
-        package_prebundle_entry(specifier, module_dirs)
+        if Volt.JS.Specifier.oxc_runtime_helper?(specifier) do
+          # The bundler supplies these helpers, so the entry only has to name
+          # one; the package does not need to be installed.
+          synthetic_prebundle_entry(
+            specifier,
+            "helper.js",
+            ~s(export { default } from #{Jason.encode!(specifier)};\n),
+            context_dir(module_dirs, plugins, module_types)
+          )
+        else
+          package_prebundle_entry(specifier, module_dirs)
+        end
     end
   end
 
@@ -526,7 +543,7 @@ defmodule Volt.JS.Vendor do
   end
 
   defp project_root([module_dir | _]), do: Path.dirname(module_dir)
-  defp project_root([]), do: File.cwd!()
+  defp project_root([]), do: Volt.Paths.root()
 
   defp ensure_cache_dir(module_dirs, plugins, module_types) do
     File.mkdir_p!(context_dir(module_dirs, plugins, module_types))
@@ -642,12 +659,12 @@ defmodule Volt.JS.Vendor do
     |> Enum.flat_map(&lockfiles_in/1)
   end
 
-  defp lockfile_roots([]), do: [File.cwd!()]
+  defp lockfile_roots([]), do: [Volt.Paths.root()]
 
   defp lockfile_roots(module_dirs) do
     module_dirs
     |> Enum.map(&Path.dirname/1)
-    |> Kernel.++([File.cwd!()])
+    |> Kernel.++([Volt.Paths.root()])
     |> Enum.uniq()
   end
 

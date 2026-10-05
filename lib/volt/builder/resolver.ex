@@ -51,7 +51,7 @@ defmodule Volt.Builder.Resolver do
 
       # OXC's transform imports helpers from `@oxc-project/runtime`, and `OXC.bundle/2`
       # provides them itself, so they never come from `node_modules`.
-      oxc_runtime_helper?(specifier) ->
+      Volt.JS.Specifier.oxc_runtime_helper?(specifier) ->
         :skip
 
       absolute?(specifier) ->
@@ -67,11 +67,6 @@ defmodule Volt.Builder.Resolver do
         resolve_bare(specifier, importer, ctx)
     end
   end
-
-  defp oxc_runtime_helper?(specifier),
-    do:
-      specifier == "@oxc-project/runtime" or
-        String.starts_with?(specifier, "@oxc-project/runtime/")
 
   defp resolve_absolute(specifier) do
     if File.exists?(specifier) do
