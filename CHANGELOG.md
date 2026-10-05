@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Leave Vue `<script>` blocks in other languages, such as `<script lang="elixir">`, out of the script modules that `mix volt.js.check` lints and type-checks. Every block was treated as JavaScript, so such a block was reported as TypeScript syntax errors. `lang="jsx"` blocks are now checked as JSX ([#57](https://github.com/elixir-volt/volt/issues/57)).
+
 ## 0.20.0 - 2026-10-03
 
 ### Breaking changes
