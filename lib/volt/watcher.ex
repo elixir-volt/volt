@@ -297,6 +297,8 @@ defmodule Volt.Watcher do
           {:noreply, state}
 
         ext in Extensions.watchable_js(state.config[:plugins] || []) ->
+          # The change may add an import of a package that is not bundled yet.
+          Volt.Dev.Prebundled.forget()
           state = schedule_rebuild(state, path)
           state = maybe_schedule_tailwind(state, path)
           {:noreply, state}

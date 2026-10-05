@@ -58,7 +58,19 @@ defmodule Volt.DevServer do
       if Volt.Config.Tailwind.enabled?(tailwind_config),
         do: Volt.Config.Tailwind.new(tailwind_config)
 
-    prebundle_vendor(expanded_root, node_modules, plugins, config.resolve_dirs, module_types)
+    # A watcher says when sources change, so the scan can wait for that.
+    watched? = server_config.watch or not is_nil(Keyword.get(opts, :session_supervisor))
+
+    prebundle_vendor(
+      [
+        root: expanded_root,
+        node_modules: node_modules,
+        plugins: plugins,
+        resolve_dirs: config.resolve_dirs,
+        module_types: module_types
+      ],
+      watched?
+    )
 
     session =
       if server_config.watch do
@@ -935,15 +947,10 @@ defmodule Volt.DevServer do
 
   # ── Vendor pre-bundling ───────────────────────────────────────────
 
-  defp prebundle_vendor(root, node_modules, plugins, resolve_dirs, module_types) do
-    Volt.JS.Vendor.prebundle(
-      root: root,
-      node_modules: node_modules,
-      plugins: plugins,
-      resolve_dirs: resolve_dirs,
-      module_types: module_types
-    )
-  end
+  defp prebundle_vendor(opts, true),
+    do: Volt.Dev.Prebundled.ensure(opts, fn -> Volt.JS.Vendor.prebundle(opts) end)
+
+  defp prebundle_vendor(opts, false), do: Volt.JS.Vendor.prebundle(opts)
 
   defp serve_vendor(specifier, config, browser_hash) do
     vendor_opts = vendor_opts(config)

@@ -357,6 +357,24 @@ defmodule Volt.WatcherTest do
     GenServer.stop(pid)
   end
 
+  test "a changed source makes the next request scan for new package imports", %{
+    watch_dir: watch_dir
+  } do
+    source = Path.join(watch_dir, "app.ts")
+    File.write!(source, "export const x = 1")
+    opts = [root: watch_dir, node_modules: Path.join(watch_dir, "node_modules")]
+
+    :ok = Volt.Dev.Prebundled.ensure(opts, fn -> :ok end)
+    assert :ets.lookup(:volt_vendor_prebundled, opts) != []
+
+    {:ok, pid} = Volt.Watcher.start_link(root: watch_dir, name: :test_watcher_forget_prebundled)
+    state = send_file_event(pid, source)
+    Process.cancel_timer(state.pending[source])
+
+    assert :ets.lookup(:volt_vendor_prebundled, opts) == []
+    GenServer.stop(pid)
+  end
+
   test "ignores configured watcher paths", %{watch_dir: watch_dir} do
     generated_dir = Path.join(watch_dir, ".generated")
     entry = Path.join(generated_dir, "entry.ts")

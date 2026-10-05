@@ -191,6 +191,12 @@ defmodule Volt.JS.Vendor do
   defp prebundle_vendors([], _module_dirs, _force, _plugins, _module_types), do: {:ok, %{}}
 
   defp prebundle_vendors(specifiers, module_dirs, force, plugins, module_types) do
+    # A bare import that resolves to no package, such as one a plugin or the
+    # host page provides, is never written to the cache. Counting it as stale
+    # would bundle every package again on each call.
+    specifiers =
+      Enum.filter(specifiers, &match?({:ok, _, _}, bundle_entry_for(&1, module_dirs, plugins)))
+
     vendor_map = Map.new(specifiers, &{&1, cache_path(&1, module_dirs, plugins, module_types)})
 
     if not force and Enum.all?(specifiers, &cache_fresh?(&1, module_dirs, plugins, module_types)) do

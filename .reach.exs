@@ -141,6 +141,7 @@ infrastructure = [
   "Volt.Cache",
   "Volt.Dev",
   "Volt.Dev.Cleanup",
+  "Volt.Dev.Prebundled",
   "Volt.Dev.Error",
   "Volt.Priv.Vendor",
   "Volt.DevServer.ClientTag",
