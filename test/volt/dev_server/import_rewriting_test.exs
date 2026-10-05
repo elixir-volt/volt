@@ -81,6 +81,36 @@ defmodule Volt.DevServer.ImportRewritingTest do
     end
   end
 
+  describe "syntax lowered for a target" do
+    @tag :tmp_dir
+    test "serves the runtime helper a lowered class field imports", %{tmp_dir: project} do
+      # A project of its own, so the helper is not already in the vendor cache.
+      root = Path.join(project, "src")
+      File.mkdir_p!(root)
+      File.mkdir_p!(Path.join(project, "node_modules"))
+
+      File.write!(Path.join(root, "search.ts"), """
+      export class Search {
+        private readonly style = 'field'
+      }
+      """)
+
+      # Class fields are lowered below ES2022, into an import of a helper from
+      # `@oxc-project/runtime`, which is not installed in `node_modules`.
+      opts = [root: root, target: :es2020]
+      conn = call_dev_server("/assets/search.ts", opts)
+      assert conn.status == 200
+
+      assert [helper_url] =
+               Regex.run(~r{/@vendor/[^"]*defineProperty\.js\?v=[a-f0-9]+}, conn.resp_body)
+
+      helper = call_dev_server(helper_url, opts)
+      assert helper.status == 200
+      assert helper.resp_body =~ "function _defineProperty"
+      assert helper.resp_body =~ ~r/export \{[^}]*default/
+    end
+  end
+
   describe "import rewriting" do
     test "rewrites relative imports to absolute paths" do
       File.write!(Path.join(@fixture_dir, "src/utils.ts"), "export const y = 1")

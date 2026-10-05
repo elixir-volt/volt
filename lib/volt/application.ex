@@ -4,6 +4,7 @@ defmodule Volt.Application do
 
   @impl true
   def start(_type, _args) do
+    Volt.Paths.capture_root()
     Volt.Cache.create_table()
     Volt.Dev.Assets.create_table()
     Volt.HMR.ImportGraph.create_table()
@@ -11,6 +12,7 @@ defmodule Volt.Application do
     Volt.HMR.StyleGraph.create_table()
     Volt.HMR.ModuleGraph.create_table()
     Volt.HMR.Errors.create_table()
+    Volt.Dev.Prebundled.create_table()
 
     # Watchers release their Tailwind contexts when they terminate, so the
     # Tailwind processes start before them and stop after them.
