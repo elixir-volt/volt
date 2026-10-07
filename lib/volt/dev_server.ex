@@ -850,7 +850,7 @@ defmodule Volt.DevServer do
     specifier = URL.append_query(specifier, query)
 
     cond do
-      NPM.Resolution.PackageResolver.node_builtin?(specifier) ->
+      Volt.JS.Specifier.node_builtin?(specifier) ->
         :keep
 
       String.starts_with?(specifier, "#") ->

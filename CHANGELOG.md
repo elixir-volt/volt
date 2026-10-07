@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Treat Node built-in subpaths such as `timers/promises`, `fs/promises` and `stream/web` as built-ins, and read the `browser` field of packages. Bundling a package that requires `timers/promises`, such as `@sinonjs/fake-timers`, failed with `{:not_found, "timers/promises"}` even though its `browser` field maps the specifier to `false`. Specifiers a `browser` field maps to `false` now resolve to an empty module, and those mapped to a path resolve to that path, as in esbuild and webpack. The builder, the dev server and the Tailwind resolver share the built-in check ([#64](https://github.com/elixir-volt/volt/issues/64)).
+
 ## 0.21.0 - 2026-10-05
 
 ### Compatibility

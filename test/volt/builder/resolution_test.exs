@@ -442,6 +442,69 @@ defmodule Volt.Builder.ResolutionTest do
       assert js =~ "ref("
     end
 
+    test "leaves Node built-in subpaths out, as it does the built-ins themselves" do
+      File.write!(Path.join(@fixture_dir, "src/builtin_subpath_app.js"), """
+      import { setTimeout as wait } from 'timers/promises'
+      import { readFile } from 'node:fs/promises'
+      export const run = () => wait(1).then(() => readFile('x'))
+      """)
+
+      assert {:ok, result} =
+               Volt.Builder.build(
+                 entry: Path.join(@fixture_dir, "src/builtin_subpath_app.js"),
+                 outdir: @outdir,
+                 format: :esm,
+                 minify: false,
+                 sourcemap: false
+               )
+
+      js = File.read!(result.js.path)
+      assert js =~ ~s(from "timers/promises")
+      assert js =~ ~s(from "node:fs/promises")
+    end
+
+    test "maps what a package's browser field sets to false to an empty module" do
+      package = Path.join(@fixture_dir, "node_modules/fake-timers")
+      File.mkdir_p!(package)
+
+      File.write!(
+        Path.join(package, "package.json"),
+        Jason.encode!(%{
+          "name" => "fake-timers",
+          "main" => "index.js",
+          "browser" => %{"timers/promises" => false, "./clock.js" => "./clock-browser.js"}
+        })
+      )
+
+      File.write!(Path.join(package, "index.js"), """
+      let promises = null
+      try { promises = require('timers/promises') } catch (e) {}
+      const clock = require('./clock.js')
+      module.exports = { promises, clock }
+      """)
+
+      File.write!(Path.join(package, "clock.js"), "module.exports = 'node clock'")
+      File.write!(Path.join(package, "clock-browser.js"), "module.exports = 'browser clock'")
+
+      File.write!(Path.join(@fixture_dir, "src/browser_field_app.js"), """
+      import timers from 'fake-timers'
+      console.log(timers.promises, timers.clock)
+      """)
+
+      assert {:ok, result} =
+               Volt.Builder.build(
+                 entry: Path.join(@fixture_dir, "src/browser_field_app.js"),
+                 outdir: @outdir,
+                 minify: false,
+                 sourcemap: false
+               )
+
+      js = File.read!(result.js.path)
+      refute js =~ "timers/promises"
+      assert js =~ "browser clock"
+      refute js =~ "node clock"
+    end
+
     test "keeps external imports in ES module output" do
       File.write!(Path.join(@fixture_dir, "src/external_app.js"), """
       import { Socket } from 'phoenix'

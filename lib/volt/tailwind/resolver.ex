@@ -42,8 +42,7 @@ defmodule Volt.Tailwind.Resolver do
     end
   end
 
-  def node_builtin_specifier?(specifier),
-    do: NPM.Resolution.PackageResolver.node_builtin?(specifier)
+  def node_builtin_specifier?(specifier), do: Volt.JS.Specifier.node_builtin?(specifier)
 
   def relative_specifier?(specifier), do: NPM.Resolution.PackageResolver.relative?(specifier)
 
