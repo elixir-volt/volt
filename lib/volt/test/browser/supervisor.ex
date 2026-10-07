@@ -15,13 +15,21 @@ defmodule Volt.Test.Browser.Supervisor do
 
   @playwright Volt.Test.Browser.Playwright
 
-  @doc "Start the tree, or find it already running."
+  @doc """
+  Start the tree, or find it already running.
+
+  The tree lives under `Volt.Supervisor`, so Volt's application is started
+  first: a project that depends on Volt with `runtime: false` has not started
+  it.
+  """
   @spec start(Config.t()) :: {:ok, pid()} | {:error, term()}
   def start(%Config{} = config) do
-    case Supervisor.start_child(Volt.Supervisor, {__MODULE__, config}) do
-      {:ok, pid} -> {:ok, pid}
-      {:error, {:already_started, pid}} -> {:ok, pid}
-      {:error, reason} -> {:error, reason}
+    with {:ok, _started} <- Application.ensure_all_started(:volt) do
+      case Supervisor.start_child(Volt.Supervisor, {__MODULE__, config}) do
+        {:ok, pid} -> {:ok, pid}
+        {:error, {:already_started, pid}} -> {:ok, pid}
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
