@@ -8,6 +8,7 @@ defmodule Volt.Builder.BuildContext do
             ctx: nil,
             asset_url_prefix: Volt.Paths.prefix(),
             code_splitting: true,
+            declarations: false,
             sourcemap_hidden: false,
             chunks: %{}
 end

@@ -83,6 +83,7 @@ model = [
 logic = [
   "Volt.Builder.Artifact",
   "Volt.Builder.CSS.Prepared",
+  "Volt.Builder.Declarations",
   "Volt.Builder.Plan",
   "Volt.Assets",
   "Volt.Assets.Query",
