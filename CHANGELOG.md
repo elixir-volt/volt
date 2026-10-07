@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Browser tests share one browser per run, in `Volt.Test.Browser`, and each test gets a browser context of its own. Every test started a Playwright driver and launched a browser for itself, because the driver was linked to the test process and went away with it, which cost more than running the test. A test file is now bundled once for all of its tests and bundled again only when one of its source files changes, and the ExUnit modules generated for browser tests are `async: true` ([#65](https://github.com/elixir-volt/volt/issues/65)).
+
 ### Fixed
 
 - Treat Node built-in subpaths such as `timers/promises`, `fs/promises` and `stream/web` as built-ins, and read the `browser` field of packages. Bundling a package that requires `timers/promises`, such as `@sinonjs/fake-timers`, failed with `{:not_found, "timers/promises"}` even though its `browser` field maps the specifier to `false`. Specifiers a `browser` field maps to `false` now resolve to an empty module, and those mapped to a path resolve to that path, as in esbuild and webpack. The builder, the dev server and the Tailwind resolver share the built-in check ([#64](https://github.com/elixir-volt/volt/issues/64)).

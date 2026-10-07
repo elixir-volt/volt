@@ -311,6 +311,8 @@ npx playwright install chromium
 
 By default Volt uses `node_modules/playwright/cli.js` when present, otherwise `playwright` from `PATH`. Pass PlaywrightEx supervisor options with `playwright: [...]` if your executable lives elsewhere.
 
+A test run shares one browser. `Volt.Test.Browser` starts the Playwright driver and launches the browser the first time a test asks for it, and every test gets a browser context of its own, which isolates its storage, cookies and pages. A test file is bundled once for all of its tests and bundled again only when one of its source files changes. Because tests no longer share state, the ExUnit modules Volt generates for browser tests are `async: true` and run concurrently with other async modules.
+
 ## ExUnit integration
 
 Each collected JS/TS `test(...)` becomes an ExUnit test. That means normal ExUnit filtering, formatters, failures, and CI behavior continue to work.
