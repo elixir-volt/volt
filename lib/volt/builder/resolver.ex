@@ -225,9 +225,11 @@ defmodule Volt.Builder.Resolver do
     end
   end
 
-  defp inside_node_modules?(nil), do: false
+  @doc "Return whether a module path, with or without a query, lies in a `node_modules` directory."
+  @spec inside_node_modules?(String.t() | nil) :: boolean()
+  def inside_node_modules?(nil), do: false
 
-  defp inside_node_modules?(importer) do
+  def inside_node_modules?(importer) do
     {importer_path, _query} = Volt.URL.split_query(importer)
     "node_modules" in Path.split(Path.expand(importer_path))
   end

@@ -228,7 +228,7 @@ defmodule Volt.Builder.Declarations do
       {:ok, resolved} ->
         {resolved_path, _query} = Volt.URL.split_query(resolved)
 
-        if "node_modules" in Path.split(resolved_path) or not File.regular?(resolved_path),
+        if Resolver.inside_node_modules?(resolved) or not File.regular?(resolved_path),
           do: :external,
           else: {:project, Path.expand(resolved_path)}
 
