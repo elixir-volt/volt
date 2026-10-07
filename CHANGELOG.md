@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `mix volt.js.check --type-aware` types imports of `.vue` files by the component's own declaration. The Vue plugin generates it from each checked `.vue` file with `Vize.generate_dts/2` and Volt sends it to tsgolint as `<file>.vue.d.ts`, which TypeScript resolves an import of the `.vue` file to. Props, emits and slots of imported components are then checked in `h(Button, {...})` and `InstanceType<typeof Button>`, and no `declare module "*.vue"` shim is needed for checked files. Plugins declare their own files through the new `c:Volt.Plugin.declaration/3` callback ([#63](https://github.com/elixir-volt/volt/issues/63)).
+
 ### Changed
 
 - Browser tests share one browser per run, in `Volt.Test.Browser`, and each test gets a browser context of its own. Every test started a Playwright driver and launched a browser for itself, because the driver was linked to the test process and went away with it, which cost more than running the test. A test file is now bundled once for all of its tests and bundled again only when one of its source files changes, and the ExUnit modules generated for browser tests are `async: true` ([#65](https://github.com/elixir-volt/volt/issues/65)).

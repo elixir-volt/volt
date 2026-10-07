@@ -74,6 +74,15 @@ defmodule Volt.PluginRunner do
     |> Volt.Plugin.EmbeddedModule.normalize_all()
   end
 
+  @doc "The declaration of a plugin-owned source file, from the first plugin that has one."
+  @spec declaration([module() | {module(), keyword()}], String.t(), String.t(), keyword()) ::
+          {:ok, String.t()} | {:error, term()} | nil
+  def declaration(plugins, path, source, opts) do
+    plugins
+    |> plugins()
+    |> Enum.find_value(&call_optional(&1, :declaration, [path, source, opts], nil))
+  end
+
   @doc "Load one embedded query module by id."
   @spec embedded_module([module() | {module(), keyword()}], String.t(), keyword()) ::
           {:ok, Volt.Plugin.EmbeddedModule.t(), String.t()} | {:error, term()} | nil
