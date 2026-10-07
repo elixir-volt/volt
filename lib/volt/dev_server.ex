@@ -63,6 +63,17 @@ defmodule Volt.DevServer do
       if Volt.Config.Tailwind.enabled?(tailwind_config),
         do: Volt.Config.Tailwind.new(tailwind_config)
 
+    session =
+      if server_config.watch do
+        Volt.Dev.session_identity(
+          root: expanded_root,
+          id: profile || :default,
+          session: Keyword.get(opts, :session, :default)
+        )
+      else
+        Keyword.get(opts, :session, :default)
+      end
+
     # A watcher says when sources change, so the scan can wait for that.
     watched? = server_config.watch or not is_nil(Keyword.get(opts, :session_supervisor))
 
@@ -76,17 +87,6 @@ defmodule Volt.DevServer do
       ],
       watched?
     )
-
-    session =
-      if server_config.watch do
-        Volt.Dev.session_identity(
-          root: expanded_root,
-          id: profile || :default,
-          session: Keyword.get(opts, :session, :default)
-        )
-      else
-        Keyword.get(opts, :session, :default)
-      end
 
     watcher_opts =
       if server_config.watch and is_nil(Keyword.get(opts, :session_supervisor)) do
@@ -493,7 +493,9 @@ defmodule Volt.DevServer do
     content_type = content_type_for(module_id, css_import?)
     cache_key = cache_key_for(module_id, css_import?)
 
-    case Volt.Cache.get(cache_key, mtime, config.tables || config.session) do
+    # A compiled module imports vendor modules by their version, which changes
+    # when a package is installed or bundled again.
+    case current_cached(cache_key, mtime, config) do
       %{code: code, sourcemap: sourcemap} ->
         send_compiled(conn, code, sourcemap, content_type)
 
@@ -508,6 +510,16 @@ defmodule Volt.DevServer do
           css_import?,
           config
         )
+    end
+  end
+
+  defp current_cached(cache_key, mtime, config) do
+    case Volt.Cache.get(cache_key, mtime, config.tables || config.session) do
+      %{vendor_hash: vendor_hash} = entry when is_binary(vendor_hash) ->
+        if vendor_hash == vendor_hash(config), do: entry
+
+      entry ->
+        entry
     end
   end
 
@@ -563,7 +575,8 @@ defmodule Volt.DevServer do
         sourcemap: result.sourcemap,
         css: result.css,
         hashes: result.hashes,
-        content_type: content_type
+        content_type: content_type,
+        vendor_hash: vendor_hash(config)
       }
 
       if cacheable?,
@@ -968,6 +981,8 @@ defmodule Volt.DevServer do
     do: Volt.Dev.Prebundled.ensure(opts, fn -> Volt.JS.Vendor.prebundle(opts) end)
 
   defp prebundle_vendor(opts, false), do: Volt.JS.Vendor.prebundle(opts)
+
+  defp vendor_hash(config), do: Volt.JS.Vendor.browser_hash(vendor_opts(config))
 
   defp serve_vendor(specifier, config, browser_hash) do
     vendor_opts = vendor_opts(config)

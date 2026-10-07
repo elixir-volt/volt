@@ -237,6 +237,69 @@ defmodule Volt.DevServer.BasicTest do
       assert stale_conn.status == 504
       assert stale_conn.resp_body =~ "outdated optimized dependency"
     end
+
+    test "gives a package that changed in place a new URL once it is bundled again" do
+      package = Path.join(@fixture_dir, "node_modules/linked-lib")
+      File.mkdir_p!(package)
+
+      File.write!(
+        Path.join(package, "package.json"),
+        Jason.encode!(%{"name" => "linked-lib", "main" => "index.js"})
+      )
+
+      File.write!(Path.join(package, "index.js"), "export const version = 1")
+
+      File.write!(
+        Path.join(@fixture_dir, "src/app.ts"),
+        "import { version } from 'linked-lib'\nconsole.log(version)"
+      )
+
+      Volt.Dev.Prebundled.forget()
+      first = call_dev_server("/assets/app.ts")
+      assert [first_url] = Regex.run(~r(/@vendor/linked-lib\.js\?v=[a-f0-9]+), first.resp_body)
+      assert call_dev_server(first_url).resp_body =~ "version = 1"
+
+      File.write!(Path.join(package, "index.js"), "export const version = 2")
+      # What the watcher does when a linked package changes.
+      Volt.Dev.Prebundled.forget()
+
+      # The application module is unchanged, yet imports the new URL.
+      second = call_dev_server("/assets/app.ts")
+      assert [second_url] = Regex.run(~r(/@vendor/linked-lib\.js\?v=[a-f0-9]+), second.resp_body)
+      refute second_url == first_url
+      assert call_dev_server(second_url).resp_body =~ "version = 2"
+      assert call_dev_server(first_url).status == 504
+    end
+
+    test "serves unchanged application modules with new vendor URLs after the lockfile changes" do
+      package = Path.join(@fixture_dir, "node_modules/locked-lib")
+      File.mkdir_p!(package)
+
+      File.write!(
+        Path.join(package, "package.json"),
+        Jason.encode!(%{"name" => "locked-lib", "main" => "index.js"})
+      )
+
+      File.write!(Path.join(package, "index.js"), "export const value = 1")
+
+      File.write!(
+        Path.join(@fixture_dir, "src/app.ts"),
+        "import { value } from 'locked-lib'\nconsole.log(value)"
+      )
+
+      lockfile = Path.join(@fixture_dir, "npm.lock")
+      File.write!(lockfile, ~s({"lockfileVersion":1,"packages":{}}))
+      first = call_dev_server("/assets/app.ts")
+      assert [first_url] = Regex.run(~r(/@vendor/locked-lib\.js\?v=[a-f0-9]+), first.resp_body)
+
+      File.write!(lockfile, ~s({"lockfileVersion":1,"packages":{"locked-lib":{}}}))
+      File.touch!(lockfile, System.os_time(:second) + 2)
+
+      second = call_dev_server("/assets/app.ts")
+      assert [second_url] = Regex.run(~r(/@vendor/locked-lib\.js\?v=[a-f0-9]+), second.resp_body)
+      refute second_url == first_url
+      assert call_dev_server(second_url).status == 200
+    end
   end
 
   describe "TypeScript files" do

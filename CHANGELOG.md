@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- Give vendor modules a new URL when a package changes. The dev server serves `/@vendor/<package>.js?v=<hash>` as immutable, and the hash covered the lockfiles and plugins but not the packages, so a package that changed in place, such as a linked one, kept its URL and browsers kept their copy of it. The hash now also covers the generation of the pre-bundle, which changes whenever a package is bundled again, and a compiled application module is compiled again when the hash it was compiled with is no longer current: after a lockfile change, unchanged modules kept importing the old URL, which answered 504. Packages linked from outside `node_modules` are watched, and a change bundles them again and reloads the page. `npm.lock`, the lockfile of `mix npm.install`, now counts as a lockfile; it was not read, so an install did not change the URL either ([#67](https://github.com/elixir-volt/volt/issues/67)).
 - Treat Node built-in subpaths such as `timers/promises`, `fs/promises` and `stream/web` as built-ins, and read the `browser` field of packages. Bundling a package that requires `timers/promises`, such as `@sinonjs/fake-timers`, failed with `{:not_found, "timers/promises"}` even though its `browser` field maps the specifier to `false`. Specifiers a `browser` field maps to `false` now resolve to an empty module, and those mapped to a path resolve to that path, as in esbuild and webpack. The builder, the dev server and the Tailwind resolver share the built-in check ([#64](https://github.com/elixir-volt/volt/issues/64)).
 
 ## 0.21.0 - 2026-10-05

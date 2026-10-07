@@ -212,6 +212,34 @@ defmodule Volt.WatcherTest do
   end
 
   @tag :tmp_dir
+  test "a change in a linked package forgets the pre-bundle and reloads the page", %{
+    tmp_dir: root
+  } do
+    assets = Path.join(root, "assets")
+    linked = Path.join(root, "packages/client")
+    File.mkdir_p!(assets)
+    File.mkdir_p!(linked)
+    File.mkdir_p!(Path.join(root, "node_modules"))
+    File.ln_s!("../packages/client", Path.join(root, "node_modules/client"))
+    File.write!(Path.join(linked, "index.js"), "export const version = 1")
+
+    watcher = start_supervised!({Volt.Watcher, root: assets, name: nil})
+    Registry.register(Volt.HMR.Registry, :clients, nil)
+    state = :sys.get_state(watcher)
+    assert state.linked_dirs == [Path.expand(linked)]
+
+    prebundle_opts = [root: assets, plugins: []]
+    Volt.Dev.Prebundled.ensure(prebundle_opts, fn -> :ok end)
+    changed = Path.join(linked, "index.js")
+
+    assert {:noreply, _state} =
+             Volt.Watcher.handle_info({:file_event, self(), {changed, [:modified]}}, state)
+
+    assert_receive {:volt_hmr, :update, %{changes: [:vendor]}}
+    assert :ets.lookup(:volt_vendor_prebundled, prebundle_opts) == []
+  end
+
+  @tag :tmp_dir
   test "document reload waits for successful CSS and remains pending on failure", %{tmp_dir: root} do
     File.mkdir_p!(Path.join(root, "pages"))
     page = Path.join(root, "pages/index.astral")
