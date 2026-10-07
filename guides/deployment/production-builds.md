@@ -150,6 +150,18 @@ For IIFE output the global name is derived from the specifier (`phoenix_html` be
 config :volt, external: %{"phoenix" => "Phoenix", "vue" => "Vue"}
 ```
 
+## Type Declarations for Libraries
+
+A library that ships a JavaScript client can write its type declarations with its bundle:
+
+```elixir
+"volt.build --entry priv/ts/client/my_lib.ts --format esm --name my_lib --declarations"
+```
+
+or `config :volt, declarations: true`. Each entry gets one `my_lib.d.ts` beside its bundle, without a hash, holding what the entry exports and the types those exports refer to, including types from modules that only hold types. Imports of other packages stay imports, for the consumer's `node_modules` to resolve. Point `package.json`'s `types` at the file.
+
+Declarations are emitted per module without a type checker, as `tsc --isolatedDeclarations` does, so exported declarations need explicit types: a function without a return type or a `const` whose type is inferred fails the build, naming the module and line. Set `"isolatedDeclarations": true` in `tsconfig.json` to have the editor and `mix volt.js.check --type-aware` report the same places. Two modules declaring the same name are told apart with a `$1` suffix on the one further from the entry; `import * as` and `export * as` of the library's own modules are not bundled.
+
 ## Module Preloading
 
 For code-split builds, the production manifest records static imports, dynamic imports, chunk-local CSS, and emitted assets. Use `Volt.Preload.tags/2` in your layout to preload the entry and its static chunk dependencies:

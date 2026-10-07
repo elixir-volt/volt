@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `mix volt.build --declarations` and `config :volt, declarations: true` write a library's type declarations with its bundle: one `<name>.d.ts` per entry, beside it and without a hash, holding what the entry exports and the types those exports reach. Modules are emitted through OXC's isolated declarations (oxc 0.19), so exported declarations need explicit types and the build fails naming the module that lacks them; the declarations are then bundled as `rollup-plugin-dts` does, with types-only modules included, imports of other packages hoisted, and same-named declarations of different modules told apart. `.vue` modules are declared by the Vue plugin ([#71](https://github.com/elixir-volt/volt/issues/71)).
+
+### Changed
+
+- Require oxc 0.19 and quickbeam 0.11.3.
+
 ## 0.22.1 - 2026-10-07
 
 ### Fixed

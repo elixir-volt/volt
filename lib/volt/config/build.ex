@@ -12,6 +12,7 @@ defmodule Volt.Config.Build do
             hash: true,
             code_splitting: true,
             tree_shaking: true,
+            declarations: false,
             format: :iife,
             mode: :production,
             env_prefix: "VOLT_",

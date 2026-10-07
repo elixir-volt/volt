@@ -31,6 +31,7 @@ defmodule Mix.Tasks.Volt.Build do
     * `--no-tree-shaking` — preserve unused exports
     * `--mode` — build mode for env variables (default: `"production"`)
     * `--format` — output format: `iife`, `esm`, or `cjs` (default from config)
+    * `--declarations` — write one `.d.ts` per entry beside its bundle, for a library
     * `--tailwind` — build Tailwind CSS
     * `--tailwind-css` — custom Tailwind input CSS file
     * `--tailwind-source` — source directory for Tailwind scanning (repeatable)
@@ -61,6 +62,7 @@ defmodule Mix.Tasks.Volt.Build do
           resolve_dir: [:string, :keep],
           external: [:string, :keep],
           code_splitting: :boolean,
+          declarations: :boolean,
           tree_shaking: :boolean,
           tailwind: :boolean,
           tailwind_css: :string,
@@ -127,6 +129,7 @@ defmodule Mix.Tasks.Volt.Build do
       mode: Keyword.get(parsed, :mode) || to_string(config.mode),
       format: parse_format(Keyword.get(parsed, :format), config.format),
       code_splitting: Keyword.get(parsed, :code_splitting, config.code_splitting),
+      declarations: Keyword.get(parsed, :declarations, config.declarations),
       tree_shaking: Keyword.get(parsed, :tree_shaking, config.tree_shaking),
       chunks: config.chunks,
       env_prefix: config.env_prefix,
@@ -174,6 +177,12 @@ defmodule Mix.Tasks.Volt.Build do
 
         for style <- styles do
           Mix.shell().info("  #{Path.basename(style.path)}  #{format_file(style.path)}")
+        end
+
+        for declaration <- assets.declarations do
+          Mix.shell().info(
+            "  #{Path.basename(declaration.path)}  #{format_file(declaration.path)}"
+          )
         end
 
         Mix.shell().info("  manifest.json  #{map_size(manifest)} entries")

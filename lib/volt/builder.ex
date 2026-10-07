@@ -42,6 +42,7 @@ defmodule Volt.Builder do
     * `:asset_url_prefix` — public URL prefix for emitted asset references (default: `"/assets"`)
     * `:code_splitting` — split dynamic imports and multi-entry ESM shared modules into chunks (default: `true`)
     * `:tree_shaking` — remove unused exports (default: `true`)
+    * `:declarations` — write one `.d.ts` per script entry beside its bundle, with the types the entry exports (default: `false`). See `Volt.Builder.Declarations`.
     * `:chunks` — manual chunk definitions, map of chunk name to list of patterns:
 
           chunks: %{"vendor" => ["vue", "vue-router"], "ui" => ["assets/src/components"]}
@@ -152,7 +153,13 @@ defmodule Volt.Builder do
           build_isolated_entries(entries, ctx, build_ctx) |> finalize_build_results()
 
         result ->
-          merge_worker_metadata(result, worker_metadata)
+          result
+          |> merge_worker_metadata(worker_metadata)
+          |> with_declarations(
+            Enum.map(entries, fn {entry, :script, name} -> {entry, name} end),
+            ctx,
+            build_ctx
+          )
       end
     else
       true -> build_isolated_entries(entries, ctx, build_ctx) |> finalize_build_results()
@@ -336,7 +343,9 @@ defmodule Volt.Builder do
           Output.prepare_single(entry, name, compiled, out)
         end
 
-      merge_worker_metadata(prepared, worker_metadata)
+      prepared
+      |> merge_worker_metadata(worker_metadata)
+      |> with_declarations([{entry, name}], ctx, build_ctx)
     end
   end
 
@@ -398,6 +407,7 @@ defmodule Volt.Builder do
     asset_url_prefix = Keyword.get(opts, :asset_url_prefix, Paths.prefix())
     aliases = Keyword.get(opts, :aliases, %{})
     code_splitting = Keyword.get(opts, :code_splitting, true)
+    declarations = Keyword.get(opts, :declarations, false)
     tree_shaking = Keyword.get(opts, :tree_shaking, true)
     chunks = Keyword.get(opts, :chunks, %{})
     format = Keyword.get(opts, :format, :iife)
@@ -463,6 +473,7 @@ defmodule Volt.Builder do
       bundle_opts: bundle_opts,
       asset_url_prefix: asset_url_prefix,
       code_splitting: code_splitting,
+      declarations: declarations,
       sourcemap_hidden: sourcemap_opt == :hidden,
       chunks: chunks
     }
@@ -514,6 +525,39 @@ defmodule Volt.Builder do
         error
     end
   end
+
+  # A library's types go beside its bundle, under the entry's name and no hash:
+  # `package.json` names the file.
+  defp with_declarations({:ok, result, plan}, entries, ctx, %{declarations: true} = build_ctx) do
+    Enum.reduce_while(entries, {:ok, [], []}, fn {entry, name}, {:ok, outputs, artifacts} ->
+      case Volt.Builder.Declarations.bundle(entry, ctx) do
+        {:ok, dts} ->
+          file = "#{name}.d.ts"
+          artifact = %Volt.Builder.Artifact{file: file, content: dts}
+
+          output = %Volt.Builder.OutputFile{
+            path: Path.join(build_ctx.outdir, file),
+            size: byte_size(dts)
+          }
+
+          {:cont, {:ok, [output | outputs], [artifact | artifacts]}}
+
+        error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, outputs, artifacts} ->
+        with {:ok, plan} <- Volt.Builder.Plan.new(plan.artifacts ++ Enum.reverse(artifacts)) do
+          {:ok, %{result | declarations: result.declarations ++ Enum.reverse(outputs)}, plan}
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp with_declarations(prepared, _entries, _ctx, _build_ctx), do: prepared
 
   defp merge_worker_metadata({:error, _} = error, _workers), do: error
 
@@ -966,6 +1010,7 @@ defmodule Volt.Builder do
               css: result.css || acc.css,
               styles: [result.styles | acc.styles],
               chunks: [result.chunks | acc.chunks],
+              declarations: [result.declarations | acc.declarations],
               manifest: Map.merge(acc.manifest, result.manifest)
             }
 
@@ -989,7 +1034,8 @@ defmodule Volt.Builder do
              result
              | js: js,
                styles: result.styles |> Enum.reverse() |> List.flatten() |> Enum.uniq(),
-               chunks: result.chunks |> Enum.reverse() |> List.flatten()
+               chunks: result.chunks |> Enum.reverse() |> List.flatten(),
+               declarations: result.declarations |> Enum.reverse() |> List.flatten()
            }, plan}
         end
 
