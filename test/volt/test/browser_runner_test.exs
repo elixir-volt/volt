@@ -77,12 +77,12 @@ defmodule Volt.Test.BrowserRunnerTest do
     assert {:ok, %Result{status: :passed}} =
              Volt.Test.BrowserRunner.run_test(file, 1, config: config)
 
-    {:ok, %{guid: guid}} = Volt.Test.Browser.Run.launch(:chromium, config.timeout)
+    {:ok, %{guid: guid}} = Volt.Test.Browser.launch(:chromium, config.timeout)
 
     assert {:ok, %Result{status: :passed}} =
              Volt.Test.BrowserRunner.run_test(file, 1, config: config)
 
-    assert {:ok, %{guid: ^guid}} = Volt.Test.Browser.Run.launch(:chromium, config.timeout)
+    assert {:ok, %{guid: ^guid}} = Volt.Test.Browser.launch(:chromium, config.timeout)
   end
 
   test "bundles a file once until one of its sources changes", %{tmp_dir: tmp_dir} do
@@ -100,8 +100,8 @@ defmodule Volt.Test.BrowserRunnerTest do
 
     config = Volt.Test.Config.read(browser: true, root: tmp_dir)
     bundle_opts = Volt.Test.Shared.bundle_opts(file, config, [])
-    {:ok, _pid} = Volt.Test.Browser.start(config)
-    {:ok, _browser} = Volt.Test.Browser.Run.launch(:chromium, config.timeout)
+    {:ok, _pid} = Volt.Test.Browser.Supervisor.start(config)
+    {:ok, _browser} = Volt.Test.Browser.launch(:chromium, config.timeout)
 
     assert {:ok, url} = Volt.Test.Browser.module(file, bundle_opts)
     assert {:ok, ^url} = Volt.Test.Browser.module(file, bundle_opts)

@@ -41,7 +41,7 @@ defmodule Volt.Test.BrowserRunner do
     config = Keyword.fetch!(opts, :config)
     timeout = Keyword.get(opts, :timeout, config.timeout)
 
-    with {:ok, _pid} <- Browser.start(config) do
+    with {:ok, _pid} <- Browser.Supervisor.start(config) do
       Browser.with_page(browser(config), timeout, fn frame ->
         with {:ok, module_url} <-
                Browser.module(path, Volt.Test.Shared.bundle_opts(path, config, opts)) do
@@ -73,6 +73,9 @@ defmodule Volt.Test.BrowserRunner do
   # The playwright_ex dependency is only present in test environments, so its
   # functions are called without compile-time references.
   defp frame_evaluate(frame_guid, opts) do
-    apply(PlaywrightEx.Frame, :evaluate, [frame_guid, [connection: Browser.connection()] ++ opts])
+    apply(PlaywrightEx.Frame, :evaluate, [
+      frame_guid,
+      [connection: Browser.Supervisor.connection()] ++ opts
+    ])
   end
 end
