@@ -7,7 +7,7 @@ mix igniter.install volt
 ```
 
 The installer:
-- Adds `{:volt, "~> 0.22"}` to `mix.exs`
+- Adds `{:volt, "~> 0.23"}` to `mix.exs`
 - Configures build settings in `config/config.exs`
 - Adds lint config to `config/config.exs`
 - Adds the `Volt.Formatter` plugin and formatter options to `.formatter.exs`
@@ -28,7 +28,7 @@ Add Volt to your dependencies:
 
 ```elixir
 def deps do
-  [{:volt, "~> 0.22"}]
+  [{:volt, "~> 0.23"}]
 end
 ```
 

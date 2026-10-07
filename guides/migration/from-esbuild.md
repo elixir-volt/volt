@@ -22,7 +22,7 @@ Remove from `mix.exs`:
 Add:
 
 ```elixir
-{:volt, "~> 0.22"}
+{:volt, "~> 0.23"}
 ```
 
 ### 2. Replace Config
