@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `mix volt.js.check --type-aware` types imports of `.vue` files by the component's own declaration. The Vue plugin generates it from each checked `.vue` file with `Vize.generate_dts/2` and Volt sends it to tsgolint as `<file>.vue.d.ts`, which TypeScript resolves an import of the `.vue` file to. Props, emits and slots of imported components are then checked in `h(Button, {...})` and `InstanceType<typeof Button>`, and no `declare module "*.vue"` shim is needed for checked files. Plugins declare their own files through the new `c:Volt.Plugin.declaration/3` callback ([#63](https://github.com/elixir-volt/volt/issues/63)).
+
+### Changed
+
+- Browser tests share one browser per run, in `Volt.Test.Browser`, and each test gets a browser context of its own. Every test started a Playwright driver and launched a browser for itself, because the driver was linked to the test process and went away with it, which cost more than running the test. A test file is now bundled once for all of its tests and bundled again only when one of its source files changes, and the ExUnit modules generated for browser tests are `async: true` ([#65](https://github.com/elixir-volt/volt/issues/65)).
+
+### Fixed
+
+- Give vendor modules a new URL when a package changes. The dev server serves `/@vendor/<package>.js?v=<hash>` as immutable, and the hash covered the lockfiles and plugins but not the packages, so a package that changed in place, such as a linked one, kept its URL and browsers kept their copy of it. The hash now also covers the generation of the pre-bundle, which changes whenever a package is bundled again, and a compiled application module is compiled again when the hash it was compiled with is no longer current: after a lockfile change, unchanged modules kept importing the old URL, which answered 504. Packages linked from outside `node_modules` are watched, and a change bundles them again and reloads the page. `npm.lock`, the lockfile of `mix npm.install`, now counts as a lockfile; it was not read, so an install did not change the URL either ([#67](https://github.com/elixir-volt/volt/issues/67)).
+- Treat Node built-in subpaths such as `timers/promises`, `fs/promises` and `stream/web` as built-ins, and read the `browser` field of packages. Bundling a package that requires `timers/promises`, such as `@sinonjs/fake-timers`, failed with `{:not_found, "timers/promises"}` even though its `browser` field maps the specifier to `false`. Specifiers a `browser` field maps to `false` now resolve to an empty module, and those mapped to a path resolve to that path, as in esbuild and webpack. The builder, the dev server and the Tailwind resolver share the built-in check ([#64](https://github.com/elixir-volt/volt/issues/64)).
+
 ## 0.21.0 - 2026-10-05
 
 ### Compatibility

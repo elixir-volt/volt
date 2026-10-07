@@ -6,14 +6,60 @@ defmodule Volt.Builder.Resolver do
 
   Returns `{:ok, path}`, `:skip` (for externals/node builtins), or `{:error, reason}`.
   """
+  # A module with nothing in it, for imports a package's `browser` field maps
+  # to `false`. The collector supplies its source; see `empty_module?/1`.
+  @empty_module "volt:empty.js"
+
   def resolve(specifier, importer, ctx) do
     {path_specifier, query} = Volt.JS.Specifier.split_query(specifier)
 
-    if external?(path_specifier, ctx.external) do
-      :skip
-    else
-      do_resolve(path_specifier, importer, ctx, query)
+    if external?(path_specifier, ctx.external),
+      do: :skip,
+      else: resolve_for_browser(path_specifier, importer, ctx, query)
+  end
+
+  @doc "Return whether a resolved path is the empty module."
+  def empty_module?(path), do: path == @empty_module
+
+  # A package's `browser` field says what a specifier means in browsers: `false`
+  # for nothing, as for Node built-ins a package only uses when it has them, or a
+  # path to a replacement. esbuild, webpack and Rollup honour it the same way.
+  defp resolve_for_browser(specifier, importer, ctx, query) do
+    case browser_field(specifier, importer) do
+      false -> {:ok, @empty_module}
+      {:replace, path} -> append_query(resolve_relative(path, importer, ctx), query)
+      nil -> do_resolve(specifier, importer, ctx, query)
     end
+  end
+
+  defp browser_field(_specifier, nil), do: nil
+
+  defp browser_field(specifier, importer) do
+    with {:ok, package_dir, %{"browser" => browser}} when is_map(browser) <-
+           NPM.Resolution.PackageResolver.nearest_package(Path.dirname(importer_path(importer))),
+         {:ok, value} <- fetch_browser_mapping(browser, specifier) do
+      case value do
+        false -> false
+        path when is_binary(path) -> {:replace, Path.expand(path, package_dir)}
+        _other -> nil
+      end
+    else
+      _none -> nil
+    end
+  end
+
+  defp fetch_browser_mapping(browser, specifier) do
+    Enum.find_value([specifier, "node:" <> specifier], :error, fn key ->
+      case Map.fetch(browser, key) do
+        {:ok, value} -> {:ok, value}
+        :error -> nil
+      end
+    end)
+  end
+
+  defp importer_path(importer) do
+    {path, _query} = Volt.URL.split_query(importer)
+    path
   end
 
   def absolute?(specifier), do: Path.type(specifier) == :absolute
@@ -46,7 +92,7 @@ defmodule Volt.Builder.Resolver do
 
   defp resolve_by_type(specifier, importer, ctx) do
     cond do
-      NPM.Resolution.PackageResolver.node_builtin?(specifier) ->
+      Volt.JS.Specifier.node_builtin?(specifier) ->
         :skip
 
       # OXC's transform imports helpers from `@oxc-project/runtime`, and `OXC.bundle/2`

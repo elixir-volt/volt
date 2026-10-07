@@ -39,6 +39,86 @@ defmodule Volt.Test.BrowserRunnerTest do
     assert :ok = apply(module, name, [%{}])
   end
 
+  test "browser test modules run concurrently", %{tmp_dir: tmp_dir} do
+    write!(tmp_dir, "async.browser.test.ts", ~TS"""
+    import { test, expect } from 'volt:test'
+
+    test('is registered', () => {
+      expect(1).toBe(1)
+    })
+    """)
+
+    assert [module] =
+             Volt.Test.ExUnit.install(
+               root: tmp_dir,
+               include: ["async.browser.test.ts"],
+               browser: true
+             )
+
+    assert %{async?: true} = module.__ex_unit__(:config)
+  end
+
+  test "tests share the run's browser and get a context each", %{tmp_dir: tmp_dir} do
+    file =
+      write!(tmp_dir, "shared.browser.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+
+      test('starts from an empty page', () => {
+        expect(localStorage.getItem('seen')).toBeNull()
+        localStorage.setItem('seen', 'yes')
+        expect(document.body.dataset.volt).toBeUndefined()
+        document.body.dataset.volt = 'seen'
+      })
+      """)
+
+    config =
+      Volt.Test.Config.read(browser: true, include: ["shared.browser.test.ts"], root: tmp_dir)
+
+    assert {:ok, %Result{status: :passed}} =
+             Volt.Test.BrowserRunner.run_test(file, 1, config: config)
+
+    {:ok, %{guid: guid}} = Volt.Test.Browser.launch(:chromium, config.timeout)
+
+    assert {:ok, %Result{status: :passed}} =
+             Volt.Test.BrowserRunner.run_test(file, 1, config: config)
+
+    assert {:ok, %{guid: ^guid}} = Volt.Test.Browser.launch(:chromium, config.timeout)
+  end
+
+  test "bundles a file once until one of its sources changes", %{tmp_dir: tmp_dir} do
+    helper = write!(tmp_dir, "answer.ts", "export const answer = 41\n")
+
+    file =
+      write!(tmp_dir, "bundled.browser.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+      import { answer } from './answer'
+
+      test('reads the helper', () => {
+        expect(answer).toBe(42)
+      })
+      """)
+
+    config = Volt.Test.Config.read(browser: true, root: tmp_dir)
+    bundle_opts = Volt.Test.Shared.bundle_opts(file, config, [])
+    {:ok, _pid} = Volt.Test.Browser.Supervisor.start(config)
+    {:ok, _browser} = Volt.Test.Browser.launch(:chromium, config.timeout)
+
+    assert {:ok, url} = Volt.Test.Browser.module(file, bundle_opts)
+    assert {:ok, ^url} = Volt.Test.Browser.module(file, bundle_opts)
+
+    assert {:ok, %Result{status: :failed}} =
+             Volt.Test.BrowserRunner.run_test(file, 1, config: config)
+
+    File.write!(helper, "export const answer = 42\n")
+    File.touch!(helper, System.os_time(:second) + 1)
+
+    assert {:ok, next} = Volt.Test.Browser.module(file, bundle_opts)
+    assert next != url
+
+    assert {:ok, %Result{status: :passed}} =
+             Volt.Test.BrowserRunner.run_test(file, 1, config: config)
+  end
+
   test "collects and runs tests in a browser context", %{tmp_dir: tmp_dir} do
     file =
       write!(tmp_dir, "browser.test.ts", ~TS"""

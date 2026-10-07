@@ -19,7 +19,9 @@ defmodule Volt.Test.ExUnit do
   in normal ExUnit tags, formatters, failures, and CI behavior.
 
   Pass `browser: true` to execute tests in a real Playwright browser instead
-  of QuickBEAM while keeping the same ExUnit registration model.
+  of QuickBEAM while keeping the same ExUnit registration model. The run
+  shares one browser (see `Volt.Test.Browser`), every test gets a browser
+  context of its own, and the generated modules are `async: true`.
 
   By default, each JavaScript test becomes an ExUnit test. Pass
   `granularity: :file` to register one ExUnit test per file and execute the
@@ -77,7 +79,7 @@ defmodule Volt.Test.ExUnit do
 
     quote do
       defmodule unquote(module) do
-        use ExUnit.Case, async: false
+        use ExUnit.Case, async: unquote(async?(config))
 
         unquote_splicing(test_defs)
       end
@@ -89,7 +91,7 @@ defmodule Volt.Test.ExUnit do
 
     quote do
       defmodule unquote(module) do
-        use ExUnit.Case, async: false
+        use ExUnit.Case, async: unquote(async?(config))
 
         @moduletag js: true
         @moduletag volt_file: unquote(file)
@@ -148,6 +150,11 @@ defmodule Volt.Test.ExUnit do
 
   defp runner(%Config{browser: true}), do: Volt.Test.BrowserRunner
   defp runner(%Config{}), do: Volt.Test.Runner
+
+  # Browser tests each run in a context of their own in the run's browser, so
+  # their modules run concurrently like any other async ExUnit modules.
+  defp async?(%Config{browser: true}), do: true
+  defp async?(%Config{}), do: false
 
   defp test_tags(file, test) do
     [

@@ -70,19 +70,24 @@ defmodule Volt.JS.Check do
   end
 
   defp type_aware_lint(files, config, lint_config, opts) do
-    {files, source_overrides, source_files} = type_aware_inputs(files)
+    inputs = type_aware_inputs(files)
 
+    # Declarations are resolved from imports, so they are not checked files
+    # and need no place in a project; the overlay only lists the modules.
     common_opts =
       [
         type_aware: true,
         type_check: opts[:type_check] == true,
         source_overrides:
-          source_overrides
-          |> Map.merge(Volt.JS.Lint.TSConfigOverlay.overrides(Map.keys(source_overrides)))
+          inputs.overrides
+          |> Map.merge(Volt.JS.Lint.TSConfigOverlay.overrides(Map.keys(inputs.overrides)))
+          |> Map.merge(inputs.declarations)
           |> Map.merge(Keyword.get(config, :source_overrides, %{}))
       ] ++ type_aware_options(config)
 
-    files
+    source_files = inputs.source_files
+
+    inputs.files
     |> Enum.group_by(fn file ->
       original = Map.get(source_files, Path.expand(file), file)
       lint_config |> Volt.JS.Lint.Config.options(original) |> OXC.Lint.type_aware_rules()
@@ -105,41 +110,61 @@ defmodule Volt.JS.Check do
     end)
   end
 
+  # The files tsgolint checks, with the virtual modules of plugin-owned files
+  # such as `.vue` scripts among them, the sources of those modules, the files
+  # they came from, and the declarations imports of plugin-owned files resolve
+  # to.
   defp type_aware_inputs(files) do
     plugins = Volt.Config.build().plugins
+    inputs = %{files: [], overrides: %{}, source_files: %{}, declarations: %{}}
 
-    Enum.reduce(files, {[], %{}, %{}}, fn file, {files, overrides, source_files} ->
+    files
+    |> Enum.reduce(inputs, fn file, inputs ->
       if type_aware_file?(file) do
-        {[file | files], overrides, source_files}
+        %{inputs | files: [file | inputs.files]}
       else
+        source = File.read!(file)
+
         file
-        |> embedded_modules(plugins)
-        |> Enum.reduce({files, overrides, source_files}, fn module, acc ->
-          add_embedded_module(acc, file, module)
-        end)
+        |> embedded_modules(plugins, source)
+        |> Enum.reduce(inputs, &add_embedded_module(&2, file, &1))
+        |> add_declaration(file, Volt.PluginRunner.declaration(plugins, file, source, []))
       end
     end)
-    |> then(fn {files, overrides, source_files} ->
-      {Enum.reverse(files), overrides, source_files}
-    end)
+    |> Map.update!(:files, &Enum.reverse/1)
   end
 
   defp type_aware_file?(file), do: Path.extname(file) in Volt.JS.Extensions.bundleable()
 
-  defp embedded_modules(file, plugins) do
-    Volt.PluginRunner.embedded_modules(plugins, file, File.read!(file), [])
+  defp embedded_modules(file, plugins, source) do
+    Volt.PluginRunner.embedded_modules(plugins, file, source, [])
   end
 
-  defp add_embedded_module({files, overrides, source_files}, file, module) do
+  defp add_embedded_module(inputs, file, module) do
     virtual_file = "#{file}.#{module.type}#{module.index}#{module.extension}"
     expanded = Path.expand(virtual_file)
 
-    {
-      [virtual_file | files],
-      Map.put(overrides, expanded, module.source),
-      Map.put(source_files, expanded, file)
+    %{
+      inputs
+      | files: [virtual_file | inputs.files],
+        overrides: Map.put(inputs.overrides, expanded, module.source),
+        source_files: Map.put(inputs.source_files, expanded, file)
     }
   end
+
+  # TypeScript resolves an import of `Button.vue` to `Button.vue.d.ts`, so a
+  # generated declaration under that name types the import without a
+  # `declare module "*.vue"` shim. A declaration the project wrote itself
+  # under that name is kept.
+  defp add_declaration(inputs, file, {:ok, declaration}) do
+    path = Path.expand("#{file}.d.ts")
+
+    if File.regular?(path),
+      do: inputs,
+      else: %{inputs | declarations: Map.put(inputs.declarations, path, declaration)}
+  end
+
+  defp add_declaration(inputs, _file, _none), do: inputs
 
   defp restore_sfc_file(diagnostic, source_files) do
     case Map.fetch(source_files, diagnostic.file) do

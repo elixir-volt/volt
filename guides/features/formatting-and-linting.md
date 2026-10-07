@@ -141,6 +141,8 @@ mix volt.js.check --type-aware --type-check
 
 `--type-aware` also checks JavaScript-like scripts embedded in framework component files when the enabled plugin exposes them. Volt's built-in Vue and Svelte plugins expose `<script>` blocks as virtual `.js`, `.ts`, or `.tsx` modules for `tsgolint`, then map diagnostics back to the original `.vue` or `.svelte` file. Component templates are still handled by the normal syntax lint/format path; they are not passed to `tsgolint`.
 
+Imports of `.vue` files are typed by the component itself: `import Button from "./Button.vue"` gives a component whose props, emits and slots the checker knows, so `h(Button, { ... })` and `InstanceType<typeof Button>` are checked against them. No `declare module "*.vue"` shim is needed for checked files.
+
 Configure the executable when it is not on `PATH`:
 
 ```elixir

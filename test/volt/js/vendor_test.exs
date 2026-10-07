@@ -783,12 +783,15 @@ defmodule Volt.JS.VendorTest do
              ) == url
     end
 
-    test "browser hash changes when lockfile changes" do
-      lockfile = Path.join(@fixture_dir, "package-lock.json")
-      File.write!(lockfile, ~s({"lockfileVersion":1}))
+    # A lockfile is known by its size and modification time, as a package
+    # manager's write changes both.
+    test "browser hash changes when a lockfile changes" do
+      lockfile = Path.join(@fixture_dir, "npm.lock")
+      File.write!(lockfile, ~s({"lockfileVersion":1,"packages":{}}))
       first = Volt.JS.Vendor.browser_hash(node_modules: @node_modules, plugins: [])
 
-      File.write!(lockfile, ~s({"lockfileVersion":2}))
+      File.write!(lockfile, ~s({"lockfileVersion":1,"packages":{"vue":{}}}))
+      File.touch!(lockfile, System.os_time(:second) + 2)
       second = Volt.JS.Vendor.browser_hash(node_modules: @node_modules, plugins: [])
 
       refute first == second

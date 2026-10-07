@@ -53,6 +53,17 @@ defmodule Volt.Plugin do
               [Volt.Plugin.EmbeddedModule.t() | {extension :: String.t(), source :: String.t()}]
               | nil
 
+  @doc """
+  Return the TypeScript declaration of a plugin-owned source file, as the
+  type checker should see the module it exports.
+
+  `mix volt.js.check` resolves imports of the file to the declaration, named
+  `<file>.d.ts`, in place of a `declare module "*.ext"` shim. Return `nil`
+  for files the plugin has no declaration for.
+  """
+  @callback declaration(path :: String.t(), source :: String.t(), opts :: keyword()) ::
+              {:ok, String.t()} | {:error, term()} | nil
+
   @doc "Transform compiled JavaScript before serving or bundling."
   @callback transform(code :: String.t(), path :: String.t()) :: {:ok, String.t()} | nil
 
@@ -102,6 +113,7 @@ defmodule Volt.Plugin do
                       compile: 3,
                       extract_imports: 3,
                       embedded_modules: 3,
+                      declaration: 3,
                       transform: 2,
                       define: 1,
                       prebundle_alias: 1,

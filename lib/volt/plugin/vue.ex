@@ -116,6 +116,17 @@ defmodule Volt.Plugin.Vue do
     end
   end
 
+  @impl true
+  def declaration(path, source, _opts) do
+    {base_path, _query} = Volt.URL.split_query(path)
+
+    if Path.extname(base_path) == ".vue" do
+      with {:ok, %{dts: dts}} <- Vize.generate_dts(source, filename: Path.basename(base_path)) do
+        {:ok, dts}
+      end
+    end
+  end
+
   defp maybe_append_style_imports(code, path, source, opts) do
     if Keyword.get(opts, :mode) == :development do
       style_imports =

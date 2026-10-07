@@ -208,7 +208,84 @@ defmodule Mix.Tasks.Volt.Js.CheckTest do
              "svelteValue"
   end
 
+  test "type-aware check declares single-file components for their importers" do
+    File.write!(Path.join(@tmp_dir, "app.ts"), "import './Button.vue'\n")
+
+    File.write!(Path.join(@tmp_dir, "Button.vue"), """
+    <script setup lang="ts">
+    defineProps<{ variant?: 'primary' | 'ghost' }>()
+    </script>
+    <template><button /></template>
+    """)
+
+    File.write!(Path.join(@tmp_dir, "Legacy.vue"), "<template><p /></template>\n")
+    File.write!(Path.join(@tmp_dir, "Legacy.vue.d.ts"), "export default 1\n")
+
+    tsgolint = fake_tsgolint_capture!(@tmp_dir)
+    Application.put_env(:volt, :sources, ["**/*.{ts,vue}"])
+    Application.put_env(:volt, :lint, tsgolint: tsgolint, rules: %{})
+
+    capture_io(fn -> Mix.Tasks.Volt.Js.Check.run(["--type-aware", "--type-check"]) end)
+
+    payload = @tmp_dir |> Path.join("payload.json") |> File.read!() |> Jason.decode!()
+    [%{"file_paths" => file_paths}] = payload["configs"]
+    overrides = payload["source_overrides"]
+
+    # The declaration is resolved from the import, not checked as a file.
+    declaration = overrides[Path.expand(Path.join(@tmp_dir, "Button.vue.d.ts"))]
+    assert declaration =~ "export type Props = { variant?: 'primary' | 'ghost' }"
+    assert declaration =~ "export default"
+    refute "Button.vue.d.ts" in Enum.map(file_paths, &Path.basename/1)
+
+    # A declaration the project wrote itself is left to it.
+    refute Map.has_key?(overrides, Path.expand(Path.join(@tmp_dir, "Legacy.vue.d.ts")))
+  end
+
   @tsgolint Path.expand("node_modules/.bin/tsgolint")
+
+  # Runs the real tsgolint, which CI and `npm ci` install.
+  @tag skip: not File.exists?(@tsgolint)
+  test "imports of single-file components are typed by their props without a shim" do
+    write = fn path, content ->
+      path = Path.join(@tmp_dir, path)
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path, content)
+    end
+
+    write.("tsconfig.json", """
+    {
+      "compilerOptions": { "strict": true, "noEmit": true, "moduleResolution": "Bundler" },
+      "include": ["assets/js/**/*.ts"]
+    }
+    """)
+
+    write.("assets/js/ui/Button.vue", """
+    <script setup lang="ts">
+    defineProps<{ variant?: 'primary' | 'ghost' }>()
+    </script>
+    <template><button /></template>
+    """)
+
+    write.("assets/js/app.ts", """
+    import Button from "./ui/Button.vue"
+    type Variant = InstanceType<typeof Button>["$props"]["variant"]
+    export const ghost: Variant = "ghost"
+    export const huge: Variant = "huge"
+    """)
+
+    Application.put_env(:volt, :sources, ["assets/js/**/*.{ts,vue}"])
+    Application.put_env(:volt, :lint, tsgolint: @tsgolint, rules: %{})
+
+    output =
+      capture_io(:stderr, fn ->
+        catch_exit(Mix.Tasks.Volt.Js.Check.run(["--type-aware", "--type-check"]))
+      end)
+
+    assert output =~ "app.ts:4"
+    assert output =~ "TS2322"
+    refute output =~ "app.ts:3"
+    refute output =~ "Cannot find module"
+  end
 
   # Runs the real tsgolint, which CI and `npm ci` install.
   @tag skip: not File.exists?(@tsgolint)

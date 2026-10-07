@@ -36,6 +36,9 @@ with the session's state generation.
 | `.ts`, `.tsx`, `.js`, `.jsx`, `.vue`, `.svelte`, `.css`, `.scss`, `.sass` | Recompile, push update over WebSocket |
 | `.ex`, `.heex`, `.eex` | Incremental Tailwind rebuild, CSS hot-swap |
 | `.vue` (style-only change) | CSS hot-swap, no page reload |
+| A linked package (a path dependency or `npm link`) | Bundle the package again, full page reload |
+
+Packages are served under a versioned URL that browsers cache. The version changes when a lockfile changes, so an install is picked up on the next page load, and when a package is bundled again. Packages linked from outside `node_modules` are watched; one edited inside `node_modules` is bundled again on the next source change or server start.
 
 The browser client auto-reconnects on disconnect, reloading the page when the connection returns, and shows compilation errors as an overlay. The dev server adds the client to HTML pages the app renders, so the overlay also appears when a page's scripts fail to load.
 

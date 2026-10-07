@@ -66,6 +66,7 @@ defmodule Volt.Watcher do
     reload_dirs: [],
     explicit_ignored: [],
     watch_ignored: [],
+    linked_dirs: [],
     source_digests: %{}
   ]
 
@@ -135,8 +136,13 @@ defmodule Volt.Watcher do
     tailwind_sources = configured_tailwind_sources || watcher_sources(all_dirs)
     watch_ignored = Volt.Watcher.Ignore.compile(Keyword.get(opts, :watch_ignored, []), all_dirs)
 
+    # Linked packages change in place, where no lockfile records it, and the
+    # vendor pre-bundle has to follow.
+    linked_dirs =
+      root |> NPM.Resolution.PackageResolver.find_node_modules() |> Volt.JS.Package.linked_dirs()
+
     fs_pids =
-      Enum.map(all_dirs, fn dir ->
+      Enum.map(all_dirs ++ linked_dirs, fn dir ->
         {:ok, pid} = FileSystem.start_link(dirs: [dir])
         FileSystem.subscribe(pid)
         pid
@@ -164,7 +170,8 @@ defmodule Volt.Watcher do
       reload_dirs: reload_dirs,
       explicit_ignored:
         Volt.Watcher.Ignore.compile_explicit(Keyword.get(opts, :watch_ignored, []), all_dirs),
-      watch_ignored: watch_ignored
+      watch_ignored: watch_ignored,
+      linked_dirs: linked_dirs
     }
 
     state = %{state | source_digests: initial_source_digests(all_dirs -- [root], state)}
@@ -276,13 +283,21 @@ defmodule Volt.Watcher do
 
   @impl true
   def handle_info({:file_event, _pid, {path, events}}, state) do
-    path = Volt.Watcher.Path.normalize_from_roots(path, state.tailwind_dirs)
+    path = Volt.Watcher.Path.normalize_from_roots(path, state.tailwind_dirs ++ state.linked_dirs)
 
     if relevant_write_event?(events) and not ignored_path?(path, state) do
       ext = Path.extname(path)
 
       cond do
         tailwind_output?(path, state) ->
+          {:noreply, state}
+
+        linked_package_path?(path, state) ->
+          # The package is bundled again on the next request, under a new
+          # vendor URL, which the page has to load from the start.
+          Volt.Dev.Prebundled.forget()
+          relative = Path.relative_to(path, state.root)
+          HMR.broadcast(:update, %{path: relative, changes: [:vendor]}, session: state.session)
           {:noreply, state}
 
         path in Map.get(state.config, :tailwind_dependencies, []) ->
@@ -378,6 +393,9 @@ defmodule Volt.Watcher do
   defp relevant_write_event?(events) do
     Enum.any?(@write_events, &(&1 in events))
   end
+
+  defp linked_package_path?(path, %{linked_dirs: dirs}),
+    do: Enum.any?(dirs, &Volt.Path.inside?(path, &1))
 
   defp ignored_path?(path, state) do
     patterns =

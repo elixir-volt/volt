@@ -16,6 +16,20 @@ defmodule Volt.JS.Specifier do
 
   def split_query(specifier), do: Volt.URL.split_query(specifier)
 
+  @doc """
+  Return whether a specifier names a Node.js built-in module, including a
+  subpath of one such as `timers/promises` or `node:fs/promises`.
+  """
+  @spec node_builtin?(String.t()) :: boolean()
+  def node_builtin?("node:" <> _rest), do: true
+
+  def node_builtin?(specifier) do
+    specifier
+    |> String.split("/", parts: 2)
+    |> hd()
+    |> NPM.Resolution.PackageResolver.node_builtin?()
+  end
+
   @oxc_runtime "@oxc-project/runtime"
 
   @doc """

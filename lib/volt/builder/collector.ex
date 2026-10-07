@@ -76,7 +76,8 @@ defmodule Volt.Builder.Collector do
   end
 
   defp read_module(module_id, plugins) do
-    with nil <- read_embedded_module(module_id, plugins),
+    with false <- Volt.Builder.Resolver.empty_module?(module_id),
+         nil <- read_embedded_module(module_id, plugins),
          nil <- read_plugin_module(module_id, plugins) do
       path = module_path(module_id)
 
@@ -84,6 +85,9 @@ defmodule Volt.Builder.Collector do
         {:ok, source} -> {:ok, source, nil}
         error -> error
       end
+    else
+      true -> {:ok, "export {};\n", nil}
+      other -> other
     end
   end
 

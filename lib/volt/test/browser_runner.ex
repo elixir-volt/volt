@@ -5,8 +5,12 @@ defmodule Volt.Test.BrowserRunner do
   This runner is intentionally small and mirrors `Volt.Test.Runner`'s result
   contract so ExUnit integration can switch between QuickBEAM and browser
   execution without changing assertions or reporting.
+
+  The browser belongs to the run (see `Volt.Test.Browser`); each call opens a
+  context in it, loads the file's bundled module and closes the context again.
   """
 
+  alias Volt.Test.Browser
   alias Volt.Test.Config
 
   @type result :: map()
@@ -37,117 +41,41 @@ defmodule Volt.Test.BrowserRunner do
     config = Keyword.fetch!(opts, :config)
     timeout = Keyword.get(opts, :timeout, config.timeout)
 
-    with {:ok, bundled} <- Volt.Builder.bundle(Volt.Test.Shared.bundle_opts(path, config, opts)),
-         {:ok, test_url, cleanup} <- write_browser_test_module(bundled.code),
-         {:ok, runtime_code} <- browser_runtime_code(),
-         :ok <- ensure_playwright_started(config, timeout),
-         {:ok, browser} <- launch_browser(browser(config), timeout: timeout),
-         {:ok, context} <- browser_new_context(browser.guid, timeout: timeout),
-         {:ok, %{main_frame: frame}} <- browser_context_new_page(context.guid, timeout: timeout),
-         {:ok, _} <- frame_goto(frame.guid, url: test_url.page, timeout: timeout) do
-      try do
-        evaluate(frame, runtime_code, test_url.module, path, mode, test_id, timeout)
-      after
-        cleanup.()
-        browser_context_close(context.guid, timeout: timeout)
-        browser_close(browser.guid, timeout: timeout)
-      end
+    with {:ok, _pid} <- Browser.Supervisor.start(config) do
+      Browser.with_page(browser(config), timeout, fn frame ->
+        with {:ok, module_url} <-
+               Browser.module(path, Volt.Test.Shared.bundle_opts(path, config, opts)) do
+          evaluate(frame, module_url, path, mode, test_id, timeout)
+        end
+      end)
     end
-  end
-
-  defp browser_runtime_code do
-    Volt.Priv.bundle({:volt, "ts"}, "test/browser.ts")
-  end
-
-  defp ensure_playwright_started(%Config{} = config, timeout) do
-    opts =
-      config.playwright
-      |> Keyword.put_new(:timeout, timeout)
-      |> Keyword.put_new(:executable, playwright_executable())
-
-    case playwright_supervisor_start_link(opts) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> :ok
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp playwright_executable do
-    local = Path.expand("node_modules/playwright/cli.js")
-    if File.exists?(local), do: local, else: "playwright"
   end
 
   defp browser(%Config{browsers: [browser | _]}), do: browser
   defp browser(%Config{}), do: :chromium
 
-  defp write_browser_test_module(code) do
-    dir = Path.join(System.tmp_dir!(), "volt-browser-test-#{System.unique_integer([:positive])}")
-    page_path = Path.join(dir, "index.html")
-    module_path = Path.join(dir, "test.mjs")
-
-    with :ok <- File.mkdir_p(dir),
-         :ok <- File.write(page_path, "<!doctype html><meta charset=\"utf-8\">"),
-         :ok <- File.write(module_path, code) do
-      {:ok, %{page: file_url(page_path), module: file_url(module_path)},
-       fn -> File.rm_rf(dir) end}
-    end
+  # The page the run opens carries the test runtime, so the frame already has
+  # `__voltExecuteBrowserTest`.
+  defp evaluate(frame, test_url, file, mode, test_id, timeout) do
+    frame_evaluate(frame.guid,
+      expression: "payload => globalThis.__voltExecuteBrowserTest(payload)",
+      is_function: true,
+      arg: %{
+        "testUrl" => test_url,
+        "file" => file,
+        "mode" => Atom.to_string(mode),
+        "testId" => test_id
+      },
+      timeout: timeout
+    )
   end
 
-  defp file_url(path) do
-    %URI{scheme: "file", path: Path.expand(path)} |> URI.to_string()
-  end
-
-  defp evaluate(frame, runtime_code, test_url, file, mode, test_id, timeout) do
-    with {:ok, _} <-
-           frame_evaluate(frame.guid,
-             expression: runtime_code,
-             is_function: false,
-             arg: nil,
-             timeout: timeout
-           ) do
-      frame_evaluate(frame.guid,
-        expression: "payload => globalThis.__voltExecuteBrowserTest(payload)",
-        is_function: true,
-        arg: %{
-          "testUrl" => test_url,
-          "file" => file,
-          "mode" => Atom.to_string(mode),
-          "testId" => test_id
-        },
-        timeout: timeout
-      )
-    end
-  end
-
-  defp playwright_supervisor_start_link(opts) do
-    apply(PlaywrightEx.Supervisor, :start_link, [opts])
-  end
-
-  defp launch_browser(browser, opts) do
-    apply(PlaywrightEx, :launch_browser, [browser, opts])
-  end
-
-  defp browser_new_context(browser_guid, opts) do
-    apply(PlaywrightEx.Browser, :new_context, [browser_guid, opts])
-  end
-
-  defp browser_close(browser_guid, opts) do
-    apply(PlaywrightEx.Browser, :close, [browser_guid, opts])
-  end
-
-  defp browser_context_new_page(context_guid, opts) do
-    apply(PlaywrightEx.BrowserContext, :new_page, [context_guid, opts])
-  end
-
-  defp browser_context_close(context_guid, opts) do
-    apply(PlaywrightEx.BrowserContext, :close, [context_guid, opts])
-  end
-
-  defp frame_goto(frame_guid, opts) do
-    apply(PlaywrightEx.Frame, :goto, [frame_guid, opts])
-  end
-
+  # The playwright_ex dependency is only present in test environments, so its
+  # functions are called without compile-time references.
   defp frame_evaluate(frame_guid, opts) do
-    apply(PlaywrightEx.Frame, :evaluate, [frame_guid, opts])
+    apply(PlaywrightEx.Frame, :evaluate, [
+      frame_guid,
+      [connection: Browser.Supervisor.connection()] ++ opts
+    ])
   end
 end

@@ -11,6 +11,15 @@ defmodule Volt.JS.Vendor do
   so conditional CJS branches resolve correctly.
 
   Bundled files are cached on disk in `_build/volt/vendor/`.
+
+  Vendor URLs carry a version, `?v=`, that browsers cache them under for
+  good. It changes with the module directories, lockfiles and plugins, and
+  with the generation of the pre-bundle: a hash over the signature of every
+  package bundled, written beside the bundles. A package that changed in
+  place, such as a linked one, is bundled again on the next pre-bundle, which
+  gives every vendor module a new URL. One URL for all of them is deliberate:
+  the bundles share chunks, and a browser mixing old and new ones would hold
+  two instances of a chunk.
   """
 
   require Logger
@@ -22,8 +31,12 @@ defmodule Volt.JS.Vendor do
     Volt.Paths.expand(Path.join(build_path, "volt/vendor"))
   end
 
-  defp context_dir(module_dirs, plugins, module_types) do
-    signature = browser_signature(module_dirs, plugins, module_types)
+  @generation_file "generation"
+
+  defp context_dir(module_dirs, plugins, module_types),
+    do: context_dir(browser_signature(module_dirs, plugins, module_types))
+
+  defp context_dir(signature) when is_map(signature) do
     hash = :crypto.hash(:sha256, :erlang.term_to_binary(signature)) |> Base.encode16(case: :lower)
     Path.join(cache_dir(), hash)
   end
@@ -101,19 +114,44 @@ defmodule Volt.JS.Vendor do
   def current_browser_hash?(nil, _opts), do: true
   def current_browser_hash?(hash, opts), do: hash == browser_hash(opts)
 
-  @doc "Return the current browser hash for optimized dependency requests."
+  @doc """
+  Return the current browser hash for optimized dependency requests.
+
+  The hash covers the browser signature and the generation of the pre-bundle,
+  so it changes when a package is bundled again.
+  """
   @spec browser_hash(keyword()) :: String.t()
   def browser_hash(opts) do
     {plugins, resolve_dirs, module_types} = normalize_on_demand_opts(opts)
     node_modules = Keyword.get(opts, :node_modules)
     module_dirs = module_dirs(node_modules, resolve_dirs)
+    signature = browser_signature(module_dirs, plugins, module_types)
 
     :crypto.hash(
       :sha256,
-      :erlang.term_to_binary(browser_signature(module_dirs, plugins, module_types))
+      :erlang.term_to_binary({signature, read_generation(context_dir(signature))})
     )
     |> Base.encode16(case: :lower)
     |> binary_part(0, 8)
+  end
+
+  @doc """
+  Return the generation of the pre-bundle for `opts`: a hash over the cache
+  signatures of the packages bundled, or `nil` before the first pre-bundle.
+  """
+  @spec generation(keyword()) :: String.t() | nil
+  def generation(opts) when is_list(opts) do
+    {plugins, resolve_dirs, module_types} = normalize_on_demand_opts(opts)
+    node_modules = Keyword.get(opts, :node_modules)
+    module_dirs = module_dirs(node_modules, resolve_dirs)
+    read_generation(context_dir(module_dirs, plugins, module_types))
+  end
+
+  defp read_generation(context_dir) do
+    case File.read(Path.join(context_dir, @generation_file)) do
+      {:ok, generation} -> generation
+      {:error, _reason} -> nil
+    end
   end
 
   @doc """
@@ -284,6 +322,24 @@ defmodule Volt.JS.Vendor do
         )
       end
     end)
+
+    write_generation!(context_dir(module_dirs, plugins, module_types))
+  end
+
+  # The generation is a hash over every package's cache signature, so it
+  # changes whenever a package was bundled again, and the vendor URLs with it.
+  defp write_generation!(context_dir) do
+    signatures =
+      context_dir
+      |> Path.join("*.meta")
+      |> Path.wildcard()
+      |> Enum.sort()
+      |> Enum.map(&File.read!/1)
+
+    generation =
+      :crypto.hash(:sha256, :erlang.term_to_binary(signatures)) |> Base.encode16(case: :lower)
+
+    File.write!(Path.join(context_dir, @generation_file), generation)
   end
 
   defp fallback_bundle_vendors(specifiers, module_dirs, plugins, module_types) do
@@ -651,7 +707,7 @@ defmodule Volt.JS.Vendor do
     end
   end
 
-  @lockfiles ~w(package-lock.json pnpm-lock.yaml yarn.lock bun.lock bun.lockb)
+  @lockfiles ~w(npm.lock package-lock.json pnpm-lock.yaml yarn.lock bun.lock bun.lockb)
 
   defp lockfile_signature(module_dirs) do
     module_dirs
@@ -668,11 +724,18 @@ defmodule Volt.JS.Vendor do
     |> Enum.uniq()
   end
 
+  # Package managers write lockfiles, which can run to megabytes, so their
+  # size and modification time stand in for their contents. The hash is
+  # computed on every vendor import and every request of a compiled module.
   defp lockfiles_in(root) do
-    @lockfiles
-    |> Enum.map(&Path.join(root, &1))
-    |> Enum.filter(&File.regular?/1)
-    |> Enum.map(&{&1, file_signature(&1)})
+    Enum.flat_map(@lockfiles, fn name ->
+      path = Path.join(root, name)
+
+      case File.stat(path, time: :posix) do
+        {:ok, %File.Stat{type: :regular, size: size, mtime: mtime}} -> [{path, size, mtime}]
+        _other -> []
+      end
+    end)
   end
 
   defp file_signature(path) do
