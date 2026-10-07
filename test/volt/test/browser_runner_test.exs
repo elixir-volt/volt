@@ -39,6 +39,24 @@ defmodule Volt.Test.BrowserRunnerTest do
     assert :ok = apply(module, name, [%{}])
   end
 
+  test "starts Volt's application for a project that does not", %{tmp_dir: tmp_dir} do
+    file =
+      write!(tmp_dir, "stopped.browser.test.ts", ~TS"""
+      import { test, expect } from 'volt:test'
+
+      test('runs', () => {
+        expect(document.body).toBeTruthy()
+      })
+      """)
+
+    config = Volt.Test.Config.read(browser: true, root: tmp_dir)
+    :ok = Application.stop(:volt)
+    on_exit(fn -> Application.ensure_all_started(:volt) end)
+
+    assert {:ok, %Result{status: :passed}} =
+             Volt.Test.BrowserRunner.run_test(file, 1, config: config)
+  end
+
   test "browser test modules run concurrently", %{tmp_dir: tmp_dir} do
     write!(tmp_dir, "async.browser.test.ts", ~TS"""
     import { test, expect } from 'volt:test'

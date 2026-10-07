@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Start Volt's application before the browser a test run shares, which lives under its supervisor. A project that depends on Volt with `runtime: false` had to start it in `test_helper.exs`, or browser tests failed with `Volt.Supervisor` not running.
+
 ## 0.22.0 - 2026-10-07
 
 ### Added
