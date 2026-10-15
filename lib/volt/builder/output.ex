@@ -6,7 +6,12 @@ defmodule Volt.Builder.Output do
   @doc "Bundle modules into a single in-memory JS bundle."
   def bundle_single(
         entry,
-        %Volt.Builder.Compiled{scripts: js_files, styles: css_parts, assets: assets},
+        %Volt.Builder.Compiled{
+          scripts: js_files,
+          styles: css_parts,
+          assets: assets,
+          package_manifests: package_manifests
+        },
         files,
         build_ctx
       ) do
@@ -26,7 +31,7 @@ defmodule Volt.Builder.Output do
       |> Keyword.put(:entry, entry_label)
       |> put_external_imports(Rewriter.preserved_external_imports(js_files, ctx))
 
-    case bundle_js_files(js_files, bundle_opts) do
+    case bundle_js_files(js_files ++ package_manifests, bundle_opts) do
       {:ok, bundle_result} ->
         {js_code, js_sourcemap} = extract_bundle_result(bundle_result)
         js_code = Rewriter.inject_external_preamble(js_code, js_files, ctx)
@@ -79,7 +84,8 @@ defmodule Volt.Builder.Output do
           scripts: js_files,
           styles: css_parts,
           assets: assets,
-          artifacts: asset_artifacts
+          artifacts: asset_artifacts,
+          package_manifests: package_manifests
         },
         build_ctx
       ) do
@@ -100,7 +106,7 @@ defmodule Volt.Builder.Output do
       |> Keyword.put(:entry, entry_label)
       |> put_external_imports(Rewriter.preserved_external_imports(js_files, ctx))
 
-    case bundle_js_files(js_files, bundle_opts) do
+    case bundle_js_files(js_files ++ package_manifests, bundle_opts) do
       {:ok, bundle_result} ->
         {js_code, js_sourcemap} = extract_bundle_result(bundle_result)
         js_code = Rewriter.inject_external_preamble(js_code, js_files, ctx)
@@ -159,7 +165,8 @@ defmodule Volt.Builder.Output do
           scripts: js_files,
           styles: css_parts,
           assets: assets,
-          artifacts: asset_artifacts
+          artifacts: asset_artifacts,
+          package_manifests: package_manifests
         },
         modules,
         path_labels,
@@ -178,7 +185,7 @@ defmodule Volt.Builder.Output do
     bundle =
       OXC.Bundle.new(
         entries: shared_bundle_entries(entries, path_labels),
-        files: js_files,
+        files: js_files ++ package_manifests,
         format: Keyword.get(bundle_opts, :format, :esm),
         minify: Keyword.get(bundle_opts, :minify, false),
         sourcemap: Keyword.get(bundle_opts, :sourcemap, false),
@@ -397,7 +404,8 @@ defmodule Volt.Builder.Output do
           scripts: js_files,
           styles: css_parts,
           assets: assets,
-          artifacts: asset_artifacts
+          artifacts: asset_artifacts,
+          package_manifests: package_manifests
         },
         {modules, dep_map},
         build_ctx
@@ -421,6 +429,7 @@ defmodule Volt.Builder.Output do
              graph.chunks,
              js_map,
              module_labels,
+             package_manifests,
              bundle_opts,
              ctx,
              graph,
@@ -781,7 +790,16 @@ defmodule Volt.Builder.Output do
     Path.relative_to(to_label, from_dir)
   end
 
-  defp build_chunk_bundles(chunks, js_map, module_labels, bundle_opts, ctx, graph, dep_map) do
+  defp build_chunk_bundles(
+         chunks,
+         js_map,
+         module_labels,
+         package_manifests,
+         bundle_opts,
+         ctx,
+         graph,
+         dep_map
+       ) do
     Enum.reduce_while(chunks, {:ok, %{}}, fn {chunk_id, chunk}, {:ok, acc} ->
       chunk_js = select_chunk_files(chunk.modules, js_map, module_labels)
 
@@ -803,7 +821,7 @@ defmodule Volt.Builder.Output do
           |> put_external_imports(external)
           |> put_external_imports(Rewriter.preserved_external_imports(chunk_js, ctx))
 
-        case bundle_js_files(chunk_js, bundle_opts) do
+        case bundle_js_files(chunk_js ++ package_manifests, bundle_opts) do
           {:ok, result} ->
             {code, sourcemap} = extract_bundle_result(result)
             code = Rewriter.restore_dynamic_imports(code, dynamic_import_placeholder)

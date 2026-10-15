@@ -84,6 +84,60 @@ defmodule Volt.Builder.ResolutionTest do
       assert js =~ "b-"
     end
 
+    test "drops unused modules of packages declaring no side effects" do
+      for {package, side_effects} <- [{"pure-icons", "false"}, {"@scope/effectful-icons", "true"}] do
+        package_dir = Path.join(@fixture_dir, "node_modules/#{package}")
+        File.mkdir_p!(package_dir)
+
+        File.write!(
+          Path.join(package_dir, "package.json"),
+          ~s({"name":"#{package}","type":"module","main":"index.js","sideEffects":#{side_effects}})
+        )
+
+        File.write!(Path.join(package_dir, "wrap.js"), """
+        export function wrap(render) {
+          globalThis.registered = (globalThis.registered || 0) + 1
+          return { render }
+        }
+        """)
+
+        File.write!(Path.join(package_dir, "index.js"), """
+        export { default as Used } from './used.js'
+        export { default as Unused } from './unused.js'
+        """)
+
+        File.write!(Path.join(package_dir, "used.js"), """
+        import { wrap } from './wrap.js'
+        export default wrap(() => '#{package}-used-icon')
+        """)
+
+        File.write!(Path.join(package_dir, "unused.js"), """
+        import { wrap } from './wrap.js'
+        export default wrap(() => '#{package}-unused-icon')
+        """)
+      end
+
+      File.write!(Path.join(@fixture_dir, "src/icons_app.ts"), """
+      import { Used } from 'pure-icons'
+      import { Used as EffectfulUsed } from '@scope/effectful-icons'
+      console.log(Used, EffectfulUsed)
+      """)
+
+      {:ok, result} =
+        Volt.Builder.build(
+          entry: Path.join(@fixture_dir, "src/icons_app.ts"),
+          outdir: @outdir,
+          minify: false,
+          sourcemap: false,
+          node_modules: Path.join(@fixture_dir, "node_modules")
+        )
+
+      js = File.read!(result.js.path)
+      assert js =~ "pure-icons-used-icon"
+      refute js =~ "pure-icons-unused-icon"
+      assert js =~ "@scope/effectful-icons-unused-icon"
+    end
+
     test "resolves bare imports from the importer's scoped package directory" do
       app_packages = Path.join(@fixture_dir, "node_modules")
       framework_root = Path.join(@fixture_dir, "framework")

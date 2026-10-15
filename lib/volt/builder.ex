@@ -615,8 +615,9 @@ defmodule Volt.Builder do
   # ── Module compilation ──────────────────────────────────────────────
 
   defp compile_all(modules, _target, ctx) do
-    with {:ok, compiled} <- compile_modules(modules, ctx) do
-      merge_compiled(compiled)
+    with {:ok, compiled} <- compile_modules(modules, ctx),
+         {:ok, merged} <- merge_compiled(compiled) do
+      {:ok, %{merged | package_manifests: Volt.Builder.PackageManifests.files(modules)}}
     end
   end
 
