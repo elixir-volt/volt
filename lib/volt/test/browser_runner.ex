@@ -1,6 +1,6 @@
 defmodule Volt.Test.BrowserRunner do
   @moduledoc """
-  Executes Volt JavaScript and TypeScript tests inside a real browser via PlaywrightEx.
+  Executes Volt JavaScript and TypeScript tests inside a real browser via Playwright.
 
   This runner is intentionally small and mirrors `Volt.Test.Runner`'s result
   contract so ExUnit integration can switch between QuickBEAM and browser
@@ -42,10 +42,10 @@ defmodule Volt.Test.BrowserRunner do
     timeout = Keyword.get(opts, :timeout, config.timeout)
 
     with {:ok, _pid} <- Browser.Supervisor.start(config) do
-      Browser.with_page(browser(config), timeout, fn frame ->
+      Browser.with_page(browser(config), timeout, fn page ->
         with {:ok, module_url} <-
                Browser.module(path, Volt.Test.Shared.bundle_opts(path, config, opts)) do
-          evaluate(frame, module_url, path, mode, test_id, timeout)
+          evaluate(page, module_url, path, mode, test_id)
         end
       end)
     end
@@ -54,28 +54,20 @@ defmodule Volt.Test.BrowserRunner do
   defp browser(%Config{browsers: [browser | _]}), do: browser
   defp browser(%Config{}), do: :chromium
 
-  # The page the run opens carries the test runtime, so the frame already has
+  # The page the run opens carries the test runtime, so it already has
   # `__voltExecuteBrowserTest`.
-  defp evaluate(frame, test_url, file, mode, test_id, timeout) do
-    frame_evaluate(frame.guid,
-      expression: "payload => globalThis.__voltExecuteBrowserTest(payload)",
-      is_function: true,
-      arg: %{
-        "testUrl" => test_url,
-        "file" => file,
-        "mode" => Atom.to_string(mode),
-        "testId" => test_id
-      },
-      timeout: timeout
-    )
+  defp evaluate(page, test_url, file, mode, test_id) do
+    page_evaluate(page, "payload => globalThis.__voltExecuteBrowserTest(payload)", %{
+      "testUrl" => test_url,
+      "file" => file,
+      "mode" => Atom.to_string(mode),
+      "testId" => test_id
+    })
   end
 
   # The playwright_ex dependency is only present in test environments, so its
   # functions are called without compile-time references.
-  defp frame_evaluate(frame_guid, opts) do
-    apply(PlaywrightEx.Frame, :evaluate, [
-      frame_guid,
-      [connection: Browser.Supervisor.connection()] ++ opts
-    ])
+  defp page_evaluate(page, expression, arg) do
+    apply(Playwright.Page, :evaluate, [page, expression, arg])
   end
 end

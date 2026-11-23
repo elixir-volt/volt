@@ -23,6 +23,6 @@ jobs:
         mix deps.get
         mix volt.priv.vendor priv/ts
         npm ci
-        npx playwright install --with-deps chromium
+        MIX_ENV=test mix playwright.install chromium --with-deps
       latest-command: MIX_ENV=dev mix lint && MIX_ENV=test mix test
       min-command: mix compile --warnings-as-errors && mix test

@@ -55,7 +55,7 @@ defmodule Volt.Test.Browser.Supervisor do
     children = [
       %{
         id: @playwright,
-        start: {PlaywrightEx.Supervisor, :start_link, [playwright_opts(config)]},
+        start: {Playwright.Supervisor, :start_link, [playwright_opts(config)]},
         type: :supervisor
       },
       Volt.Test.Browser
@@ -64,19 +64,11 @@ defmodule Volt.Test.Browser.Supervisor do
     Supervisor.init(children, strategy: :rest_for_one)
   end
 
-  @doc "The Playwright connection the run's browsers belong to."
-  @spec connection() :: GenServer.name()
-  def connection, do: Module.concat(@playwright, "Connection")
+  @doc "The name of the Playwright driver the run's browsers belong to."
+  @spec playwright() :: atom()
+  def playwright, do: @playwright
 
   defp playwright_opts(%Config{} = config) do
-    config.playwright
-    |> Keyword.put_new(:timeout, config.timeout)
-    |> Keyword.put_new(:executable, playwright_executable())
-    |> Keyword.put(:name, @playwright)
-  end
-
-  defp playwright_executable do
-    local = Path.expand("node_modules/playwright/cli.js", Volt.Paths.root())
-    if File.exists?(local), do: local, else: "playwright"
+    Keyword.put(config.playwright, :name, @playwright)
   end
 end
