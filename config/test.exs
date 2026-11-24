@@ -8,3 +8,5 @@ config :volt,
          tsgolint: "node_modules/.bin/tsgolint",
          cwd: File.cwd!()
        )
+
+config :playwright, :test, trace: :retain_on_failure, screenshot: :only_on_failure

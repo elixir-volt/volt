@@ -113,25 +113,14 @@ defmodule Volt.Integration.TestPlug do
 end
 
 defmodule Volt.Integration.HMRTest do
-  use ExUnit.Case, async: false
+  use Playwright.Case, async: false
 
   @moduletag :integration
-
-  alias Playwright.{Browser, BrowserContext, BrowserType, Page}
 
   @fixture_dir Path.join(System.tmp_dir!(), "volt-integration-hmr-test")
   @port 44_831
 
-  setup_all do
-    {:ok, _pid} = Playwright.Supervisor.start_link()
-
-    browser =
-      Playwright.instance() |> Playwright.chromium() |> BrowserType.launch!(timeout: 10_000)
-
-    %{browser: browser}
-  end
-
-  setup %{browser: browser} do
+  setup do
     File.rm_rf!(@fixture_dir)
     File.mkdir_p!(@fixture_dir)
     Volt.Cache.clear()
@@ -182,17 +171,10 @@ defmodule Volt.Integration.HMRTest do
         startup_log: false
       )
 
-    on_exit(fn -> Process.exit(server, :normal) end)
-
-    {:ok, context} = Browser.new_context(browser)
-    {:ok, page} = BrowserContext.new_page(context)
-
     on_exit(fn ->
-      BrowserContext.close(context)
+      Process.exit(server, :normal)
       File.rm_rf!(@fixture_dir)
     end)
-
-    %{page: page, context: context}
   end
 
   describe "dev server module serving" do
@@ -219,8 +201,7 @@ defmodule Volt.Integration.HMRTest do
 
       {:ok, _} = Page.goto(page, base_url("/hot_page.html"), timeout: 10_000)
 
-      {:ok, result} = eval_poll(page, "window.__voltHotAvailable")
-      assert result == true
+      expect_eval(page, "window.__voltHotAvailable", true)
     end
 
     test "rewrites relative imports between modules", %{page: page} do
@@ -242,8 +223,7 @@ defmodule Volt.Integration.HMRTest do
 
       {:ok, _} = Page.goto(page, base_url("/import_page.html"), timeout: 10_000)
 
-      {:ok, result} = eval_poll(page, "window.__voltImportResult")
-      assert result == "hello from utils"
+      expect_eval(page, "window.__voltImportResult", "hello from utils")
     end
 
     test "imports CSS from JavaScript and injects a style tag", %{page: page} do
@@ -270,24 +250,15 @@ defmodule Volt.Integration.HMRTest do
 
       {:ok, _} = Page.goto(page, base_url("/css_import_page.html"), timeout: 10_000)
 
-      {:ok, loaded} = eval_poll(page, "window.__voltCssImportLoaded")
-      assert loaded == true
+      expect_eval(page, "window.__voltCssImportLoaded", true)
 
-      {:ok, style_count} =
-        eval_poll(
-          page,
-          "document.querySelectorAll('style[data-volt-id=\"/assets/imported.css\"]').length"
-        )
+      Expect.to_have_count!(Page.locator(page, "style[data-volt-id=\"/assets/imported.css\"]"), 1)
 
-      assert style_count == 1
-
-      {:ok, color} =
-        eval_poll(
-          page,
-          "getComputedStyle(document.querySelector('.volt-css-import-target')).color"
-        )
-
-      assert color == "rgb(10, 20, 30)"
+      Expect.to_have_css!(
+        Page.locator(page, ".volt-css-import-target"),
+        "color",
+        "rgb(10, 20, 30)"
+      )
     end
 
     test "self-accepting modules update without reloading and preserve hot data", %{page: page} do
@@ -323,22 +294,19 @@ defmodule Volt.Integration.HMRTest do
       """)
 
       {:ok, _} = Page.goto(page, base_url("/self_accept_page.html"), timeout: 10_000)
-      {:ok, initial} = eval_poll(page, "document.getElementById('self-accept')?.textContent")
-      assert initial == "one:none"
+      Expect.to_have_text!(Page.locator(page, "#self-accept"), "one:none")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("self_accept.ts", &String.replace(&1, "'one'", "'two'"))
 
-      assert {:ok, "two:one"} =
-               eval_until(page, "document.getElementById('self-accept')?.textContent", "two:one")
+      Expect.to_have_text!(Page.locator(page, "#self-accept"), "two:one")
 
-      assert {:ok, true} =
-               eval_until(
-                 page,
-                 "window.__voltSelfAccept.events.includes('dispose:one') && window.__voltSelfAccept.events.includes('accept:two')",
-                 true
-               )
+      expect_eval(
+        page,
+        "window.__voltSelfAccept.events.includes('dispose:one') && window.__voltSelfAccept.events.includes('accept:two')",
+        true
+      )
 
       GenServer.stop(watcher)
     end
@@ -376,29 +344,17 @@ defmodule Volt.Integration.HMRTest do
       """)
 
       {:ok, _} = Page.goto(page, base_url("/accept_dep_page.html"), timeout: 10_000)
-      {:ok, initial} = eval_poll(page, "document.getElementById('accepted-dep')?.textContent")
-      assert initial == "child-one"
+      Expect.to_have_text!(Page.locator(page, "#accepted-dep"), "child-one")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("accepted_dep.ts", &String.replace(&1, "child-one", "child-two"))
 
-      assert {:ok, "child-two"} =
-               eval_until(
-                 page,
-                 "document.getElementById('accepted-dep')?.textContent",
-                 "child-two"
-               )
+      Expect.to_have_text!(Page.locator(page, "#accepted-dep"), "child-two")
 
-      assert {:ok, true} =
-               eval_until(
-                 page,
-                 "window.__voltAcceptedDep.events.includes('accepted:child-two')",
-                 true
-               )
+      expect_eval(page, "window.__voltAcceptedDep.events.includes('accepted:child-two')", true)
 
-      {:ok, reloads} = eval_poll(page, "window.__voltAcceptedDep.reloads")
-      assert reloads == 1
+      expect_eval(page, "window.__voltAcceptedDep.reloads", 1)
 
       GenServer.stop(watcher)
     end
@@ -438,31 +394,17 @@ defmodule Volt.Integration.HMRTest do
       {:ok, _} =
         Page.goto(page, base_url("/multi_accept_dep_page.html"), timeout: 10_000)
 
-      {:ok, initial} =
-        eval_poll(page, "document.getElementById('multi-accepted-dep')?.textContent")
-
-      assert initial == "a-one:b-one"
+      Expect.to_have_text!(Page.locator(page, "#multi-accepted-dep"), "a-one:b-one")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("multi_dep_a.ts", &String.replace(&1, "a-one", "a-two"))
 
-      assert {:ok, "a-two:b-one"} =
-               eval_until(
-                 page,
-                 "document.getElementById('multi-accepted-dep')?.textContent",
-                 "a-two:b-one"
-               )
+      Expect.to_have_text!(Page.locator(page, "#multi-accepted-dep"), "a-two:b-one")
 
-      assert {:ok, true} =
-               eval_until(
-                 page,
-                 "window.__voltMultiDep.events.includes('accepted:a-two:b-one')",
-                 true
-               )
+      expect_eval(page, "window.__voltMultiDep.events.includes('accepted:a-two:b-one')", true)
 
-      {:ok, reloads} = eval_poll(page, "window.__voltMultiDep.reloads")
-      assert reloads == 1
+      expect_eval(page, "window.__voltMultiDep.reloads", 1)
 
       GenServer.stop(watcher)
     end
@@ -477,7 +419,7 @@ defmodule Volt.Integration.HMRTest do
       File.write!(Path.join(content_dir, "second.md"), "second page")
 
       {:ok, _} = Page.goto(page, base_url("/doc/first"), timeout: 10_000)
-      assert {:ok, "1"} = eval_until(page, "document.body.dataset.loads", "1")
+      Expect.to_have_attribute!(Page.locator(page, "body"), "data-loads", "1")
 
       {:ok, watcher} =
         Volt.Watcher.start_link(
@@ -491,21 +433,15 @@ defmodule Volt.Integration.HMRTest do
       # Another page's content: this page revalidates and stays.
       File.write!(Path.join(content_dir, "second.md"), "second page, edited")
       Process.sleep(1000)
-      assert {:ok, "1"} = eval_poll(page, "document.body.dataset.loads")
+      Expect.to_have_attribute!(Page.locator(page, "body"), "data-loads", "1")
 
-      assert {:ok, "first page"} =
-               eval_poll(page, "document.getElementById('content').textContent")
+      Expect.to_have_text!(Page.locator(page, "#content"), "first page")
 
       File.write!(Path.join(content_dir, "first.md"), "first page, edited")
 
-      assert {:ok, "first page, edited"} =
-               eval_until(
-                 page,
-                 "document.getElementById('content')?.textContent",
-                 "first page, edited"
-               )
+      Expect.to_have_text!(Page.locator(page, "#content"), "first page, edited")
 
-      assert {:ok, "2"} = eval_poll(page, "document.body.dataset.loads")
+      Expect.to_have_attribute!(Page.locator(page, "body"), "data-loads", "2")
 
       GenServer.stop(watcher)
     end
@@ -518,10 +454,10 @@ defmodule Volt.Integration.HMRTest do
       File.write!(Path.join(content_dir, "first.md"), "first page")
 
       {:ok, _} = Page.goto(page, base_url("/morph/first"), timeout: 10_000)
-      assert {:ok, "1"} = eval_until(page, "document.body.dataset.loads", "1")
+      expect_eval(page, "document.body.dataset.loads", "1")
 
       # State a reload would lose.
-      {:ok, _} = eval_poll(page, "(window.voltKept = 'kept')")
+      Page.evaluate!(page, "window.voltKept = 'kept'")
 
       {:ok, watcher} =
         Volt.Watcher.start_link(
@@ -533,27 +469,17 @@ defmodule Volt.Integration.HMRTest do
       Process.sleep(150)
       File.write!(Path.join(content_dir, "first.md"), "first page, edited")
 
-      assert {:ok, "first page, edited"} =
-               eval_until(
-                 page,
-                 "document.getElementById('content')?.textContent",
-                 "first page, edited"
-               )
+      Expect.to_have_text!(Page.locator(page, "#content"), "first page, edited")
 
-      assert {:ok, "kept"} = eval_poll(page, "window.voltKept")
-      assert {:ok, "1"} = eval_poll(page, "document.body.dataset.loads")
+      expect_eval(page, "window.voltKept", "kept")
+      expect_eval(page, "document.body.dataset.loads", "1")
 
       # The patched page revalidates against its new HTML.
       File.write!(Path.join(content_dir, "first.md"), "first page, edited twice")
 
-      assert {:ok, "first page, edited twice"} =
-               eval_until(
-                 page,
-                 "document.getElementById('content')?.textContent",
-                 "first page, edited twice"
-               )
+      Expect.to_have_text!(Page.locator(page, "#content"), "first page, edited twice")
 
-      assert {:ok, "kept"} = eval_poll(page, "window.voltKept")
+      expect_eval(page, "window.voltKept", "kept")
 
       GenServer.stop(watcher)
     end
@@ -566,15 +492,14 @@ defmodule Volt.Integration.HMRTest do
       File.write!(Path.join(content_dir, "page.md"), "first|1|en|old description")
 
       {:ok, _} = Page.goto(page, base_url("/push/page"), timeout: 10_000)
-      assert {:ok, "1"} = eval_until(page, "document.body.dataset.loads", "1")
-      {:ok, _} = eval_poll(page, "(window.voltKept = 'kept')")
+      expect_eval(page, "document.body.dataset.loads", "1")
+      Page.evaluate!(page, "window.voltKept = 'kept'")
 
       # The page requests nothing more: what changed arrives over the websocket.
-      {:ok, _} =
-        eval_poll(
-          page,
-          "(window.voltFetches = 0, window.fetch = ((f) => (...a) => (window.voltFetches++, f(...a)))(window.fetch), 0)"
-        )
+      Page.evaluate!(
+        page,
+        "(window.voltFetches = 0, window.fetch = ((f) => (...a) => (window.voltFetches++, f(...a)))(window.fetch), 0)"
+      )
 
       {:ok, watcher} =
         Volt.Watcher.start_link(
@@ -586,26 +511,26 @@ defmodule Volt.Integration.HMRTest do
       Process.sleep(150)
       File.write!(Path.join(content_dir, "page.md"), "second|2|ru|new description")
 
-      assert {:ok, "second"} =
-               eval_until(page, "document.getElementById('content')?.textContent", "second")
+      Expect.to_have_text!(Page.locator(page, "#content"), "second")
 
       # The owner of the element re-rendered it from the props the server changed.
-      assert {:ok, "props:2"} =
-               eval_until(page, "document.getElementById('owned')?.textContent", "props:2")
+      Expect.to_have_text!(Page.locator(page, "#owned"), "props:2")
 
       # Attributes the server changed are applied; one a script set stays.
-      assert {:ok, "ru"} = eval_poll(page, "document.documentElement.lang")
-      assert {:ok, "dark"} = eval_poll(page, "document.documentElement.dataset.theme")
+      Expect.to_have_attribute!(Page.locator(page, "html"), "lang", "ru")
+      Expect.to_have_attribute!(Page.locator(page, "html"), "data-theme", "dark")
 
-      assert {:ok, "new description"} =
-               eval_poll(page, "document.querySelector('meta[name=description]').content")
+      Expect.to_have_attribute!(
+        Page.locator(page, "meta[name=description]"),
+        "content",
+        "new description"
+      )
 
-      assert {:ok, 1} =
-               eval_poll(page, "document.querySelectorAll('meta[name=description]').length")
+      Expect.to_have_count!(Page.locator(page, "meta[name=description]"), 1)
 
-      assert {:ok, "kept"} = eval_poll(page, "window.voltKept")
-      assert {:ok, "1"} = eval_poll(page, "document.body.dataset.loads")
-      assert {:ok, 0} = eval_poll(page, "window.voltFetches")
+      expect_eval(page, "window.voltKept", "kept")
+      expect_eval(page, "document.body.dataset.loads", "1")
+      expect_eval(page, "window.voltFetches", 0)
 
       GenServer.stop(watcher)
     end
@@ -628,15 +553,13 @@ defmodule Volt.Integration.HMRTest do
       """)
 
       {:ok, _} = Page.goto(page, base_url("/full_reload_page.html"), timeout: 10_000)
-      {:ok, initial} = eval_poll(page, "document.getElementById('full-reload')?.textContent")
-      assert initial == "before:1"
+      Expect.to_have_text!(Page.locator(page, "#full-reload"), "before:1")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("full_reload.ts", &String.replace(&1, "before", "after"))
 
-      assert {:ok, "after:2"} =
-               eval_until(page, "document.getElementById('full-reload')?.textContent", "after:2")
+      Expect.to_have_text!(Page.locator(page, "#full-reload"), "after:2")
 
       GenServer.stop(watcher)
     end
@@ -664,23 +587,14 @@ defmodule Volt.Integration.HMRTest do
 
       {:ok, _} = Page.goto(page, base_url("/css_hmr_page.html"), timeout: 10_000)
 
-      {:ok, initial_color} =
-        eval_poll(page, "getComputedStyle(document.querySelector('.hmr-style')).color")
-
-      assert initial_color == "rgb(1, 2, 3)"
-      {:ok, reload_count} = eval_poll(page, "sessionStorage.getItem('voltCssReloadCount')")
-      assert reload_count == "1"
+      Expect.to_have_css!(Page.locator(page, ".hmr-style"), "color", "rgb(1, 2, 3)")
+      expect_eval(page, "sessionStorage.getItem('voltCssReloadCount')", "1")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("hmr-style.css", &String.replace(&1, "rgb(1, 2, 3)", "rgb(4, 5, 6)"))
 
-      assert {:ok, "rgb(4, 5, 6)"} =
-               eval_until(
-                 page,
-                 "getComputedStyle(document.querySelector('.hmr-style')).color",
-                 "rgb(4, 5, 6)"
-               )
+      Expect.to_have_css!(Page.locator(page, ".hmr-style"), "color", "rgb(4, 5, 6)")
 
       GenServer.stop(watcher)
     end
@@ -709,47 +623,26 @@ defmodule Volt.Integration.HMRTest do
 
       {:ok, _} = Page.goto(page, base_url("/css_module_page.html"), timeout: 10_000)
 
-      {:ok, class_name} = eval_poll(page, "window.__voltCssModuleClass")
-      assert is_binary(class_name)
-      assert class_name =~ "btn"
+      Expect.poll!(
+        fn -> Page.evaluate!(page, "window.__voltCssModuleClass") end,
+        &assert(is_binary(&1) and &1 =~ "btn")
+      )
 
-      {:ok, style_count} =
-        eval_poll(
-          page,
-          "document.querySelectorAll('style[data-volt-id=\"/assets/button.module.css\"]').length"
-        )
+      Expect.to_have_count!(
+        Page.locator(page, "style[data-volt-id=\"/assets/button.module.css\"]"),
+        1
+      )
 
-      assert style_count == 1
-
-      {:ok, color} = eval_poll(page, "getComputedStyle(document.querySelector('div')).color")
-      assert color == "rgb(40, 50, 60)"
+      Expect.to_have_css!(
+        Page.locator(page, "div") |> Locator.first(),
+        "color",
+        "rgb(40, 50, 60)"
+      )
     end
   end
 
-  defp eval_until(page, expression, expected, attempts \\ 30) do
-    case Page.evaluate(page, expression) do
-      {:ok, ^expected} ->
-        {:ok, expected}
-
-      {:ok, _other} when attempts > 0 ->
-        Process.sleep(100) && eval_until(page, expression, expected, attempts - 1)
-
-      _ ->
-        {:error, :timeout}
-    end
-  end
-
-  defp eval_poll(page, expression, attempts \\ 20) do
-    case Page.evaluate(page, expression) do
-      {:ok, result} when result not in [nil, :null] ->
-        {:ok, result}
-
-      {:ok, _missing} when attempts > 0 ->
-        Process.sleep(100) && eval_poll(page, expression, attempts - 1)
-
-      _ ->
-        {:error, :timeout}
-    end
+  defp expect_eval(page, expression, expected) do
+    Expect.poll!(fn -> Page.evaluate!(page, expression) end, &assert(&1 == expected))
   end
 
   defp start_watcher do
