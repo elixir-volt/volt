@@ -24,7 +24,7 @@ defmodule Volt.Test.Browser do
 
   @table __MODULE__
 
-  @type launched :: %{guid: String.t()}
+  @type launched :: term()
 
   @doc false
   def start_link(opts) do
@@ -33,37 +33,37 @@ defmodule Volt.Test.Browser do
 
   @doc """
   Open a context in the browser of `type`, with the test runtime installed
-  and a page on the blank document, and call `fun` with the page's main frame.
+  and a page on the blank document, and call `fun` with the page.
 
   The context closes when `fun` returns or raises. A browser that is no longer
   reachable, because it crashed since it was launched, is launched again once.
   """
-  @spec with_page(atom(), timeout(), (map() -> result)) :: result | {:error, term()}
+  @spec with_page(atom(), timeout(), (term() -> result)) :: result | {:error, term()}
         when result: term()
   def with_page(type, timeout, fun) do
     with {:ok, browser} <- launch(type, timeout),
          {:ok, context} <- new_context(browser, type, timeout) do
       try do
-        with {:ok, _} <- browser_context_add_init_script(context.guid, runtime(), timeout),
-             {:ok, %{main_frame: frame}} <- browser_context_new_page(context.guid, timeout),
-             {:ok, _} <- frame_goto(frame.guid, page_url(), timeout) do
-          fun.(frame)
+        with {:ok, _} <- browser_context_add_init_script(context, runtime()),
+             {:ok, page} <- browser_context_new_page(context),
+             {:ok, _} <- page_goto(page, page_url(), timeout) do
+          fun.(page)
         end
       after
-        browser_context_close(context.guid, timeout)
+        browser_context_close(context)
       end
     end
   end
 
   defp new_context(browser, type, timeout) do
-    case browser_new_context(browser.guid, timeout) do
+    case browser_new_context(browser) do
       {:ok, context} ->
         {:ok, context}
 
       {:error, _reason} ->
-        with :ok <- forget(type, browser.guid),
+        with :ok <- forget(type, browser),
              {:ok, browser} <- launch(type, timeout) do
-          browser_new_context(browser.guid, timeout)
+          browser_new_context(browser)
         end
     end
   end
@@ -75,9 +75,9 @@ defmodule Volt.Test.Browser do
   end
 
   @doc "Drop a browser that is no longer reachable, so the next request launches a new one."
-  @spec forget(atom(), String.t()) :: :ok
-  def forget(type, guid) do
-    GenServer.call(__MODULE__, {:forget, type, guid})
+  @spec forget(atom(), launched()) :: :ok
+  def forget(type, browser) do
+    GenServer.call(__MODULE__, {:forget, type, browser})
   end
 
   @doc """
@@ -178,9 +178,9 @@ defmodule Volt.Test.Browser do
     end
   end
 
-  def handle_call({:forget, type, guid}, _from, state) do
+  def handle_call({:forget, type, browser}, _from, state) do
     case state.browsers do
-      %{^type => %{guid: ^guid}} ->
+      %{^type => ^browser} ->
         {:reply, :ok, %{state | browsers: Map.delete(state.browsers, type)}}
 
       _other ->
@@ -191,41 +191,28 @@ defmodule Volt.Test.Browser do
   # The playwright_ex dependency is only present in test environments, so its
   # functions are called without compile-time references.
   defp launch_browser(type, timeout) do
-    apply(PlaywrightEx, :launch_browser, [type, [connection: Tree.connection(), timeout: timeout]])
+    playwright = apply(Playwright, :instance, [Tree.playwright()])
+    browser_type = apply(Playwright, type, [playwright])
+    apply(Playwright.BrowserType, :launch, [browser_type, [timeout: timeout]])
   end
 
-  defp browser_new_context(browser_guid, timeout) do
-    apply(PlaywrightEx.Browser, :new_context, [
-      browser_guid,
-      [connection: Tree.connection(), timeout: timeout]
-    ])
+  defp browser_new_context(browser) do
+    apply(Playwright.Browser, :new_context, [browser])
   end
 
-  defp browser_context_add_init_script(context_guid, source, timeout) do
-    apply(PlaywrightEx.BrowserContext, :add_init_script, [
-      context_guid,
-      [source: source, connection: Tree.connection(), timeout: timeout]
-    ])
+  defp browser_context_add_init_script(context, source) do
+    apply(Playwright.BrowserContext, :add_init_script, [context, source])
   end
 
-  defp browser_context_new_page(context_guid, timeout) do
-    apply(PlaywrightEx.BrowserContext, :new_page, [
-      context_guid,
-      [connection: Tree.connection(), timeout: timeout]
-    ])
+  defp browser_context_new_page(context) do
+    apply(Playwright.BrowserContext, :new_page, [context])
   end
 
-  defp browser_context_close(context_guid, timeout) do
-    apply(PlaywrightEx.BrowserContext, :close, [
-      context_guid,
-      [connection: Tree.connection(), timeout: timeout]
-    ])
+  defp browser_context_close(context) do
+    apply(Playwright.BrowserContext, :close, [context])
   end
 
-  defp frame_goto(frame_guid, url, timeout) do
-    apply(PlaywrightEx.Frame, :goto, [
-      frame_guid,
-      [url: url, connection: Tree.connection(), timeout: timeout]
-    ])
+  defp page_goto(page, url, timeout) do
+    apply(Playwright.Page, :goto, [page, url, [timeout: timeout]])
   end
 end

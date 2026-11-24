@@ -113,60 +113,14 @@ defmodule Volt.Integration.TestPlug do
 end
 
 defmodule Volt.Integration.HMRTest do
-  use ExUnit.Case, async: false
+  use Playwright.Case, async: false
 
   @moduletag :integration
-
-  alias PlaywrightEx.{Browser, BrowserContext, Frame}
 
   @fixture_dir Path.join(System.tmp_dir!(), "volt-integration-hmr-test")
   @port 44_831
 
-  setup_all do
-    ensure_playwright_started!()
-    {:ok, browser} = launch_browser!()
-    on_exit(fn -> :ok end)
-    %{browser: browser}
-  end
-
-  defp ensure_playwright_started! do
-    case PlaywrightEx.Supervisor.start_link(timeout: 10_000, executable: playwright_executable()) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> :ok
-    end
-  end
-
-  defp launch_browser! do
-    case PlaywrightEx.launch_browser(:chromium, timeout: 10_000) do
-      {:ok, browser} ->
-        {:ok, browser}
-
-      {:error, _reason} ->
-        restart_playwright!()
-        PlaywrightEx.launch_browser(:chromium, timeout: 10_000)
-    end
-  catch
-    :exit, _reason ->
-      restart_playwright!()
-      PlaywrightEx.launch_browser(:chromium, timeout: 10_000)
-  end
-
-  defp restart_playwright! do
-    case Process.whereis(PlaywrightEx.Supervisor) do
-      nil -> :ok
-      pid -> Process.exit(pid, :kill)
-    end
-
-    Process.sleep(100)
-    ensure_playwright_started!()
-  end
-
-  defp playwright_executable do
-    local = Path.expand("node_modules/playwright/cli.js")
-    if File.exists?(local), do: local, else: "playwright"
-  end
-
-  setup %{browser: browser} do
+  setup do
     File.rm_rf!(@fixture_dir)
     File.mkdir_p!(@fixture_dir)
     Volt.Cache.clear()
@@ -217,33 +171,23 @@ defmodule Volt.Integration.HMRTest do
         startup_log: false
       )
 
-    on_exit(fn -> Process.exit(server, :normal) end)
-
-    {:ok, context} = Browser.new_context(browser.guid, timeout: 5000)
-    {:ok, %{main_frame: frame}} = BrowserContext.new_page(context.guid, timeout: 5000)
-
     on_exit(fn ->
-      BrowserContext.close(context.guid, timeout: 5000)
+      Process.exit(server, :normal)
       File.rm_rf!(@fixture_dir)
     end)
-
-    %{frame: frame, context: context}
   end
 
   describe "dev server module serving" do
-    test "serves compiled TypeScript and executes in browser", %{frame: frame} do
-      {:ok, _} = Frame.goto(frame.guid, url: base_url(), timeout: 10_000)
+    test "serves compiled TypeScript and executes in browser", %{page: page} do
+      {:ok, _} = Page.goto(page, base_url(), timeout: 10_000)
 
-      {:ok, text} =
-        Frame.wait_for_function(frame.guid,
-          expression: "document.getElementById('volt-test')?.textContent",
+      {:ok, _handle} =
+        Page.wait_for_function(page, "document.getElementById('volt-test')?.textContent", nil,
           timeout: 5000
         )
-
-      assert text
     end
 
-    test "injects import.meta.hot into served modules", %{frame: frame} do
+    test "injects import.meta.hot into served modules", %{page: page} do
       write_fixture("hot_check.ts", """
       window.__voltHotAvailable = typeof import.meta.hot?.accept === 'function'
       """)
@@ -255,13 +199,12 @@ defmodule Volt.Integration.HMRTest do
       </body></html>
       """)
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/hot_page.html"), timeout: 10_000)
+      {:ok, _} = Page.goto(page, base_url("/hot_page.html"), timeout: 10_000)
 
-      {:ok, result} = eval_poll(frame, "window.__voltHotAvailable")
-      assert result == true
+      expect_eval(page, "window.__voltHotAvailable", true)
     end
 
-    test "rewrites relative imports between modules", %{frame: frame} do
+    test "rewrites relative imports between modules", %{page: page} do
       write_fixture("utils.ts", """
       export const greeting = 'hello from utils'
       """)
@@ -278,13 +221,12 @@ defmodule Volt.Integration.HMRTest do
       </body></html>
       """)
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/import_page.html"), timeout: 10_000)
+      {:ok, _} = Page.goto(page, base_url("/import_page.html"), timeout: 10_000)
 
-      {:ok, result} = eval_poll(frame, "window.__voltImportResult")
-      assert result == "hello from utils"
+      expect_eval(page, "window.__voltImportResult", "hello from utils")
     end
 
-    test "imports CSS from JavaScript and injects a style tag", %{frame: frame} do
+    test "imports CSS from JavaScript and injects a style tag", %{page: page} do
       write_fixture("imported.css", """
       .volt-css-import-target { color: rgb(10, 20, 30); }
       """)
@@ -306,29 +248,20 @@ defmodule Volt.Integration.HMRTest do
       </body></html>
       """)
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/css_import_page.html"), timeout: 10_000)
+      {:ok, _} = Page.goto(page, base_url("/css_import_page.html"), timeout: 10_000)
 
-      {:ok, loaded} = eval_poll(frame, "window.__voltCssImportLoaded")
-      assert loaded == true
+      expect_eval(page, "window.__voltCssImportLoaded", true)
 
-      {:ok, style_count} =
-        eval_poll(
-          frame,
-          "document.querySelectorAll('style[data-volt-id=\"/assets/imported.css\"]').length"
-        )
+      Expect.to_have_count!(Page.locator(page, "style[data-volt-id=\"/assets/imported.css\"]"), 1)
 
-      assert style_count == 1
-
-      {:ok, color} =
-        eval_poll(
-          frame,
-          "getComputedStyle(document.querySelector('.volt-css-import-target')).color"
-        )
-
-      assert color == "rgb(10, 20, 30)"
+      Expect.to_have_css!(
+        Page.locator(page, ".volt-css-import-target"),
+        "color",
+        "rgb(10, 20, 30)"
+      )
     end
 
-    test "self-accepting modules update without reloading and preserve hot data", %{frame: frame} do
+    test "self-accepting modules update without reloading and preserve hot data", %{page: page} do
       write_fixture("self_accept.ts", """
       const store = (window.__voltSelfAccept ??= { events: [] })
       export const value = 'one'
@@ -360,28 +293,25 @@ defmodule Volt.Integration.HMRTest do
       </body></html>
       """)
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/self_accept_page.html"), timeout: 10_000)
-      {:ok, initial} = eval_poll(frame, "document.getElementById('self-accept')?.textContent")
-      assert initial == "one:none"
+      {:ok, _} = Page.goto(page, base_url("/self_accept_page.html"), timeout: 10_000)
+      Expect.to_have_text!(Page.locator(page, "#self-accept"), "one:none")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("self_accept.ts", &String.replace(&1, "'one'", "'two'"))
 
-      assert {:ok, "two:one"} =
-               eval_until(frame, "document.getElementById('self-accept')?.textContent", "two:one")
+      Expect.to_have_text!(Page.locator(page, "#self-accept"), "two:one")
 
-      assert {:ok, true} =
-               eval_until(
-                 frame,
-                 "window.__voltSelfAccept.events.includes('dispose:one') && window.__voltSelfAccept.events.includes('accept:two')",
-                 true
-               )
+      expect_eval(
+        page,
+        "window.__voltSelfAccept.events.includes('dispose:one') && window.__voltSelfAccept.events.includes('accept:two')",
+        true
+      )
 
       GenServer.stop(watcher)
     end
 
-    test "parent modules accept dependency updates without reloading", %{frame: frame} do
+    test "parent modules accept dependency updates without reloading", %{page: page} do
       write_fixture("accepted_dep.ts", """
       export const value = 'child-one'
       """)
@@ -413,35 +343,23 @@ defmodule Volt.Integration.HMRTest do
       </body></html>
       """)
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/accept_dep_page.html"), timeout: 10_000)
-      {:ok, initial} = eval_poll(frame, "document.getElementById('accepted-dep')?.textContent")
-      assert initial == "child-one"
+      {:ok, _} = Page.goto(page, base_url("/accept_dep_page.html"), timeout: 10_000)
+      Expect.to_have_text!(Page.locator(page, "#accepted-dep"), "child-one")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("accepted_dep.ts", &String.replace(&1, "child-one", "child-two"))
 
-      assert {:ok, "child-two"} =
-               eval_until(
-                 frame,
-                 "document.getElementById('accepted-dep')?.textContent",
-                 "child-two"
-               )
+      Expect.to_have_text!(Page.locator(page, "#accepted-dep"), "child-two")
 
-      assert {:ok, true} =
-               eval_until(
-                 frame,
-                 "window.__voltAcceptedDep.events.includes('accepted:child-two')",
-                 true
-               )
+      expect_eval(page, "window.__voltAcceptedDep.events.includes('accepted:child-two')", true)
 
-      {:ok, reloads} = eval_poll(frame, "window.__voltAcceptedDep.reloads")
-      assert reloads == 1
+      expect_eval(page, "window.__voltAcceptedDep.reloads", 1)
 
       GenServer.stop(watcher)
     end
 
-    test "parent modules accept multiple dependency updates", %{frame: frame} do
+    test "parent modules accept multiple dependency updates", %{page: page} do
       write_fixture("multi_dep_a.ts", "export const value = 'a-one'")
       write_fixture("multi_dep_b.ts", "export const value = 'b-one'")
 
@@ -474,38 +392,24 @@ defmodule Volt.Integration.HMRTest do
       """)
 
       {:ok, _} =
-        Frame.goto(frame.guid, url: base_url("/multi_accept_dep_page.html"), timeout: 10_000)
+        Page.goto(page, base_url("/multi_accept_dep_page.html"), timeout: 10_000)
 
-      {:ok, initial} =
-        eval_poll(frame, "document.getElementById('multi-accepted-dep')?.textContent")
-
-      assert initial == "a-one:b-one"
+      Expect.to_have_text!(Page.locator(page, "#multi-accepted-dep"), "a-one:b-one")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("multi_dep_a.ts", &String.replace(&1, "a-one", "a-two"))
 
-      assert {:ok, "a-two:b-one"} =
-               eval_until(
-                 frame,
-                 "document.getElementById('multi-accepted-dep')?.textContent",
-                 "a-two:b-one"
-               )
+      Expect.to_have_text!(Page.locator(page, "#multi-accepted-dep"), "a-two:b-one")
 
-      assert {:ok, true} =
-               eval_until(
-                 frame,
-                 "window.__voltMultiDep.events.includes('accepted:a-two:b-one')",
-                 true
-               )
+      expect_eval(page, "window.__voltMultiDep.events.includes('accepted:a-two:b-one')", true)
 
-      {:ok, reloads} = eval_poll(frame, "window.__voltMultiDep.reloads")
-      assert reloads == 1
+      expect_eval(page, "window.__voltMultiDep.reloads", 1)
 
       GenServer.stop(watcher)
     end
 
-    test "content changes reload only the pages whose HTML changed", %{frame: frame} do
+    test "content changes reload only the pages whose HTML changed", %{page: page} do
       # Content lives beside the asset root, as a site's pages and posts do.
       content_dir = @fixture_dir <> "-content"
       File.rm_rf!(content_dir)
@@ -514,8 +418,8 @@ defmodule Volt.Integration.HMRTest do
       File.write!(Path.join(content_dir, "first.md"), "first page")
       File.write!(Path.join(content_dir, "second.md"), "second page")
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/doc/first"), timeout: 10_000)
-      assert {:ok, "1"} = eval_until(frame, "document.body.dataset.loads", "1")
+      {:ok, _} = Page.goto(page, base_url("/doc/first"), timeout: 10_000)
+      Expect.to_have_attribute!(Page.locator(page, "body"), "data-loads", "1")
 
       {:ok, watcher} =
         Volt.Watcher.start_link(
@@ -529,37 +433,31 @@ defmodule Volt.Integration.HMRTest do
       # Another page's content: this page revalidates and stays.
       File.write!(Path.join(content_dir, "second.md"), "second page, edited")
       Process.sleep(1000)
-      assert {:ok, "1"} = eval_poll(frame, "document.body.dataset.loads")
+      Expect.to_have_attribute!(Page.locator(page, "body"), "data-loads", "1")
 
-      assert {:ok, "first page"} =
-               eval_poll(frame, "document.getElementById('content').textContent")
+      Expect.to_have_text!(Page.locator(page, "#content"), "first page")
 
       File.write!(Path.join(content_dir, "first.md"), "first page, edited")
 
-      assert {:ok, "first page, edited"} =
-               eval_until(
-                 frame,
-                 "document.getElementById('content')?.textContent",
-                 "first page, edited"
-               )
+      Expect.to_have_text!(Page.locator(page, "#content"), "first page, edited")
 
-      assert {:ok, "2"} = eval_poll(frame, "document.body.dataset.loads")
+      Expect.to_have_attribute!(Page.locator(page, "body"), "data-loads", "2")
 
       GenServer.stop(watcher)
     end
 
-    test "pages that opt in are patched in place instead of reloaded", %{frame: frame} do
+    test "pages that opt in are patched in place instead of reloaded", %{page: page} do
       content_dir = @fixture_dir <> "-content"
       File.rm_rf!(content_dir)
       File.mkdir_p!(content_dir)
       on_exit(fn -> File.rm_rf!(content_dir) end)
       File.write!(Path.join(content_dir, "first.md"), "first page")
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/morph/first"), timeout: 10_000)
-      assert {:ok, "1"} = eval_until(frame, "document.body.dataset.loads", "1")
+      {:ok, _} = Page.goto(page, base_url("/morph/first"), timeout: 10_000)
+      expect_eval(page, "document.body.dataset.loads", "1")
 
       # State a reload would lose.
-      {:ok, _} = eval_poll(frame, "(window.voltKept = 'kept')")
+      Page.evaluate!(page, "window.voltKept = 'kept'")
 
       {:ok, watcher} =
         Volt.Watcher.start_link(
@@ -571,48 +469,37 @@ defmodule Volt.Integration.HMRTest do
       Process.sleep(150)
       File.write!(Path.join(content_dir, "first.md"), "first page, edited")
 
-      assert {:ok, "first page, edited"} =
-               eval_until(
-                 frame,
-                 "document.getElementById('content')?.textContent",
-                 "first page, edited"
-               )
+      Expect.to_have_text!(Page.locator(page, "#content"), "first page, edited")
 
-      assert {:ok, "kept"} = eval_poll(frame, "window.voltKept")
-      assert {:ok, "1"} = eval_poll(frame, "document.body.dataset.loads")
+      expect_eval(page, "window.voltKept", "kept")
+      expect_eval(page, "document.body.dataset.loads", "1")
 
       # The patched page revalidates against its new HTML.
       File.write!(Path.join(content_dir, "first.md"), "first page, edited twice")
 
-      assert {:ok, "first page, edited twice"} =
-               eval_until(
-                 frame,
-                 "document.getElementById('content')?.textContent",
-                 "first page, edited twice"
-               )
+      Expect.to_have_text!(Page.locator(page, "#content"), "first page, edited twice")
 
-      assert {:ok, "kept"} = eval_poll(frame, "window.voltKept")
+      expect_eval(page, "window.voltKept", "kept")
 
       GenServer.stop(watcher)
     end
 
-    test "the server pushes what it changed to a page it keeps a render of", %{frame: frame} do
+    test "the server pushes what it changed to a page it keeps a render of", %{page: page} do
       content_dir = @fixture_dir <> "-content"
       File.rm_rf!(content_dir)
       File.mkdir_p!(content_dir)
       on_exit(fn -> File.rm_rf!(content_dir) end)
       File.write!(Path.join(content_dir, "page.md"), "first|1|en|old description")
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/push/page"), timeout: 10_000)
-      assert {:ok, "1"} = eval_until(frame, "document.body.dataset.loads", "1")
-      {:ok, _} = eval_poll(frame, "(window.voltKept = 'kept')")
+      {:ok, _} = Page.goto(page, base_url("/push/page"), timeout: 10_000)
+      expect_eval(page, "document.body.dataset.loads", "1")
+      Page.evaluate!(page, "window.voltKept = 'kept'")
 
       # The page requests nothing more: what changed arrives over the websocket.
-      {:ok, _} =
-        eval_poll(
-          frame,
-          "(window.voltFetches = 0, window.fetch = ((f) => (...a) => (window.voltFetches++, f(...a)))(window.fetch), 0)"
-        )
+      Page.evaluate!(
+        page,
+        "(window.voltFetches = 0, window.fetch = ((f) => (...a) => (window.voltFetches++, f(...a)))(window.fetch), 0)"
+      )
 
       {:ok, watcher} =
         Volt.Watcher.start_link(
@@ -624,31 +511,31 @@ defmodule Volt.Integration.HMRTest do
       Process.sleep(150)
       File.write!(Path.join(content_dir, "page.md"), "second|2|ru|new description")
 
-      assert {:ok, "second"} =
-               eval_until(frame, "document.getElementById('content')?.textContent", "second")
+      Expect.to_have_text!(Page.locator(page, "#content"), "second")
 
       # The owner of the element re-rendered it from the props the server changed.
-      assert {:ok, "props:2"} =
-               eval_until(frame, "document.getElementById('owned')?.textContent", "props:2")
+      Expect.to_have_text!(Page.locator(page, "#owned"), "props:2")
 
       # Attributes the server changed are applied; one a script set stays.
-      assert {:ok, "ru"} = eval_poll(frame, "document.documentElement.lang")
-      assert {:ok, "dark"} = eval_poll(frame, "document.documentElement.dataset.theme")
+      Expect.to_have_attribute!(Page.locator(page, "html"), "lang", "ru")
+      Expect.to_have_attribute!(Page.locator(page, "html"), "data-theme", "dark")
 
-      assert {:ok, "new description"} =
-               eval_poll(frame, "document.querySelector('meta[name=description]').content")
+      Expect.to_have_attribute!(
+        Page.locator(page, "meta[name=description]"),
+        "content",
+        "new description"
+      )
 
-      assert {:ok, 1} =
-               eval_poll(frame, "document.querySelectorAll('meta[name=description]').length")
+      Expect.to_have_count!(Page.locator(page, "meta[name=description]"), 1)
 
-      assert {:ok, "kept"} = eval_poll(frame, "window.voltKept")
-      assert {:ok, "1"} = eval_poll(frame, "document.body.dataset.loads")
-      assert {:ok, 0} = eval_poll(frame, "window.voltFetches")
+      expect_eval(page, "window.voltKept", "kept")
+      expect_eval(page, "document.body.dataset.loads", "1")
+      expect_eval(page, "window.voltFetches", 0)
 
       GenServer.stop(watcher)
     end
 
-    test "non-accepted module updates trigger a full reload", %{frame: frame} do
+    test "non-accepted module updates trigger a full reload", %{page: page} do
       write_fixture("full_reload.ts", """
       const count = Number(sessionStorage.getItem('voltReloadCount') ?? '0') + 1
       sessionStorage.setItem('voltReloadCount', String(count))
@@ -665,21 +552,19 @@ defmodule Volt.Integration.HMRTest do
       </body></html>
       """)
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/full_reload_page.html"), timeout: 10_000)
-      {:ok, initial} = eval_poll(frame, "document.getElementById('full-reload')?.textContent")
-      assert initial == "before:1"
+      {:ok, _} = Page.goto(page, base_url("/full_reload_page.html"), timeout: 10_000)
+      Expect.to_have_text!(Page.locator(page, "#full-reload"), "before:1")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("full_reload.ts", &String.replace(&1, "before", "after"))
 
-      assert {:ok, "after:2"} =
-               eval_until(frame, "document.getElementById('full-reload')?.textContent", "after:2")
+      Expect.to_have_text!(Page.locator(page, "#full-reload"), "after:2")
 
       GenServer.stop(watcher)
     end
 
-    test "CSS import HMR updates injected styles", %{frame: frame} do
+    test "CSS import HMR updates injected styles", %{page: page} do
       write_fixture("hmr-style.css", ".hmr-style { color: rgb(1, 2, 3); }")
 
       write_fixture("css_hmr.ts", """
@@ -700,30 +585,21 @@ defmodule Volt.Integration.HMRTest do
       </body></html>
       """)
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/css_hmr_page.html"), timeout: 10_000)
+      {:ok, _} = Page.goto(page, base_url("/css_hmr_page.html"), timeout: 10_000)
 
-      {:ok, initial_color} =
-        eval_poll(frame, "getComputedStyle(document.querySelector('.hmr-style')).color")
-
-      assert initial_color == "rgb(1, 2, 3)"
-      {:ok, reload_count} = eval_poll(frame, "sessionStorage.getItem('voltCssReloadCount')")
-      assert reload_count == "1"
+      Expect.to_have_css!(Page.locator(page, ".hmr-style"), "color", "rgb(1, 2, 3)")
+      expect_eval(page, "sessionStorage.getItem('voltCssReloadCount')", "1")
 
       {:ok, watcher} = start_watcher()
 
       update_fixture("hmr-style.css", &String.replace(&1, "rgb(1, 2, 3)", "rgb(4, 5, 6)"))
 
-      assert {:ok, "rgb(4, 5, 6)"} =
-               eval_until(
-                 frame,
-                 "getComputedStyle(document.querySelector('.hmr-style')).color",
-                 "rgb(4, 5, 6)"
-               )
+      Expect.to_have_css!(Page.locator(page, ".hmr-style"), "color", "rgb(4, 5, 6)")
 
       GenServer.stop(watcher)
     end
 
-    test "imports CSS modules from JavaScript with exports and injected styles", %{frame: frame} do
+    test "imports CSS modules from JavaScript with exports and injected styles", %{page: page} do
       write_fixture("button.module.css", """
       .btn { color: rgb(40, 50, 60); }
       """)
@@ -745,59 +621,28 @@ defmodule Volt.Integration.HMRTest do
       </body></html>
       """)
 
-      {:ok, _} = Frame.goto(frame.guid, url: base_url("/css_module_page.html"), timeout: 10_000)
+      {:ok, _} = Page.goto(page, base_url("/css_module_page.html"), timeout: 10_000)
 
-      {:ok, class_name} = eval_poll(frame, "window.__voltCssModuleClass")
-      assert is_binary(class_name)
-      assert class_name =~ "btn"
+      Expect.poll!(
+        fn -> Page.evaluate!(page, "window.__voltCssModuleClass") end,
+        &assert(is_binary(&1) and &1 =~ "btn")
+      )
 
-      {:ok, style_count} =
-        eval_poll(
-          frame,
-          "document.querySelectorAll('style[data-volt-id=\"/assets/button.module.css\"]').length"
-        )
+      Expect.to_have_count!(
+        Page.locator(page, "style[data-volt-id=\"/assets/button.module.css\"]"),
+        1
+      )
 
-      assert style_count == 1
-
-      {:ok, color} = eval_poll(frame, "getComputedStyle(document.querySelector('div')).color")
-      assert color == "rgb(40, 50, 60)"
+      Expect.to_have_css!(
+        Page.locator(page, "div") |> Locator.first(),
+        "color",
+        "rgb(40, 50, 60)"
+      )
     end
   end
 
-  defp eval_until(frame, expression, expected, attempts \\ 30) do
-    case Frame.evaluate(frame.guid,
-           expression: expression,
-           is_function: false,
-           arg: nil,
-           timeout: 5000
-         ) do
-      {:ok, ^expected} ->
-        {:ok, expected}
-
-      {:ok, _other} when attempts > 0 ->
-        Process.sleep(100) && eval_until(frame, expression, expected, attempts - 1)
-
-      _ ->
-        {:error, :timeout}
-    end
-  end
-
-  defp eval_poll(frame, expression, attempts \\ 20) do
-    case Frame.evaluate(frame.guid,
-           expression: expression,
-           is_function: false,
-           arg: nil,
-           timeout: 5000
-         ) do
-      {:ok, result} when result != nil ->
-        {:ok, result}
-
-      {:ok, nil} when attempts > 0 ->
-        Process.sleep(100) && eval_poll(frame, expression, attempts - 1)
-
-      _ ->
-        {:error, :timeout}
-    end
+  defp expect_eval(page, expression, expected) do
+    Expect.poll!(fn -> Page.evaluate!(page, expression) end, &assert(&1 == expected))
   end
 
   defp start_watcher do

@@ -302,14 +302,17 @@ test('updates the DOM', () => {
 })
 ```
 
-Volt runs these tests through PlaywrightEx. Install Playwright for local browser execution:
+Volt runs these tests through [playwright_ex](https://hexdocs.pm/playwright_ex). Add it to your test dependencies and install the driver and a browser:
 
-```bash
-npm install --save-dev playwright
-npx playwright install chromium
+```elixir
+{:playwright, "~> 1.65.0-rc.4", hex: :playwright_ex, only: :test}
 ```
 
-By default Volt uses `node_modules/playwright/cli.js` when present, otherwise `playwright` from `PATH`. Pass PlaywrightEx supervisor options with `playwright: [...]` if your executable lives elsewhere.
+```bash
+MIX_ENV=test mix playwright.install chromium
+```
+
+The driver is configured with `config :playwright, :driver`. Pass `Playwright.Supervisor` options with `playwright: [...]`, such as `executable:` for an npm-managed `playwright` CLI.
 
 A test run shares one browser, launched the first time a test needs it, and every test gets a browser context of its own, so tests do not see each other's storage, cookies or pages. The ExUnit modules Volt generates for browser tests are `async: true`. The browser runs under Volt's application, which the first browser test starts if the project has not, as with a `runtime: false` dependency.
 
@@ -356,4 +359,4 @@ Available sigils: `~JS`, `~TS`, `~JSX`, `~TSX`, `~CSS`, and `~HTML`.
 
 ## Current scope
 
-The QuickBEAM runner is intended for fast JS/TS unit tests. The browser runner is intended for tests that genuinely need a browser environment. Higher-level Phoenix end-to-end flows can still use PlaywrightEx or Phoenix-oriented browser-test helpers alongside Volt's JS test runner.
+The QuickBEAM runner is intended for fast JS/TS unit tests. The browser runner is intended for tests that genuinely need a browser environment. Higher-level Phoenix end-to-end flows can still use playwright_ex or Phoenix-oriented browser-test helpers alongside Volt's JS test runner.

@@ -61,7 +61,7 @@ defmodule Volt.MixProject do
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:makeup_js, "~> 0.1", only: :dev, runtime: false},
       {:bandit, ">= 1.12.5 and < 2.0.0", only: :test},
-      {:playwright_ex, "~> 0.5", only: :test}
+      {:playwright, "~> 1.65.0-rc.4", hex: :playwright_ex, only: :test}
     ]
   end
 
